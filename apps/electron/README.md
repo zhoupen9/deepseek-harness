@@ -15,7 +15,7 @@ The server process lives and dies with the window: closing the window sends `SIG
 ## Prerequisites
 
 - A built workspace. The spawned CLI is the compiled `@deepseek-ai/dsh` `lib/bin.js`, so run `pnpm run build` at the repository root first.
-- Node `^22.19 || >=24` (the same range as the harness).
+- Node `^22.19 || >=24` (the same range as the harness). The spawned `dsh web` runs under this Node, not the Electron binary: the harness's plugin loader reaches Node internals through the `node-addon-require-builtin` native addon, which cannot load under `ELECTRON_RUN_AS_NODE`.
 - A system-installed Electron (43.x). The npm `electron` dependency is kept only for its TypeScript declarations — its postinstall binary download is denied in `pnpm-workspace.yaml`, and `scripts/electron.mjs` resolves the runtime from the system instead.
 
 ## Run
@@ -40,6 +40,8 @@ pnpm --filter @deepseek-ai/dsh-electron run dev
 ### Choosing the Electron binary
 
 `scripts/electron.mjs` resolves the runtime in this order: the `DSH_ELECTRON_BIN` environment variable, electron's `ELECTRON_OVERRIDE_DIST_PATH` convention, then an `electron` on `PATH` outside `node_modules/.bin` (the system install), and finally the npm shim. Set `DSH_ELECTRON_BIN=/path/to/electron` to force a specific binary.
+
+The child `dsh web` process is spawned with the ambient `node` from `PATH` (not the Electron binary). Set `DSH_NODE=/path/to/node` to force a specific Node.
 
 ## Known Limitations and Deferred Work
 

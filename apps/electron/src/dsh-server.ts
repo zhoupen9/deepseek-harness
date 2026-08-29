@@ -26,7 +26,7 @@ export interface DshWebServer {
 
 /** Options for {@link spawnDshWeb}. */
 export interface SpawnDshWebOptions {
-  /** Extra arguments appended after `web --no-open` (for example `--port 8080`). */
+  /** Extra arguments appended after `web --no-open --port 0` (for example `--port 8080` to pin a port). */
   args?: readonly string[]
   /** How long to wait for the URL line, in milliseconds. */
   urlTimeoutMs?: number
@@ -50,6 +50,18 @@ export function resolveDshEntry(require: NodeRequire = createRequire(import.meta
 }
 
 /**
+ * Resolve the real Node executable that runs the CLI. The harness's plugin
+ * loader reaches Node internals through node-addon-require-builtin (a native
+ * addon compiled for Node's ABI), which cannot load under Electron's
+ * ELECTRON_RUN_AS_NODE mode, so the CLI must run under real Node. `DSH_NODE`
+ * overrides the default `node` resolved from PATH.
+ * @returns the Node executable to spawn.
+ */
+function resolveNode(): string {
+  return process.env.DSH_NODE ?? 'node'
+}
+
+/**
  * Spawn `dsh web --no-open` and resolve once its authenticated URL appears on
  * stdout. The URL line is the harness's readiness signal: it is printed only
  * after the Loader tree settles and sibling rows such as `/api` finish mounting.
@@ -58,12 +70,16 @@ export function resolveDshEntry(require: NodeRequire = createRequire(import.meta
  */
 export function spawnDshWeb(options: SpawnDshWebOptions = {}): Promise<DshWebServer> {
   const entry = resolveDshEntry()
-  // In the Electron main process `process.execPath` is the Electron binary, not
-  // Node. `ELECTRON_RUN_AS_NODE=1` makes that binary behave as plain Node, which
-  // is how the CLI (and, transitively, its own subprocesses) run in a packaged app
-  // that ships no system Node.
-  const child = spawn(process.execPath, [entry, 'web', '--no-open', ...(options.args ?? [])], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+  // The CLI must run under a real Node, not the Electron binary. Its plugin
+  // loader resolves packages through Node's internal ESM loader, reached via the
+  // node-addon-require-builtin native addon (built for Node's ABI); under
+  // ELECTRON_RUN_AS_NODE that addon cannot load, so plugin imports fail. The
+  // Electron main process inherits the ambient `node` from PATH (a packaged app
+  // would bundle Node; that is deferred packaging work).
+  // `--port 0` lets the OS pick a free port so the shell never collides with a
+  // user's already-running `dsh web`; the actual port arrives in the URL line.
+  const child = spawn(resolveNode(), [entry, 'web', '--no-open', '--port', '0', ...(options.args ?? [])], {
+    env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   child.stdout?.setEncoding('utf8')

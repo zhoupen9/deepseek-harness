@@ -53,6 +53,8 @@ async function start(): Promise<void> {
     minHeight: 480,
     title: 'DeepSeek Harness',
     show: false,
+    // The Web UI is the only chrome; hide the default application menu bar.
+    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

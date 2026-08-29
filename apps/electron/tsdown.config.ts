@@ -5,6 +5,8 @@ import { defineConfig } from 'tsdown'
  * Node built-in stay external: the former is provided by the Electron runtime,
  * the latter by Node. `@deepseek-ai/dsh` is never imported - its bin entry is
  * resolved at runtime through `createRequire` - so it needs no bundling either.
+ * `fixedExtension: false` keeps the `.js` extension the `main` field points at
+ * (the package is `type: module`).
  */
 export default defineConfig({
   entry: ['src/main.ts'],
@@ -12,7 +14,10 @@ export default defineConfig({
   format: ['esm'],
   platform: 'node',
   target: 'es2024',
+  fixedExtension: false,
   dts: false,
   clean: true,
-  external: ['electron'],
+  deps: {
+    neverBundle: ['electron'],
+  },
 })

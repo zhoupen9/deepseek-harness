@@ -15,7 +15,7 @@ Web UI 不是独立的静态站点 —— 只有 `dsh web` 会注入 `window.__D
 ## 前置条件
 
 - 已构建的工作区。被启动的 CLI 是编译后的 `@deepseek-ai/dsh` `lib/bin.js`，因此需先在仓库根目录运行 `pnpm run build`。
-- Node `^22.19 || >=24`（与 harness 相同的版本范围）。
+- Node `^22.19 || >=24`（与 harness 相同的版本范围）。被启动的 `dsh web` 运行在此 Node 而非 Electron 二进制上：harness 的插件加载器通过 `node-addon-require-builtin` 原生插件访问 Node 内部，该插件无法在 `ELECTRON_RUN_AS_NODE` 模式下加载。
 - 系统安装的 Electron（43.x）。npm 的 `electron` 依赖仅用于其 TypeScript 类型声明 —— 其 postinstall 二进制下载已在 `pnpm-workspace.yaml` 中拒绝，运行时由 `scripts/electron.mjs` 从系统中解析。
 
 ## 运行
@@ -40,6 +40,8 @@ pnpm --filter @deepseek-ai/dsh-electron run dev
 ### 选择 Electron 二进制
 
 `scripts/electron.mjs` 按以下顺序解析运行时：`DSH_ELECTRON_BIN` 环境变量、electron 的 `ELECTRON_OVERRIDE_DIST_PATH` 约定、`PATH` 上位于 `node_modules/.bin` 之外的 `electron`（即系统安装），最后才是 npm 垫片。可设置 `DSH_ELECTRON_BIN=/path/to/electron` 强制指定某个二进制。
+
+子进程 `dsh web` 使用 `PATH` 上的 `node`（而非 Electron 二进制）启动。可设置 `DSH_NODE=/path/to/node` 强制指定某个 Node。
 
 ## 已知限制与待办工作
 
