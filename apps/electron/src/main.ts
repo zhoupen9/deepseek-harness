@@ -9,7 +9,8 @@
  * @module @deepseek-ai/dsh-electron
  */
 
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron'
+import { fileURLToPath } from 'node:url'
 import { spawnDshWeb, type DshWebServer } from './dsh-server.ts'
 
 let server: DshWebServer | undefined
@@ -26,6 +27,62 @@ function terminateServer(): void {
 }
 
 /**
+ * Show a native desktop notification, no-oping on platforms without support
+ * (for example a Linux session with no notification daemon).
+ * @param title - notification title.
+ * @param body - notification body text.
+ */
+function notify(title: string, body: string): void {
+  if (!Notification.isSupported()) return
+  new Notification({ title, body }).show()
+}
+
+/**
+ * Notification copy for each Web UI attention kind. The Web UI calls
+ * `window.dshNotify(kind)` when the user's attention or action is needed; the
+ * shell maps the kind to a notification.
+ */
+const ATTENTION_COPY: Readonly<Record<string, { title: string; body: string }>> = {
+  approval: { title: 'Approval requested', body: 'DeepSeek Harness needs your approval to continue.' },
+  question: { title: 'Question', body: 'DeepSeek Harness has a question for you.' },
+  'plan-review': { title: 'Plan ready', body: 'DeepSeek Harness has a plan for your review.' },
+  'turn-complete': { title: 'Response ready', body: 'DeepSeek Harness finished responding.' },
+}
+
+/** Log a diagnostic line when `DSH_DEBUG_NOTIFY` is set (any non-empty value). */
+function logNotify(message: string): void {
+  if (process.env.DSH_DEBUG_NOTIFY !== undefined && process.env.DSH_DEBUG_NOTIFY !== '') {
+    console.log('[dsh-notify]', message)
+  }
+}
+
+/** Whether the shell window currently has focus (or none exists yet). */
+function windowFocused(): boolean {
+  return mainWindow !== undefined && mainWindow.isFocused()
+}
+
+/** Forward one Web UI attention kind to a native notification. */
+function handleAttention(kind: unknown): void {
+  if (typeof kind !== 'string') return
+  const copy = ATTENTION_COPY[kind]
+  logNotify('attention kind ' + JSON.stringify(kind) + (copy === undefined ? ' (unknown)' : ''))
+  if (copy === undefined) return
+  // Attention notifications only interrupt when the window is not already in
+  // front of the user; a focused window already shows the event in the UI.
+  if (windowFocused()) {
+    logNotify('suppressing ' + kind + ': window focused')
+    return
+  }
+  logNotify('notifying: ' + copy.title)
+  notify(copy.title, copy.body)
+}
+
+ipcMain.on('dsh:notify', (_event, payload: unknown) => {
+  const kind = typeof payload === 'object' && payload !== null ? (payload as { kind?: unknown }).kind : undefined
+  handleAttention(kind)
+})
+
+/**
  * Boot the child server, then create and load the window. A boot or load
  * failure is surfaced in a native dialog and exits the app.
  */
@@ -40,7 +97,9 @@ async function start(): Promise<void> {
   // An unexpected child exit tears down the window it was serving.
   server.child.once('exit', (code, signal) => {
     if (!quitting) {
-      dialog.showErrorBox('DeepSeek Harness stopped', 'dsh web exited (code ' + String(code) + ', signal ' + String(signal) + ').')
+      const detail = 'dsh web exited (code ' + String(code) + ', signal ' + String(signal) + ').'
+      notify('DeepSeek Harness stopped', detail)
+      dialog.showErrorBox('DeepSeek Harness stopped', detail)
     }
     app.quit()
   })
@@ -59,6 +118,7 @@ async function start(): Promise<void> {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: fileURLToPath(new URL('./preload.cjs', import.meta.url)),
     },
   })
   mainWindow.once('ready-to-show', () => { mainWindow?.show() })
@@ -80,6 +140,7 @@ async function start(): Promise<void> {
 
   try {
     await mainWindow.loadURL(server.url)
+    notify('DeepSeek Harness', 'Ready')
   } catch (error) {
     dialog.showErrorBox('DeepSeek Harness failed to load', error instanceof Error ? error.message : String(error))
     app.quit()

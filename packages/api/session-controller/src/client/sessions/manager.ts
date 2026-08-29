@@ -88,6 +88,19 @@ type SessionListMutation =
   /** Local first-send flip: the sender clears blank without waiting for a host frame. */
   | { kind: 'engaged'; sessionId: SessionId }
 
+/**
+ * Dispatch a browser attention event for a desktop shell (the Electron wrapper
+ * exposes `window.dshNotify` and raises a native notification). No-op outside a
+ * browser or when no shell bridge is present (a regular browser or a node test).
+ * @param kind - stable attention discriminator (for example `approval`, `turn-complete`).
+ */
+function dispatchAttention(kind: string): void {
+  if (typeof window === 'undefined') return
+  const bridge = (window as unknown as { dshNotify?: (kind: string) => void }).dshNotify
+  if (typeof bridge !== 'function') return
+  bridge(kind)
+}
+
 /** Instance cluster + frame entry + the session list. */
 export class SessionManager {
   private readonly sessions = new Map<SessionId, Session>()
@@ -902,6 +915,9 @@ export class SessionManager {
         continue
       }
       if (prev && !s.running) {
+        // A turn just finished; surface it to the desktop shell regardless of
+        // selection (the shell decides whether to interrupt a focused window).
+        dispatchAttention('turn-complete')
         if (s.sessionId !== this.selected) this.completedNotifications.add(s.sessionId)
       } else if (s.running) {
         this.completedNotifications.delete(s.sessionId)

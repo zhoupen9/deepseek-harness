@@ -471,6 +471,22 @@ describe('UiSession pending interactions', () => {
     await ctx.fiber.dispose()
   })
 
+  it('calls the desktop-shell bridge when an interaction first appears', () => {
+    const dshNotify = vi.fn()
+    vi.stubGlobal('window', { dshNotify })
+    try {
+      const ctx = new Context()
+      const bench = createSessionsBench(ctx)
+      const service = createUiSession(ctx, bench)
+      const register = service.registerPendingInteraction<SessionPendingInteractionBase>(() => 0)
+      register({ key: 'approval:1', kind: 'approval', sessionId: sessionId('s1') }, () => Promise.resolve())
+      expect(dshNotify).toHaveBeenCalledTimes(1)
+      expect(dshNotify).toHaveBeenCalledWith('approval')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('rejects duplicate keys and contains a failing aggregate subscriber', () => {
     const ctx = new Context()
     const bench = createSessionsBench(ctx)

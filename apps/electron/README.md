@@ -12,6 +12,17 @@ The Web UI is not a standalone static site — only `dsh web` injects `window.__
 
 The server process lives and dies with the window: closing the window sends `SIGTERM` and ends the session.
 
+## Notifications
+
+The shell raises native desktop notifications for two kinds of events:
+
+- **Lifecycle** — once when the window finishes loading, and when the child server stops unexpectedly.
+- **Attention** — when the Web UI needs the user's attention or action: an approval request (`approval`), a question (`question`), a plan ready for review (`plan-review`), or a completed assistant turn (`turn-complete`).
+
+Attention notifications only fire when the window is not focused; a focused window already shows the event in the UI.
+
+The Web UI signals these by calling `window.dshNotify(kind)`, which the shell's preload exposes through `contextBridge`; the main process maps the kind to a notification. Set `DSH_DEBUG_NOTIFY=1` to trace each attention event in the shell's stdout.
+
 ## Prerequisites
 
 - A built workspace. The spawned CLI is the compiled `@deepseek-ai/dsh` `lib/bin.js`, so run `pnpm run build` at the repository root first.

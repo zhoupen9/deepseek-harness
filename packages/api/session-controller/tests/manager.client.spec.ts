@@ -45,6 +45,25 @@ describe('SessionManager instances', () => {
 
 })
 
+describe('completion notifications', () => {
+  it('calls the desktop-shell bridge on a running-to-idle edge of a non-selected session', async () => {
+    const dshNotify = vi.fn()
+    vi.stubGlobal('window', { dshNotify })
+    try {
+      const api = new FakeApiClient()
+      const manager = new SessionManager(fakeRemote(api))
+      api.onList = () => Promise.resolve(ok({ items: [summary(S1, { running: true })] as never[] }))
+      await manager.refreshList()
+      api.onList = () => Promise.resolve(ok({ items: [summary(S1, { running: false })] as never[] }))
+      await manager.refreshList()
+      expect(dshNotify).toHaveBeenCalledTimes(1)
+      expect(dshNotify).toHaveBeenCalledWith('turn-complete')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
 describe('list lifecycle', () => {
   it('single-flights refreshList and preserves the Host baseline order', async () => {
     const api = new FakeApiClient()

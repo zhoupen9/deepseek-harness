@@ -24,6 +24,19 @@ import type {
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { renderSessionArea } from './session-provider.tsx'
 
+/**
+ * Dispatch a browser attention event for a desktop shell (the Electron wrapper
+ * exposes `window.dshNotify` and raises a native notification). No-op outside a
+ * browser or when no shell bridge is present (a regular browser or a node test).
+ * @param kind - stable attention discriminator (for example `approval`, `question`).
+ */
+function dispatchAttention(kind: string): void {
+  if (typeof window === 'undefined') return
+  const bridge = (window as unknown as { dshNotify?: (kind: string) => void }).dshNotify
+  if (typeof bridge !== 'function') return
+  bridge(kind)
+}
+
 /** Selector hook over the Session Controller list and current selection. */
 export type UseSessions = SnapshotSelectorHook<SessionListState>
 /** Selector hook over one Session's lifecycle and control state. */
@@ -381,6 +394,14 @@ export class UiSession extends Service {
       [...next].map(([sessionId, value]) => [sessionId, value.interaction] as const),
     )
     if (samePendingInteractions(this.pendingSnapshot, projected)) return
+    // A newly-appeared or replaced interaction needs the user's attention (an
+    // approval, question, or plan-review); surface it to the desktop shell.
+    for (const [sessionId, interaction] of projected) {
+      const previous = this.pendingSnapshot.get(sessionId)
+      if (previous === undefined || previous.key !== interaction.key) {
+        dispatchAttention(interaction.kind)
+      }
+    }
     this.pendingSnapshot = projected
     notifySubscribers(this.pendingListeners, '[ui-session] pending interactions')
   }

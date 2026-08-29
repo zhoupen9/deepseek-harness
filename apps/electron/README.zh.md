@@ -12,6 +12,17 @@ Web UI 不是独立的静态站点 —— 只有 `dsh web` 会注入 `window.__D
 
 服务器进程与窗口同生命周期：关闭窗口会发送 `SIGTERM` 并结束会话。
 
+## 通知
+
+外壳会在两类事件时显示原生桌面通知：
+
+- **生命周期** —— 窗口加载完成时一次，以及子服务器意外停止时。
+- **需要关注** —— 当 Web UI 需要用户关注或操作时：审批请求（`approval`）、提问（`question`）、待审阅的计划（`plan-review`），或助手回合完成（`turn-complete`）。
+
+关注通知仅在窗口未聚焦时触发；聚焦的窗口已经在 UI 中显示了该事件。
+
+Web UI 通过调用 `window.dshNotify(kind)` 来发信号，该函数由外壳的 preload 通过 `contextBridge` 暴露；主进程将 kind 映射为通知。可设置 `DSH_DEBUG_NOTIFY=1` 在外壳 stdout 中追踪每个关注事件。
+
 ## 前置条件
 
 - 已构建的工作区。被启动的 CLI 是编译后的 `@deepseek-ai/dsh` `lib/bin.js`，因此需先在仓库根目录运行 `pnpm run build`。
