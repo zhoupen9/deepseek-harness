@@ -72,4 +72,20 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
     expect(declarations('.fallbackBrandName')?.get('white-space')).toBe('nowrap')
   })
+
+  it('renders New Session borderless and left-aligned, centered on the rail', () => {
+    const wide = declarations('.newSession')
+    expect(wide?.get('justify-content')).toBe('flex-start')
+    expect(wide?.get('background')).toBe('transparent')
+    expect(wide?.get('border')).toBe('none')
+    expect(declarations('.newSession:hover')?.get('background')).toBe(
+      'var(--dsw-alias-interactive-bg-hover)',
+    )
+    expect(declarations('.collapsed .newSession')?.get('justify-content')).toBe('center')
+  })
+
+  it('left-aligns the build version seat and centers it on the rail', () => {
+    expect(declarations('.versionArea')?.get('justify-content')).toBe('flex-start')
+    expect(declarations('.collapsed .versionArea')?.get('justify-content')).toBe('center')
+  })
 })

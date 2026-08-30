@@ -123,6 +123,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   workspaceRegistry: 'workspace.md',
   workspaceController: 'workspace.md',
   directoryPickerController: 'workspace.md',
+  workspaceFilesController: 'workspace.md',
 }
 
 /**
@@ -722,6 +723,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   WorkflowAgentEndInfo: 'event-local snapshot is owned by packages/workflow/workflow/src/index.ts',
   WorkflowAgentInfo: 'event-local snapshot is owned by packages/workflow/workflow/src/index.ts',
   WorkflowResultInfo: 'event-local snapshot is owned by packages/workflow/workflow/src/index.ts',
+  WorkspaceFilesContent: 'workspace-files wire contract is owned by packages/api/workspace-files-controller/README.md',
+  WorkspaceFilesEntry: 'workspace-files wire contract is owned by packages/api/workspace-files-controller/README.md',
+  WorkspaceFilesListing: 'workspace-files wire contract is owned by packages/api/workspace-files-controller/README.md',
 }
 
 /** Repository data policy consumed by the Cordis catalog projector. */

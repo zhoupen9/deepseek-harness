@@ -95,6 +95,11 @@
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'
 
+    # Fenced directory-and-file listing and bounded text reads for the Files
+    # explorer (ctx.remote.workspaceFiles).
+    - id: workspace-files-controller
+      name: '@deepseek-ai/dsh-api-workspace-files-controller'
+
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
 

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { apply, inject } from '../src/client/index.ts'
-import { OfficialBrandMark, OfficialBrandName } from '../src/client/Brand.tsx'
+import { OfficialBrandMark, OfficialBrandName, OfficialBuildRevision } from '../src/client/Brand.tsx'
 
 afterEach(() => {
   cleanup()
@@ -14,6 +14,7 @@ afterEach(() => {
 const HOLES = [
   'sidebar.brand.mark',
   'sidebar.brand.name',
+  'sidebar.footer.version',
   'conversation.hero.brand.mark',
 ] as const
 
@@ -75,5 +76,38 @@ describe('official browser-brand plugin', () => {
     expect(mark.container.querySelector('svg')?.getAttribute('class')).toBe('hero-mark')
     mark.rerender(<OfficialBrandMark size={24} />)
     expect(mark.container.querySelector('svg')?.getAttribute('width')).toBe('24')
+  })
+
+  it('renders the revision text with the build hammer glyph when opted in', () => {
+    vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3')
+    vi.stubEnv('DSH_CLIENT_COMMIT_HASH', 'abc1234')
+
+    const view = render(<OfficialBuildRevision wide />)
+    expect(view.getByText('1.2.3-abc1234')).toBeTruthy()
+    expect(view.getByText('🔨')).toBeTruthy()
+  })
+
+  it('omits the revision text without the opt-in flag', () => {
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3')
+    vi.stubEnv('DSH_CLIENT_COMMIT_HASH', 'abc1234')
+
+    const view = render(<OfficialBuildRevision wide />)
+    expect(view.container.querySelector('span')).toBeNull()
+  })
+
+  it('omits the revision text when the build lacks version metadata', () => {
+    vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+
+    const view = render(<OfficialBuildRevision wide />)
+    expect(view.container.querySelector('span')).toBeNull()
+  })
+
+  it('omits the revision text on the collapsed rail', () => {
+    vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3')
+
+    const view = render(<OfficialBuildRevision wide={false} />)
+    expect(view.container.querySelector('span')).toBeNull()
   })
 })

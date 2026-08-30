@@ -2806,6 +2806,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'workspaceFilesController',
+    summary: 'Host service backing the generated `ctx.remote.workspaceFiles` namespace.',
+    description: 'Host service backing the generated `ctx.remote.workspaceFiles` namespace. Its two verbs are Agent-scoped: the `agent` lookup resolves the caller\'s session, whose cwd is the workspace root every listing and read is fenced to.',
+    methods: [
+      {
+        signature: '@Remote(\'list\') async list(agent: Agent, path: string | undefined, signal: AbortSignal): Promise<WorkspaceFilesListing>',
+        description: 'List one directory level for a Remote caller\'s explorer.',
+        parameters: [{ name: 'agent', description: 'target Agent resolved from the Session identity on the wire; its cwd is the fence root.' }, { name: 'path', description: 'absolute directory to list; absent lists the workspace root.' }, { name: 'signal', description: 'caller lifetime; abort stops the scan instead of letting it outlive a disconnected caller.' }],
+        returns: 'the level\'s listing with its ancestry.',
+      },
+      {
+        signature: '@Remote(\'read\') async read(agent: Agent, path: string, signal: AbortSignal): Promise<WorkspaceFilesContent>',
+        description: 'Read one text file\'s bounded content for a Remote caller\'s explorer.',
+        parameters: [{ name: 'agent', description: 'target Agent resolved from the Session identity on the wire; its cwd is the fence root.' }, { name: 'path', description: 'absolute file to read.' }, { name: 'signal', description: 'caller lifetime; abort stops the read and closes the handle.' }],
+        returns: 'the bounded UTF-8 content with binary and truncation flags.',
+      },
+    ],
+  },
+  {
     key: 'workspaceRegistry',
     summary: 'Durable workspace registry.',
     description: 'Durable workspace registry. Startup waits for `sessionPersistence`, builds one canonical-cwd header index, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.',
@@ -5887,6 +5906,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface UserMessage extends Message {\n    readonly role: \'user\';\n}',
   },
   {
+    name: 'VcsContext',
+    declaration: 'export type VcsContext = {\n    readonly kind: \'none\';\n} | {\n    readonly kind: \'error\';\n    readonly message: string;\n} | {\n    readonly kind: \'git\';\n    readonly root: string;\n    readonly worktree: string;\n};',
+  },
+  {
+    name: 'VcsFileStatus',
+    declaration: 'export type VcsFileStatus = \'modified\' | \'added\' | \'deleted\' | \'renamed\' | \'untracked\' | \'ignored\' | \'conflicted\';',
+  },
+  {
     name: 'VerifiedWebhookDelivery',
     declaration: 'export interface VerifiedWebhookDelivery<K extends string = string> {\n    readonly kind: K;\n    readonly source: WebhookSourceId;\n    readonly deliveryId: WebhookDeliveryId;\n    readonly event: WebhookEventOf<K>;\n    readonly receivedAt: number;\n}',
   },
@@ -6077,6 +6104,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceDeleteValue',
     declaration: 'export interface WorkspaceDeleteValue {\n    readonly deleted: true;\n}',
+  },
+  {
+    name: 'WorkspaceFilesContent',
+    declaration: 'export interface WorkspaceFilesContent {\n    readonly path: string;\n    readonly size: number;\n    readonly binary: boolean;\n    readonly truncated: boolean;\n    readonly content: string;\n    readonly totalLines: number;\n}',
+  },
+  {
+    name: 'WorkspaceFilesEntry',
+    declaration: 'export interface WorkspaceFilesEntry {\n    readonly name: string;\n    readonly path: string;\n    readonly kind: \'dir\' | \'file\';\n    readonly hidden: boolean;\n    readonly size?: number;\n    readonly modifiedAt?: number;\n    readonly vcs?: VcsFileStatus;\n    readonly vcsDirty?: boolean;\n}',
+  },
+  {
+    name: 'WorkspaceFilesListing',
+    declaration: 'export interface WorkspaceFilesListing {\n    readonly path: string;\n    readonly home: string;\n    readonly crumbs: readonly WorkspaceFilesEntry[];\n    readonly entries: readonly WorkspaceFilesEntry[];\n    readonly truncated: boolean;\n    readonly vcs: VcsContext;\n}',
   },
   {
     name: 'WorkspaceFollowFrame',

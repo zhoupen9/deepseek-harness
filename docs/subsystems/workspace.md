@@ -242,6 +242,36 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 
 Source: [`packages/api/workspace-controller/src/index.ts`](../../packages/api/workspace-controller/src/index.ts)
 
+<a id="ctxworkspacefilescontroller--workspacefilescontroller"></a>
+
+### `ctx.workspaceFilesController` — `WorkspaceFilesController`
+
+Host service backing the generated `ctx.remote.workspaceFiles` namespace. Its two verbs are Agent-scoped: the `agent` lookup resolves the caller's session, whose cwd is the workspace root every listing and read is fenced to.
+
+```ts cordis-catalog
+/**
+ * List one directory level for a Remote caller's explorer.
+ * @param agent - target Agent resolved from the Session identity on the wire; its cwd is the fence root.
+ * @param path - absolute directory to list; absent lists the workspace root.
+ * @param signal - caller lifetime; abort stops the scan instead of letting it outlive a disconnected caller.
+ * @returns the level's listing with its ancestry.
+ */
+@Remote('list') async list(agent: Agent, path: string | undefined, signal: AbortSignal): Promise<WorkspaceFilesListing>
+
+/**
+ * Read one text file's bounded content for a Remote caller's explorer.
+ * @param agent - target Agent resolved from the Session identity on the wire; its cwd is the fence root.
+ * @param path - absolute file to read.
+ * @param signal - caller lifetime; abort stops the read and closes the handle.
+ * @returns the bounded UTF-8 content with binary and truncation flags.
+ */
+@Remote('read') async read(agent: Agent, path: string, signal: AbortSignal): Promise<WorkspaceFilesContent>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/api/workspace-files-controller/src/index.ts`](../../packages/api/workspace-files-controller/src/index.ts)
+
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 
 ### `ctx.workspaceRegistry` — `WorkspaceRegistry`

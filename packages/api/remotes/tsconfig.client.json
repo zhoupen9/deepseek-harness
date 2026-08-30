@@ -73,6 +73,9 @@
       "path": "../workspace-controller/tsconfig.client.json"
     },
     {
+      "path": "../workspace-files-controller"
+    },
+    {
       "path": "../../typert/protocol"
     }
   ]
