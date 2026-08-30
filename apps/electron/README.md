@@ -1,5 +1,7 @@
 # @deepseek-ai/dsh-electron
 
+English | [中文](README.zh.md)
+
 Electron desktop shell for [DeepSeek Harness](../..): it boots the `dsh web` profile in a child process and hosts its authenticated Web UI in a native window.
 
 ## How it works
@@ -11,6 +13,10 @@ The Web UI is not a standalone static site — only `dsh web` injects `window.__
 3. Loads that URL in a native `BrowserWindow` and keeps navigation inside the served origin; any other link opens in the platform browser.
 
 The server process lives and dies with the window: closing the window sends `SIGTERM` and ends the session.
+
+## Window chrome
+
+The window is frameless — the OS title bar is removed (`frame: false`) and the shell draws its own chrome. There is no dedicated title bar: the preload floats a small **minimize / maximize / close** button group over the top-right of every page, with no reserved space, and the same invisible strip doubles as the window drag region. The buttons drive the window over IPC; the maximize button swaps to a restore glyph while the window is maximized, and double-clicking the strip toggles maximize, mirroring the native title bar. The controls follow the Web UI theme through the same `--dsw-*` design tokens.
 
 ## Notifications
 
@@ -42,9 +48,9 @@ pnpm --filter @deepseek-ai/dsh-electron run dev
 
 ## Scripts
 
-- `build` — bundle `src/main.ts` to `lib/main.js` (tsdown).
+- `build` — bundle `src/main.ts` to `lib/main.js` (ESM) and `src/preload.ts` to `lib/preload.cjs` (CommonJS, with `electron` external) via tsdown.
 - `typecheck` — `tsc -b`.
-- `test` — unit tests (URL-line parser and bin resolution).
+- `test` — unit tests (URL-line parser, bin resolution, and title-bar injection).
 - `start` — run `scripts/electron.mjs` over the built `lib/main.js`.
 - `dev` — build, then run `scripts/electron.mjs`.
 

@@ -1,5 +1,7 @@
 # @deepseek-ai/dsh-electron
 
+[English](README.md) | 中文
+
 [DeepSeek Harness](../..) 的 Electron 桌面外壳：它在子进程中启动 `dsh web` 配置，并在原生窗口中承载其经过认证的 Web UI。
 
 ## 工作原理
@@ -11,6 +13,10 @@ Web UI 不是独立的静态站点 —— 只有 `dsh web` 会注入 `window.__D
 3. 在原生 `BrowserWindow` 中加载该 URL，并将导航限制在所服务的源内；任何其他链接都会在系统浏览器中打开。
 
 服务器进程与窗口同生命周期：关闭窗口会发送 `SIGTERM` 并结束会话。
+
+## 窗口外框
+
+窗口采用无边框设计 —— 移除了系统标题栏（`frame: false`），由外壳自行绘制窗口外框。没有专用标题栏：preload 会在每个页面的右上角悬浮一组 **最小化 / 最大化 / 关闭** 按钮，不预留任何空间，同一条不可见的顶栏兼作窗口拖动区域。这些按钮通过 IPC 驱动窗口；窗口最大化时，最大化按钮会切换为还原图标；双击顶栏可切换最大化，与原生的标题栏行为一致。这些控件通过相同的 `--dsw-*` 设计令牌跟随 Web UI 主题。
 
 ## 通知
 
@@ -32,7 +38,7 @@ Web UI 通过调用 `window.dshNotify(kind)` 来发信号，该函数由外壳�
 ## 运行
 
 ```sh
-# 在仓库根目录
+# from the repository root
 pnpm install
 pnpm run build
 pnpm --filter @deepseek-ai/dsh-electron run dev
@@ -42,9 +48,9 @@ pnpm --filter @deepseek-ai/dsh-electron run dev
 
 ## 脚本
 
-- `build` —— 将 `src/main.ts` 打包为 `lib/main.js`（tsdown）。
+- `build` —— 将 `src/main.ts` 打包为 `lib/main.js`（ESM），并将 `src/preload.ts` 打包为 `lib/preload.cjs`（CommonJS，`electron` 保持外部依赖），通过 tsdown 完成。
 - `typecheck` —— `tsc -b`。
-- `test` —— 单元测试（URL 行解析与 bin 解析）。
+- `test` —— 单元测试（URL 行解析、bin 解析与顶栏注入）。
 - `start` —— 在构建好的 `lib/main.js` 上运行 `scripts/electron.mjs`。
 - `dev` —— 构建，然后运行 `scripts/electron.mjs`。
 

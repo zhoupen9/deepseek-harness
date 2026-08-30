@@ -7,7 +7,7 @@
   "main": "lib/main.js",
   "license": "MIT",
   "scripts": {
-    "build": "tsdown && node scripts/copy-preload.mjs",
+    "build": "tsdown",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "start": "node scripts/electron.mjs .",
