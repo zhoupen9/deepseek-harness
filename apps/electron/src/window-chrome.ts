@@ -77,8 +77,8 @@ const TITLEBAR_CSS = `
 }
 
 .dsh-wc[data-action='close']:hover {
-  background: var(--dsw-alias-interactive-bg-hover-danger, #e81123);
-  color: var(--dsw-alias-label-primary-inverted, #fff);
+  background: #e81123;
+  color: #fff;
 }
 
 .dsh-wc:focus-visible {
