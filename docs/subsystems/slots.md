@@ -141,7 +141,7 @@ root
 │  ├─ conversation.session.header
 │  │  ├─ conversation.session.header.lineage
 │  │  ├─ conversation.session.header.actions
-│  │  └─ conversation.session.header.utilities
+│  │  └─ conversation.session.header.tabs.utilities
 │  ├─ conversation.composer
 │  │  └─ conversation.approval.detail
 │  ├─ conversation.composer.bar
