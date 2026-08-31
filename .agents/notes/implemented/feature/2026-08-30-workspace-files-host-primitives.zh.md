@@ -17,11 +17,11 @@ Status: implemented
 
 两个动词都以 `agent: Agent` 作为第一个参数，由现有的 `agent` 查找从线上解析而来，因此客户端签名不携带会话 id，控制器会把每个操作限制在 `agent.session.header.cwd`（与 `SessionSummary.cwd` 所携带的值相同）之内。
 
-**根围栏由 Host 强制，而非 UX。** 只有当目标是完全限定路径（与 directory-picker-browse 使用的 `fullyQualified` 围栏相同）、并且在 `resolve()` 与 `realpath()` 之后位于会话 cwd 之内时，才被接受。位于根目录父级或以上的路径，或解析到根之外的符号链接，都会以 `workspace-path-outside-root` 拒绝。逃逸出根目录的符号链接仍会作为叶子条目列出——客户端可以显示它们——但它们的 `read` 会被拒绝；损坏或循环的链接会以无大小、无修改时间的文件形式列出，读取失败时报 `workspace-file-unreadable`。
+**根围栏由 Host 强制，而非 UX。** 只有当目标是完全限定路径（与 directory-picker-browse 使用的 `fullyQualified` 围栏相同）、并且在 `resolve()` 与 `realpath()` 之后位于会话 cwd 之内时，才被接受。位于根目录父级或以上的路径，或解析到根之外的符号链接，都会以 `workspace-files/path-outside-root` 拒绝。逃逸出根目录的符号链接仍会作为叶子条目列出——客户端可以显示它们——但它们的 `read` 会被拒绝；损坏或循环的链接会以无大小、无修改时间的文件形式列出，读取失败时报 `workspace-files/file-unreadable`。
 
 **列举像选择器一样流式且有界。** `list` 用 `opendir` 把一层内容流式读入一个规范顺序的、大小为 `maxEntries + 1`（默认 1000）的有界窗口，绝不会把一整层 `readdir` 进内存。目录由 dirent 判定；符号链接会用 stat 探测以跟随其目标种类；普通文件把大小/修改时间的 stat 推迟到物化阶段，因此只有被保留的窗口才付出代价。隐藏条目会被返回并标记（点前缀；Node 的 dirent 不暴露 Windows 隐藏属性），而绝不会被丢弃。`read` 最多读取 `maxBytes + 1` 字节（默认 512 KiB），多出的一个字节用于证明截断，去除 UTF-8 BOM，并在 `TextDecoder('utf-8', { fatal: true })` 失败时返回 `binary: true`——线上不传 base64。每个文件系统 await 都通过选择器的 `raceAbort` 模式与调用方信号竞速，被中止的扫描会关闭其句柄，而不会等待正在进行的读取。
 
-**封闭的失败词汇表。** 控制器抛出 `WorkspaceFilesError`，包含 `workspace-path-outside-root`、`workspace-path-unreadable`、`workspace-file-unreadable` 或 `workspace-path-not-found`，并像 `DirectoryPickerErrorCode` 一样映射到线上，让客户端无需字符串匹配即可映射业务代码。`cancelled` 与 `internal` 补全线上映射。
+**封闭的失败词汇表。** 控制器抛出 `WorkspaceFilesError`，包含 `workspace-files/path-outside-root`、`workspace-files/path-unreadable`、`workspace-files/file-unreadable` 或 `workspace-files/path-not-found`，并包装为 `RemoteError`，让客户端无需字符串匹配即可映射业务代码。承载码 `gateway/cancelled` 与 `gateway/internal` 补全线上映射。
 
 该包作为 web-app bundle 中独立的 Loader entry 发布，其生成的 `./remote` 贡献被加入 `dsh-api-remotes` 组装，因此客户端的 `ctx.remote.workspaceFiles` 命名空间无需其他客户端改动即可存在。
 

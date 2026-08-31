@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-30-workspace-files-host-primitives.md
-2026-08-30-workspace-files-host-primitives.md: f010f5778b1ed6a627e85244cae622fee0fc1c05
-2026-08-30-workspace-files-host-primitives.zh.md: 1a0a64f82132621b9e3f306fb283e09e58660664
+2026-08-30-workspace-files-host-primitives.md: 6e0b600532038a233fb333c19c1b6ea9c05bebb6
+2026-08-30-workspace-files-host-primitives.zh.md: cdcaf5a5ea2c257a26b6f4f80c7aedc7fda4144a

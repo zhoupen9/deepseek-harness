@@ -17,7 +17,7 @@ import { TextDecoder } from 'node:util'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { Remote, TypertRemoteFailure, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { VcsIndex } from './vcs.ts'
 import type { VcsConfig } from './vcs.ts'
 import type {
@@ -25,7 +25,6 @@ import type {
   WorkspaceFilesContent,
   WorkspaceFilesEntry,
   WorkspaceFilesErrorCode,
-  WorkspaceFilesErrorDetailsMap,
   WorkspaceFilesListing,
 } from './types.ts'
 
@@ -312,15 +311,15 @@ export class WorkspaceFilesController extends TypertRemoteService {
       // target does not) via lstat.
       const entry = await raceAbort(lstat(resolved), signal).catch(() => undefined)
       if (entry === undefined) {
-        throw new WorkspaceFilesError('workspace-path-not-found', resolved, `${resolved} does not exist`)
+        throw new WorkspaceFilesError('workspace-files/path-not-found', resolved, `${resolved} does not exist`)
       }
       if (verb === 'read') {
-        throw new WorkspaceFilesError('workspace-file-unreadable', resolved, `${resolved} is a broken or cyclic link`)
+        throw new WorkspaceFilesError('workspace-files/file-unreadable', resolved, `${resolved} is a broken or cyclic link`)
       }
-      throw new WorkspaceFilesError('workspace-path-unreadable', resolved, `cannot list ${resolved}: ${messageOf(error)}`)
+      throw new WorkspaceFilesError('workspace-files/path-unreadable', resolved, `cannot list ${resolved}: ${messageOf(error)}`)
     }
     if (!within(root, real)) {
-      throw new WorkspaceFilesError('workspace-path-outside-root', resolved, `"${resolved}" is outside the session workspace root`)
+      throw new WorkspaceFilesError('workspace-files/path-outside-root', resolved, `"${resolved}" is outside the session workspace root`)
     }
     return real
   }
@@ -332,7 +331,7 @@ export class WorkspaceFilesController extends TypertRemoteService {
     // silently rebase a relative or empty wire value under the host process
     // cwd (or, on Windows, its current drive).
     if (path !== undefined && !fullyQualified(path)) {
-      throw new WorkspaceFilesError('workspace-path-unreadable', path, `cannot list "${path}": not a fully qualified path`)
+      throw new WorkspaceFilesError('workspace-files/path-unreadable', path, `cannot list "${path}": not a fully qualified path`)
     }
     const target = resolve(path ?? root)
     await this.fencedRealPath(target, root, signal, 'list')
@@ -383,7 +382,7 @@ export class WorkspaceFilesController extends TypertRemoteService {
     } catch (error: unknown) {
       // An abort is the caller's own reason, not an unreadable directory.
       signal.throwIfAborted()
-      throw new WorkspaceFilesError('workspace-path-unreadable', target, `cannot list ${target}: ${messageOf(error)}`)
+      throw new WorkspaceFilesError('workspace-files/path-unreadable', target, `cannot list ${target}: ${messageOf(error)}`)
     }
     const entries: WorkspaceFilesEntry[] = []
     let truncated = evicted
@@ -458,16 +457,16 @@ export class WorkspaceFilesController extends TypertRemoteService {
   private async readFile(agent: Agent, path: string, signal: AbortSignal): Promise<WorkspaceFilesContent> {
     const root = await this.rootOf(agent, signal)
     if (!fullyQualified(path)) {
-      throw new WorkspaceFilesError('workspace-path-unreadable', path, `cannot read "${path}": not a fully qualified path`)
+      throw new WorkspaceFilesError('workspace-files/path-unreadable', path, `cannot read "${path}": not a fully qualified path`)
     }
     const resolved = resolve(path)
     const real = await this.fencedRealPath(resolved, root, signal, 'read')
     const info = await raceAbort(stat(real), signal).catch((error: unknown) => {
       if (signal.aborted) throw asError(signal.reason)
-      throw new WorkspaceFilesError('workspace-file-unreadable', resolved, `cannot read ${resolved}: ${messageOf(error)}`)
+      throw new WorkspaceFilesError('workspace-files/file-unreadable', resolved, `cannot read ${resolved}: ${messageOf(error)}`)
     })
     if (!info.isFile()) {
-      throw new WorkspaceFilesError('workspace-file-unreadable', resolved, `"${resolved}" is not a regular file`)
+      throw new WorkspaceFilesError('workspace-files/file-unreadable', resolved, `"${resolved}" is not a regular file`)
     }
     const maxBytes = this.config.maxBytes
     let bytes: Buffer
@@ -494,7 +493,7 @@ export class WorkspaceFilesController extends TypertRemoteService {
       }
     } catch (error: unknown) {
       signal.throwIfAborted()
-      throw new WorkspaceFilesError('workspace-file-unreadable', resolved, `cannot read ${resolved}: ${messageOf(error)}`)
+      throw new WorkspaceFilesError('workspace-files/file-unreadable', resolved, `cannot read ${resolved}: ${messageOf(error)}`)
     }
     const truncated = bytes.length > maxBytes
     const contentBytes = truncated ? bytes.subarray(0, maxBytes) : bytes
@@ -518,39 +517,30 @@ export class WorkspaceFilesController extends TypertRemoteService {
   }
 }
 
-/** Raise one entry of the workspace-files wire failure vocabulary. */
-function failureOf<Code extends keyof WorkspaceFilesErrorDetailsMap>(
-  code: Code,
-  message: string,
-  details: WorkspaceFilesErrorDetailsMap[Code],
-): TypertRemoteFailure {
-  return new TypertRemoteFailure({ code, message, details })
-}
-
 /**
  * Classify a primitive's rejection: the controller's own closed codes carry
  * the path they are about, and anything else stays an infrastructure failure.
  * @param error - the primitive's rejection.
  * @returns the failure to throw across the Remote boundary.
  */
-function workspaceFilesFailure(error: unknown): TypertRemoteFailure {
+function workspaceFilesFailure(error: unknown): RemoteError {
   if (error instanceof WorkspaceFilesError) {
-    return failureOf(error.code, error.message, { path: error.path })
+    return new RemoteError(error.code, error.message, { path: error.path }, { cause: error })
   }
-  return failureOf('internal', messageOf(error), {})
+  return new RemoteError('gateway/internal', messageOf(error), {}, { cause: error })
 }
 
 /**
  * Classify a cancellable primitive's rejection. An abort is the caller's own
- * timeout or disconnect, not a backend failure, so it answers `cancelled`
- * before the business classification runs.
+ * timeout or disconnect, not a backend failure, so it answers
+ * `gateway/cancelled` before the business classification runs.
  * @param error - the primitive's rejection.
  * @param signal - the caller lifetime the primitive ran under.
  * @param cancelled - operator-facing text for the abort outcome.
  * @returns the failure to throw across the Remote boundary.
  */
-function cancellableFailure(error: unknown, signal: AbortSignal, cancelled: string): TypertRemoteFailure {
-  if (signal.aborted) return failureOf('cancelled', cancelled, {})
+function cancellableFailure(error: unknown, signal: AbortSignal, cancelled: string): RemoteError {
+  if (signal.aborted) return new RemoteError('gateway/cancelled', cancelled, {})
   return workspaceFilesFailure(error)
 }
 

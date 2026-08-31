@@ -156,38 +156,38 @@ describe('WorkspaceFilesController.read', () => {
 describe('WorkspaceFilesController fence', () => {
   it('refuses a path outside the workspace root', async () => {
     await expect(controller.list(agent(), '/etc', new AbortController().signal))
-      .rejects.toMatchObject({ failure: { code: 'workspace-path-outside-root', details: { path: '/etc' } } })
+      .rejects.toMatchObject({ code: 'workspace-files/path-outside-root', details: { path: '/etc' } })
   })
 
   it('refuses a read of a symlink that resolves outside the root, while still listing it', async () => {
     const listing = await controller.list(agent(), root, new AbortController().signal)
     expect(listing.entries.map(entry => entry.name)).toContain('link-out')
     await expect(controller.read(agent(), join(root, 'link-out'), new AbortController().signal))
-      .rejects.toMatchObject({ failure: { code: 'workspace-path-outside-root' } })
+      .rejects.toMatchObject({ code: 'workspace-files/path-outside-root' })
   })
 
   it('refuses non-fully-qualified paths instead of rebasing them under the process cwd', async () => {
     for (const relative of ['', 'sub', './sub', '..']) {
       const listFailure = await controller.list(agent(), relative, new AbortController().signal).catch((error: unknown) => error)
-      expect(listFailure).toMatchObject({ failure: { code: 'workspace-path-unreadable' } })
+      expect(listFailure).toMatchObject({ code: 'workspace-files/path-unreadable' })
     }
   })
 
   it('refuses a read of a directory and a missing file', async () => {
     await expect(controller.read(agent(), join(root, 'dir-a'), new AbortController().signal))
-      .rejects.toMatchObject({ failure: { code: 'workspace-file-unreadable' } })
+      .rejects.toMatchObject({ code: 'workspace-files/file-unreadable' })
     await expect(controller.read(agent(), join(root, 'no-such-file'), new AbortController().signal))
-      .rejects.toMatchObject({ failure: { code: 'workspace-path-not-found' } })
+      .rejects.toMatchObject({ code: 'workspace-files/path-not-found' })
   })
 
   it('refuses a read of a broken link', async () => {
     await expect(controller.read(agent(), join(root, 'broken-link'), new AbortController().signal))
-      .rejects.toMatchObject({ failure: { code: 'workspace-file-unreadable' } })
+      .rejects.toMatchObject({ code: 'workspace-files/file-unreadable' })
   })
 
-  it('maps a missing list target to workspace-path-not-found', async () => {
+  it('maps a missing list target to workspace-files/path-not-found', async () => {
     await expect(controller.list(agent(), join(root, 'no-such-dir'), new AbortController().signal))
-      .rejects.toMatchObject({ failure: { code: 'workspace-path-not-found' } })
+      .rejects.toMatchObject({ code: 'workspace-files/path-not-found' })
   })
 })
 
@@ -196,9 +196,9 @@ describe('WorkspaceFilesController abort', () => {
     const aborted = new AbortController()
     aborted.abort(new Error('caller left'))
     await expect(controller.list(agent(), root, aborted.signal))
-      .rejects.toMatchObject({ failure: { code: 'cancelled' } })
+      .rejects.toMatchObject({ code: 'gateway/cancelled' })
     await expect(controller.read(agent(), join(root, 'big.txt'), aborted.signal))
-      .rejects.toMatchObject({ failure: { code: 'cancelled' } })
+      .rejects.toMatchObject({ code: 'gateway/cancelled' })
     // Give the abandoned realpath/read settlements a turn to surface as
     // unhandled rejections; raceAbort swallows them.
     await new Promise(resolve => setTimeout(resolve, 10))
@@ -207,8 +207,8 @@ describe('WorkspaceFilesController abort', () => {
 
 describe('WorkspaceFilesController helpers', () => {
   it('throws a typed WorkspaceFilesError carrying its code and path', () => {
-    const error = new WorkspaceFilesError('workspace-path-outside-root', '/etc', 'outside')
-    expect(error.code).toBe('workspace-path-outside-root')
+    const error = new WorkspaceFilesError('workspace-files/path-outside-root', '/etc', 'outside')
+    expect(error.code).toBe('workspace-files/path-outside-root')
     expect(error.path).toBe('/etc')
     expect(error.name).toBe('WorkspaceFilesError')
   })

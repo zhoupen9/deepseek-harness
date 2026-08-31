@@ -24,7 +24,7 @@ English | [中文](README.zh.md)
 
 `list(path?, signal)` streams one level with `opendir` into a bounded window of `maxEntries` (default 1000) entries, directories first then files, each alphabetical. Hidden entries are returned and flagged, never dropped; broken or cyclic symlinks list as files with no size or mtime. `read(path, signal)` reads at most `maxBytes + 1` bytes (default 512 KiB), strips a UTF-8 BOM, and reports `binary: true` when the bytes are not valid UTF-8 instead of transferring base64.
 
-The fence resolves the session's cwd as the workspace root. A target at or above the root's parent, or a symlink that resolves outside the root, is refused with `workspace-path-outside-root`. A symlink escaping the root still lists (so the client can show it), but its read is refused.
+The fence resolves the session's cwd as the workspace root. A target at or above the root's parent, or a symlink that resolves outside the root, is refused with `workspace-files/path-outside-root`. A symlink escaping the root still lists (so the client can show it), but its read is refused.
 
 Under a git repository `list` also decorates each entry with a collapsed VCS status: files carry `vcs` (modified/added/deleted/renamed/untracked/ignored/conflicted; a clean tracked file omits it) and directories carry `vcsDirty` when a non-ignored descendant differs or `vcs: 'ignored'` when the whole directory is git-ignored. Status is one cached snapshot per worktree root, recomputed after a short TTL, and a missing or broken git degrades to a `none`/`error` context instead of failing the listing.
 

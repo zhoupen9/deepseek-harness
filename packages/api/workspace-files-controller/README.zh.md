@@ -24,7 +24,7 @@ kind: "package-reference"
 
 `list(path?, signal)` 用 `opendir` 将一层内容流式读入一个有界窗口（默认 `maxEntries` 为 1000 项），目录在前、文件在后，各自按字母排序。隐藏条目会被返回并标记，而不会被丢弃；损坏或循环的符号链接会以无大小、无修改时间的文件形式列出。`read(path, signal)` 最多读取 `maxBytes + 1` 字节（默认 512 KiB），去除 UTF-8 BOM，并在字节不是合法 UTF-8 时返回 `binary: true`，而不传输 base64。
 
-围栏将会话的 cwd 作为工作区根目录。位于根目录父级或以上的目标，或解析到根目录之外的符号链接，都会以 `workspace-path-outside-root` 拒绝。逃逸出根目录的符号链接仍会被列出（以便客户端显示它），但读取它会被拒绝。
+围栏将会话的 cwd 作为工作区根目录。位于根目录父级或以上的目标，或解析到根目录之外的符号链接，都会以 `workspace-files/path-outside-root` 拒绝。逃逸出根目录的符号链接仍会被列出（以便客户端显示它），但读取它会被拒绝。
 
 在 git 仓库内，`list` 还会为每个条目附加折叠后的 VCS 状态：文件携带 `vcs`（modified/added/deleted/renamed/untracked/ignored/conflicted；干净的被跟踪文件省略它），当某个非忽略的后代有差异时目录携带 `vcsDirty`，当整个目录被 git 忽略时携带 `vcs: 'ignored'`。状态是每个工作树根目录一个缓存快照，在短暂的 TTL 后重新计算，缺失或损坏的 git 会退化为 `none`/`error` 上下文，而不是让列举失败。
 

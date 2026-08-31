@@ -77,25 +77,22 @@ export interface WorkspaceFilesContent {
   readonly totalLines: number
 }
 
+declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface RemoteErrorDetailsMap {
+    /** The target escapes the session workspace root. */
+    'workspace-files/path-outside-root': { readonly path: string }
+    /** The target is not fully qualified, or cannot be listed. */
+    'workspace-files/path-unreadable': { readonly path: string }
+    /** The read target is a directory, a non-regular file, unreadable, or a broken link. */
+    'workspace-files/file-unreadable': { readonly path: string }
+    /** The target does not exist. */
+    'workspace-files/path-not-found': { readonly path: string }
+  }
+}
+
 /** Closed failure vocabulary of the workspace-files primitives. */
 export type WorkspaceFilesErrorCode =
-  | 'workspace-path-outside-root'
-  | 'workspace-path-unreadable'
-  | 'workspace-file-unreadable'
-  | 'workspace-path-not-found'
-
-/** Stable workspace-files failure details returned by the wire verbs. */
-export interface WorkspaceFilesErrorDetailsMap {
-  /** The target escapes the session workspace root. */
-  'workspace-path-outside-root': { readonly path: string }
-  /** The target is not fully qualified, or cannot be listed. */
-  'workspace-path-unreadable': { readonly path: string }
-  /** The read target is a directory, a non-regular file, unreadable, or a broken link. */
-  'workspace-file-unreadable': { readonly path: string }
-  /** The target does not exist. */
-  'workspace-path-not-found': { readonly path: string }
-  /** The caller's own timeout or disconnect ended the scan or the read. */
-  cancelled: Record<never, never>
-  /** A backend failure with no seam code of its own. */
-  internal: Record<never, never>
-}
+  | 'workspace-files/path-outside-root'
+  | 'workspace-files/path-unreadable'
+  | 'workspace-files/file-unreadable'
+  | 'workspace-files/path-not-found'
