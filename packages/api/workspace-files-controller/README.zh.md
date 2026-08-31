@@ -26,7 +26,7 @@ kind: "package-reference"
 
 围栏将会话的 cwd 作为工作区根目录。位于根目录父级或以上的目标，或解析到根目录之外的符号链接，都会以 `workspace-path-outside-root` 拒绝。逃逸出根目录的符号链接仍会被列出（以便客户端显示它），但读取它会被拒绝。
 
-在 git 仓库内，`list` 还会为每个条目附加折叠后的 VCS 状态：文件携带 `vcs`（modified/added/deleted/renamed/untracked/ignored/conflicted；干净的被跟踪文件省略它），当某个非忽略的后代有差异时，目录携带 `vcsDirty`。状态是每个工作树根目录一个缓存快照，在短暂的 TTL 后重新计算，缺失或损坏的 git 会退化为 `none`/`error` 上下文，而不是让列举失败。
+在 git 仓库内，`list` 还会为每个条目附加折叠后的 VCS 状态：文件携带 `vcs`（modified/added/deleted/renamed/untracked/ignored/conflicted；干净的被跟踪文件省略它），当某个非忽略的后代有差异时目录携带 `vcsDirty`，当整个目录被 git 忽略时携带 `vcs: 'ignored'`。状态是每个工作树根目录一个缓存快照，在短暂的 TTL 后重新计算，缺失或损坏的 git 会退化为 `none`/`error` 上下文，而不是让列举失败。
 
 -----
 

@@ -415,8 +415,10 @@ export class WorkspaceFilesController extends TypertRemoteService {
       if (vcs.snapshot !== undefined) {
         if (candidate.kind === 'file') {
           vcsStatus = vcs.snapshot.statusByPath.get(entryPath)
-        } else if (vcs.snapshot.dirtyDirs.has(entryPath)) {
-          vcsDirty = true
+        } else {
+          // A directory's only status row is the entirely-ignored `!! dir/`.
+          vcsStatus = vcs.snapshot.statusByPath.get(entryPath)
+          if (vcs.snapshot.dirtyDirs.has(entryPath)) vcsDirty = true
         }
       }
       entries.push({

@@ -25,7 +25,7 @@ Status: implemented
 
 该包作为 web-app bundle 中独立的 Loader entry 发布，其生成的 `./remote` 贡献被加入 `dsh-api-remotes` 组装，因此客户端的 `ctx.remote.workspaceFiles` 命名空间无需其他客户端改动即可存在。
 
-**VCS（git）状态是 `list` 的一种能力，而非第三个动词。** 每个列举都携带一个 `vcs` 上下文（`none` / `error` / 带 `root` 与 `worktree` 的 `git`），在 git 下每个文件条目携带折叠后的 `vcs` 状态，而每个目录在某个非忽略的后代有差异时携带 `vcsDirty`。状态是每个工作树根目录一个缓存快照，在相邻的 list 调用间复用，并在短暂的 TTL 后重新计算，因此路径不会在渲染中途翻转，陈旧的快照也可接受。git 运行是被围栏的：它使用 `-c core.hooksPath=/dev/null -c core.fsmonitor=false`，且一个 `gitdir:` 解析到工作区根之外的 `.git` FILE（链接工作树 / gitlink / 子模块）绝不会被跟随。被忽略的文件（通过 `--ignored` 报告）保持为 `ignored`，绝不会是 `untracked`；porcelain XY 折叠为每个文件一个代码，其中 `U`/冲突对映射为 `conflicted`。缺失的 git 退化为 `none`，失败的状态运行退化为 `error` —— 列举总是成功。超过 `maxDirtyPaths` 个显著路径后，快照退化为不标注，而不是一个不完整的集合。
+**VCS（git）状态是 `list` 的一种能力，而非第三个动词。** 每个列举都携带一个 `vcs` 上下文（`none` / `error` / 带 `root` 与 `worktree` 的 `git`），在 git 下每个文件条目携带折叠后的 `vcs` 状态，而每个目录在某个非忽略的后代有差异时携带 `vcsDirty`，当整个目录被 git 忽略时携带 `vcs: 'ignored'`。状态是每个工作树根目录一个缓存快照，在相邻的 list 调用间复用，并在短暂的 TTL 后重新计算，因此路径不会在渲染中途翻转，陈旧的快照也可接受。git 运行是被围栏的：它使用 `-c core.hooksPath=/dev/null -c core.fsmonitor=false`，且一个 `gitdir:` 解析到工作区根之外的 `.git` FILE（链接工作树 / gitlink / 子模块）绝不会被跟随。被忽略的文件与被整体忽略的目录（通过 `--ignored=matching` 报告）保持为 `ignored`，绝不会是 `untracked`；porcelain XY 折叠为每个文件一个代码，其中 `U`/冲突对映射为 `conflicted`。缺失的 git 退化为 `none`，失败的状态运行退化为 `error` —— 列举总是成功。超过 `maxDirtyPaths` 个显著路径后，快照退化为不标注，而不是一个不完整的集合。
 
 ## Alternatives considered
 
@@ -51,4 +51,4 @@ Status: implemented
 
 ## Testing
 
-包测试覆盖目录在前的排序与截断、围栏（根之外、非完全限定、符号链接逃逸、不存在）、损坏链接的列出与读取拒绝、有界/二进制/行数读取、被中止扫描的 cancelled 代码，以及一个真实的 Loader 组装——它以默认配置挂载控制器并在销毁时移除它。VCS 测试覆盖 porcelain 折叠（包括重命名旧路径跳过与 `maxDirtyPaths` 退化）、真实仓库下的逐条目标注与 `vcsDirty`、被忽略而非未跟踪的区分、仓库外与损坏仓库内的 `none`/`error` 上下文，以及快照缓存（相邻读取结果一致、TTL 后重新计算）。生成的 `./remote` 产物在构建期间由 Typert 生成器的导出检查验证。
+包测试覆盖目录在前的排序与截断、围栏（根之外、非完全限定、符号链接逃逸、不存在）、损坏链接的列出与读取拒绝、有界/二进制/行数读取、被中止扫描的 cancelled 代码，以及一个真实的 Loader 组装——它以默认配置挂载控制器并在销毁时移除它。VCS 测试覆盖 porcelain 折叠（包括重命名旧路径跳过、整体被忽略目录的折叠与 `maxDirtyPaths` 退化）、真实仓库下的逐条目标注、`vcsDirty` 与整体被忽略目录的 `vcs: 'ignored'`、被忽略而非未跟踪的区分、仓库外与损坏仓库内的 `none`/`error` 上下文，以及快照缓存（相邻读取结果一致、TTL 后重新计算）。生成的 `./remote` 产物在构建期间由 Typert 生成器的导出检查验证。

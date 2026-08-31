@@ -42,6 +42,14 @@ describe('buildSnapshot', () => {
     expect(snapshot.dirtyDirs.has('/repo/only-ignored')).toBe(false)
   })
 
+  it('maps an entirely-ignored directory row onto its path as ignored, never a dirty ancestor', () => {
+    const output = '!! build/\0 M sub/mod.txt\0'
+    const snapshot = buildSnapshot('/repo', output, 100)
+    expect(snapshot.statusByPath.get('/repo/build')).toBe('ignored')
+    expect(snapshot.dirtyDirs.has('/repo/build')).toBe(false)
+    expect(snapshot.dirtyDirs.has('/repo/sub')).toBe(true)
+  })
+
   it('degrades to empty maps past maxDirtyPaths instead of reporting partial status', () => {
     const output = ' M a.txt\0 M b.txt\0 M c.txt\0'
     const snapshot = buildSnapshot('/repo', output, 2)
@@ -73,7 +81,7 @@ beforeAll(async () => {
   // Worktree changes after the commit.
   await writeFile(join(repo, 'committed.txt'), 'modified')
   await writeFile(join(repo, 'untracked.txt'), 'new')
-  await writeFile(join(repo, '.gitignore'), '*.ignored\n')
+  await writeFile(join(repo, '.gitignore'), '*.ignored\nignored-dir/\n')
   await writeFile(join(repo, 'skip.ignored'), 'x')
   await mkdir(join(repo, 'sub'))
   await writeFile(join(repo, 'sub', 'added.txt'), 'a')
@@ -103,7 +111,8 @@ describe('WorkspaceFilesController VCS decoration', () => {
     expect(byName.get('untracked.txt')?.vcs).toBe('untracked')
     expect(byName.get('skip.ignored')?.vcs).toBe('ignored')
     expect(byName.get('sub')?.vcsDirty).toBe(true)
-    // An ignored-only directory is not dirty.
+    // An entirely-ignored directory is marked ignored and is never dirty.
+    expect(byName.get('ignored-dir')?.vcs).toBe('ignored')
     expect(byName.get('ignored-dir')?.vcsDirty).toBeUndefined()
   })
 

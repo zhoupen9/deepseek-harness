@@ -280,9 +280,12 @@ export class VcsIndex {
 
 /** Run one `git status` with the safe flags and build its snapshot. */
 async function computeSnapshot(root: string, maxDirtyPaths: number, signal: AbortSignal): Promise<VcsSnapshot> {
+  // `--ignored=matching` keeps untracked directories expanded while collapsing
+  // an entirely-ignored directory to one `!! dir/` row; the traditional default
+  // expands it into individual `!! dir/file` rows and loses that directory marker.
   const { stdout } = await execFileAsync(
     'git',
-    ['-C', root, ...GIT_SAFE_CONFIG, 'status', '--porcelain=v1', '--ignored', '--untracked-files=all', '-z'],
+    ['-C', root, ...GIT_SAFE_CONFIG, 'status', '--porcelain=v1', '--ignored=matching', '--untracked-files=all', '-z'],
     { signal, maxBuffer: GIT_STATUS_MAX_BUFFER, encoding: 'utf8' },
   )
   return buildSnapshot(root, stdout, maxDirtyPaths)

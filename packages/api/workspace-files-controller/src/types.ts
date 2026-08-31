@@ -36,7 +36,10 @@ export interface WorkspaceFilesEntry {
   readonly size?: number
   /** Last-modified epoch ms; present only for files the host could stat. */
   readonly modifiedAt?: number
-  /** Notable VCS status; present only for files under a git repo (clean = absent). */
+  /**
+   * Notable VCS status (clean = absent). Files: one of the seven codes;
+   * directories: 'ignored' when the whole directory is git-ignored.
+   */
   readonly vcs?: VcsFileStatus
   /** Present (true) for directories with a differing descendant (ignored-only excluded). */
   readonly vcsDirty?: boolean
