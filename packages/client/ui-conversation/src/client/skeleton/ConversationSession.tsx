@@ -197,6 +197,7 @@ export function ConversationSession({
   return (
     <div className={css.viewArea}>
       {active !== undefined && renderSlot('conversation.view', {
+        conversationViews: tabs,
         viewRequest,
         openView: actions.openView,
         completeViewRequest: actions.completeViewRequest,

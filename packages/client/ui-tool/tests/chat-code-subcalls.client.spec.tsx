@@ -83,6 +83,7 @@ const VIEW_OWNER: ConvViewOwnerProps = {
   viewRequest: null,
   openView: () => {},
   completeViewRequest: () => {},
+  conversationViews: [],
 }
 function AppRoot({ renderSlot }: AppRootProps) {
   return <>{renderSlot('conversation.view', VIEW_OWNER, { only: 'chat' })}</>

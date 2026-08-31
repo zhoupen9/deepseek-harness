@@ -79,7 +79,7 @@ function tailOwner(
   openFile: (path: string) => void = () => {},
   turn = 1,
 ): TurnTailOwnerProps {
-  return { seq, openFile, turn: turnLocation(turn, data) }
+  return { seq, openFile, openView: () => {}, turn: turnLocation(turn, data) }
 }
 
 interface TimelineSnapshot {

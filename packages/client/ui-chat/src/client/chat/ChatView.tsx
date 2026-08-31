@@ -16,6 +16,9 @@ import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
 
+/** Conversation View id the ui-files plugin registers for its Files explorer. */
+const FILES_VIEW_ID = 'files'
+
 /** Active column host when present; otherwise the view-local scroller. */
 function scrollerOf(from: HTMLElement): HTMLElement {
   return (from.closest('[data-conversation-scroll]')) ?? from
@@ -203,7 +206,7 @@ function TurnStatus({ startTime, t }: {
  */
 export function ChatView({
   useSession, useChat, useSessions, useStore, actions, renderSlot, sessionId, openFile, loadOlder, loadImage, openView, chatScroll, forkAt,
-  fileMentions, useTranscriptView, t,
+  conversationViews, fileMentions, useTranscriptView, t,
 }: ChatViewSlotProps) {
   const order = useChat(s => s.order)
   const nodeStore = useChat(s => s.nodes)
@@ -232,6 +235,12 @@ export function ChatView({
   const fileOpenRequest = useRef(0)
 
   const requestOpenFile = useCallback((path: string) => {
+    // A registered Files view takes chat file opens: switch to that tab and
+    // let the view reveal the path; without one the Host opens it natively.
+    if (conversationViews.some(view => view.id === FILES_VIEW_ID)) {
+      openView(FILES_VIEW_ID, path)
+      return
+    }
     const id = ++fileOpenRequest.current
     setFileOpenBusy(true)
     void openFile(path).then(
@@ -252,7 +261,7 @@ export function ChatView({
         setFileOpenBusy(false)
       },
     )
-  }, [openFile, t])
+  }, [conversationViews, openFile, openView, t])
 
   const closeFileOpenError = useCallback(() => {
     fileOpenRequest.current += 1
@@ -604,6 +613,7 @@ export function ChatView({
               selectedCallId={selectedCallId}
               cwd={cwd}
               openFile={requestOpenFile}
+              openView={openView}
               inspectCall={inspectCall}
               forkAt={forkAt}
               renderMessageImages={renderMessageImages}

@@ -25,6 +25,8 @@ export interface TurnTailOwnerProps {
   turn: TurnLocation
   seq: number
   openFile: (path: string) => void
+  /** Open a Conversation View and address one opaque focus identity to it. */
+  openView: (view: string, focus: string) => void
 }
 
 /** Owner currency of finalized-assistant actions. */
@@ -64,6 +66,8 @@ export interface ChatNodeOwnerProps {
   selectedCallId?: ToolCallId | undefined
   cwd?: string | undefined
   openFile: (path: string) => void
+  /** Open a Conversation View and address one opaque focus identity to it. */
+  openView: (view: string, focus: string) => void
   inspectCall: (callId: ToolCallId) => void
   forkAt: (seq: number) => void
   renderMessageImages: RenderMessageImages

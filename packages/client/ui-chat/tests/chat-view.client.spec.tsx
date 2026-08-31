@@ -7,8 +7,8 @@ import type {
   AssistantMessageNode, ChatNode, ChatNodeOwnerProps, ChatNodeViewProps, ChatSnapshot,
   ChatViewSlotProps, CommandNode, CompactionSummaryNode, ContextMessageNode, ConversationNode,
   LegacyConversationSlice, ModelRetryNode, RunningToolCall, SelectionTarget, SteeringMessageNode,
-  ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode, UseChatNodeTurnData,
-  TranscriptViewMode, UserMessageNode,
+  ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode, TurnTailOwnerProps,
+  UseChatNodeTurnData, TranscriptViewMode, UserMessageNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
   SessionListState, SessionSnapshot,
@@ -362,6 +362,7 @@ function makeHarness(
     useTranscriptView: bindSnapshotSelector(transcriptView),
     renderSlot,
     SessionProvider: SessionProviderStub,
+    conversationViews: [{ id: 'chat', label: 'Chat' }],
     viewRequest: null,
     openView,
     completeViewRequest: () => {},
@@ -494,6 +495,31 @@ describe('Chat node rendering', () => {
     fireEvent.click(mention)
     // The vocabulary was built from the closing message's own owner currency.
     expect(h.openFile).toHaveBeenCalledWith('for-seq-4/site/report.html')
+  })
+
+  it('threads the Chat view openView into the closing-turn owner', () => {
+    const wrote = (seq: number, callId: string): ToolResultNode => ({
+      ...toolResult(seq, callId, 'write'),
+    })
+    const h = makeHarness({
+      nodes: [
+        user(1, 'build it'),
+        assistant(2, 'Wrote `report.html` now', 1),
+        wrote(3, 'w'),
+        assistant(4, 'Wrote `report.html`.', 1),
+      ],
+      turnEnds: new Map([[1, 4]]),
+    })
+    let seen: TurnTailOwnerProps | undefined
+    h.props.fileMentions = (owner) => {
+      seen = owner
+      return undefined
+    }
+    render(<h.ChatView {...h.props} />)
+    // The closing Assistant's mention vocabulary receives the same view
+    // opener the Chat view was given, so a provider can route a file open
+    // to a Conversation View (for example the Files explorer) on click.
+    expect(seen?.openView).toBe(h.openView)
   })
 
   it('formatRunDuration localizes units and floors partial seconds', () => {
@@ -1898,6 +1924,28 @@ describe('ChatView', () => {
     expect(h.openFile).toHaveBeenCalledWith('src/a.ts')
     owner.inspectCall('a')
     expect(h.openView).toHaveBeenCalledWith('trajectory', 'a')
+  })
+
+  it('routes a file open to the Files view when one is registered', () => {
+    const h = makeHarness({ nodes: [toolResult(3, 'a')] })
+    h.props.conversationViews = [
+      { id: 'chat', label: 'Chat' },
+      { id: 'files', label: 'Files' },
+    ]
+    render(<h.ChatView {...h.props} />)
+    h.toolOwners[0]!.openFile('src/a.ts')
+    // The Files view switch carries the path as its focus; the Host opener
+    // is never consulted.
+    expect(h.openView).toHaveBeenCalledWith('files', 'src/a.ts')
+    expect(h.openFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps the Host opener when no Files view is registered', () => {
+    const h = makeHarness({ nodes: [toolResult(3, 'a')] })
+    render(<h.ChatView {...h.props} />)
+    h.toolOwners[0]!.openFile('src/a.ts')
+    expect(h.openView).not.toHaveBeenCalled()
+    expect(h.openFile).toHaveBeenCalledWith('src/a.ts')
   })
 
   it('shows a Host open refusal with the reason and retries the same path', async () => {
