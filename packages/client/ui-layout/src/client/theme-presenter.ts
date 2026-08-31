@@ -3,8 +3,9 @@
  * document — `html { color-scheme }` for native UA chrome (scrollbars, form
  * controls), `body[data-ds-dark-theme]` for the token palette, the active
  * theme's alias-token overrides as inline CSS variables on body, the content
- * font-size axis (`--dsh-content-font-size`), and one presenter-owned
- * `meta[name="theme-color"]` for surrounding browser UI. Pure DOM writes, no
+ * font-size axis (`--dsh-content-font-size`), the variant and fixed-width
+ * font stacks on the root element, and one presenter-owned `meta[name="theme-color"]` for
+ * surrounding browser UI. Pure DOM writes, no
  * React involvement; the presenter only ever retracts what it wrote itself,
  * so foreign attributes, metadata, and inline styles survive.
  */
@@ -15,6 +16,12 @@ export const DARK_ATTRIBUTE = 'data-ds-dark-theme'
 
 /** Body variable carrying the user's content font size in px. */
 export const CONTENT_FONT_SIZE_VARIABLE = '--dsh-content-font-size'
+
+/** Root variable carrying the selected variant (proportional) font stack. */
+export const UI_FONT_VARIABLE = '--dsh-ui-font-family'
+
+/** Root variable carrying the selected fixed-width (monospace) font stack. */
+export const MONO_FONT_VARIABLE = '--dsh-mono-font-family'
 
 /** Applies theme snapshots to the document; one instance per plugin fiber. */
 export class ThemePresenter {
@@ -45,6 +52,8 @@ export class ThemePresenter {
     if (scheme === 'dark') body.setAttribute(DARK_ATTRIBUTE, '')
     else body.removeAttribute(DARK_ATTRIBUTE)
     body.style.setProperty(CONTENT_FONT_SIZE_VARIABLE, `${snapshot.fontSize}px`)
+    document.documentElement.style.setProperty(UI_FONT_VARIABLE, snapshot.uiFontStack)
+    document.documentElement.style.setProperty(MONO_FONT_VARIABLE, snapshot.monoFontStack)
     for (const name of this.appliedTokens) body.style.removeProperty(name)
     this.appliedTokens = []
     for (const [name, value] of Object.entries(snapshot.active.tokens)) {
@@ -61,6 +70,8 @@ export class ThemePresenter {
     const body = document.body
     body.removeAttribute(DARK_ATTRIBUTE)
     body.style.removeProperty(CONTENT_FONT_SIZE_VARIABLE)
+    document.documentElement.style.removeProperty(UI_FONT_VARIABLE)
+    document.documentElement.style.removeProperty(MONO_FONT_VARIABLE)
     for (const name of this.appliedTokens) body.style.removeProperty(name)
     this.appliedTokens = []
     this.themeColorMeta.remove()

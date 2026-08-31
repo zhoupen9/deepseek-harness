@@ -1,6 +1,6 @@
 /** Appearance and font-size row stores: snapshot-mirror actions and the revision guards. */
 import { describe, expect, it } from 'vitest'
-import { createAppearanceRowStore, createFontSizeRowStore } from '../src/client/settings-store.ts'
+import { createAppearanceRowStore, createFontFaceRowStore, createFontSizeRowStore } from '../src/client/settings-store.ts'
 
 describe('createAppearanceRowStore', () => {
   it('init shape: system preference with revision at -1', () => {
@@ -41,5 +41,28 @@ describe('createFontSizeRowStore', () => {
     store.actions.sync(12, 3)
     expect(store.getSnapshot().fontSize).toBe(16)
     expect(store.getSnapshot().revision).toBe(3)
+  })
+})
+
+describe('createFontFaceRowStore', () => {
+  it('init shape: empty family, empty catalogue, loading, revision -1', () => {
+    expect(createFontFaceRowStore().create().getSnapshot()).toEqual({ font: '', families: [], loading: true, revision: -1 })
+  })
+
+  it('sync mirrors the family; the revision guard drops stale and duplicate writes', () => {
+    const store = createFontFaceRowStore().create()
+    store.actions.sync('Georgia', 3)
+    expect(store.getSnapshot().font).toBe('Georgia')
+    store.actions.sync('Arial', 2)
+    store.actions.sync('Arial', 3)
+    expect(store.getSnapshot().font).toBe('Georgia')
+    expect(store.getSnapshot().revision).toBe(3)
+  })
+
+  it('setFamilies replaces the catalogue and clears loading', () => {
+    const store = createFontFaceRowStore().create()
+    store.actions.setFamilies(['Arial', 'Georgia'], false)
+    expect(store.getSnapshot().families).toEqual(['Arial', 'Georgia'])
+    expect(store.getSnapshot().loading).toBe(false)
   })
 })

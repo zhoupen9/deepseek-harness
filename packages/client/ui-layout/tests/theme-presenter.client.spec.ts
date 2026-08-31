@@ -7,10 +7,10 @@ import { DARK_ATTRIBUTE, ThemePresenter } from '@deepseek-ai/dsh-client-ui-layou
 const LIGHT_THEME_COLOR = 'rgb(255, 255, 255)'
 const DARK_THEME_COLOR = 'rgb(21, 21, 23)'
 
-function snapshot(colorScheme: 'light' | 'dark', tokens: Record<string, string> = {}, fontSize = 14): ThemeSnapshot {
+function snapshot(colorScheme: 'light' | 'dark', tokens: Record<string, string> = {}, fontSize = 14, uiFontStack = 'ui-stack', monoFontStack = 'mono-stack'): ThemeSnapshot {
   // The presenter must key off colorScheme, not the id — keep them distinct.
   const active = { id: `${colorScheme}-test`, colorScheme, tokens }
-  return { preference: colorScheme, fontSize, active, themes: [active], revision: 1 }
+  return { preference: colorScheme, fontSize, variantFont: 'default', monoFont: 'default', uiFontStack, monoFontStack, active, themes: [active], revision: 1 }
 }
 
 function clearThemePresentation(): void {
@@ -80,6 +80,16 @@ describe('ThemePresenter', () => {
     expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('17px')
   })
 
+  it('publishes the font stacks and follows changes', () => {
+    const presenter = new ThemePresenter()
+    presenter.apply(snapshot('light'))
+    expect(document.documentElement.style.getPropertyValue('--dsh-ui-font-family')).toBe('ui-stack')
+    expect(document.documentElement.style.getPropertyValue('--dsh-mono-font-family')).toBe('mono-stack')
+    presenter.apply(snapshot('light', {}, 14, 'next-ui', 'next-mono'))
+    expect(document.documentElement.style.getPropertyValue('--dsh-ui-font-family')).toBe('next-ui')
+    expect(document.documentElement.style.getPropertyValue('--dsh-mono-font-family')).toBe('next-mono')
+  })
+
   it('dispose removes color-scheme, the attribute, the font-size axis, and every applied variable, sparing foreign inline styles', () => {
     document.body.style.setProperty('--foreign', 'kept')
     const presenter = new ThemePresenter()
@@ -90,6 +100,8 @@ describe('ThemePresenter', () => {
     expect(document.body.hasAttribute(DARK_ATTRIBUTE)).toBe(false)
     expect(document.body.style.getPropertyValue('--dsw-alias-bg')).toBe('')
     expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('')
+    expect(document.documentElement.style.getPropertyValue('--dsh-ui-font-family')).toBe('')
+    expect(document.documentElement.style.getPropertyValue('--dsh-mono-font-family')).toBe('')
     expect(document.body.style.getPropertyValue('--foreign')).toBe('kept')
     expect(meta?.isConnected).toBe(false)
   })

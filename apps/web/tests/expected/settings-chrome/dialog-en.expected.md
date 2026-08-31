@@ -44,10 +44,16 @@
     - img
   - button "Decrease font size":
     - img
-  - text: px Conversation display Controls process content in completed turns
+  - text: px Font Font used for interface text
+  - combobox "Font":
+    - option "Default" [selected]
+  - text: Conversation display Controls process content in completed turns
   - button "Compact":
     - text: Compact
     - img
+  - text: Monospace font Font used for code blocks and terminals
+  - combobox "Monospace font":
+    - option "Default" [selected]
   - text: Enter behavior while busy Busy only; Cmd/Ctrl+Enter uses the other behavior
   - button "Queue":
     - text: Queue

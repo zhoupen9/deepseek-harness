@@ -11,8 +11,8 @@ function mockSystemDark(matches: boolean): void {
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches }) as MediaQueryList))
 }
 
-function executeBootstrap(preference?: ThemePreference, fontSize?: number): void {
-  const row = bootThemeInjection(preference, fontSize)
+function executeBootstrap(preference?: ThemePreference, fontSize?: number, variantFont?: string, monoFont?: string): void {
+  const row = bootThemeInjection(preference, fontSize, variantFont, monoFont)
   if (row.kind !== 'script') throw new Error('theme bootstrap row is not a script')
   runInNewContext(row.text, { document, matchMedia: globalThis.matchMedia })
 }
@@ -23,6 +23,10 @@ afterEach(() => {
   document.documentElement.style.removeProperty('color-scheme')
   document.body.removeAttribute(DARK_ATTRIBUTE)
   document.body.style.removeProperty('--dsh-content-font-size')
+  document.documentElement.style.removeProperty('--dsh-ui-font-family')
+  document.documentElement.style.removeProperty('--dsh-mono-font-family')
+  delete document.body.dataset.dshVariantFont
+  delete document.body.dataset.dshMonoFont
 })
 
 describe('theme bootstrap row', () => {
@@ -66,5 +70,17 @@ describe('theme bootstrap row', () => {
     expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('17px')
     executeBootstrap('light')
     expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('14px')
+  })
+
+  it('writes the font stacks and family-name attributes, defaulting both', () => {
+    mockSystemDark(false)
+    executeBootstrap('light', 14, 'Georgia', 'JetBrains Mono')
+    expect(document.documentElement.style.getPropertyValue('--dsh-ui-font-family')).toContain('"Georgia"')
+    expect(document.body.dataset.dshVariantFont).toBe('Georgia')
+    expect(document.documentElement.style.getPropertyValue('--dsh-mono-font-family')).toContain('"JetBrains Mono"')
+    expect(document.body.dataset.dshMonoFont).toBe('JetBrains Mono')
+    executeBootstrap('light')
+    expect(document.documentElement.style.getPropertyValue('--dsh-ui-font-family')).toContain('-apple-system')
+    expect(document.body.dataset.dshVariantFont).toBe('')
   })
 })

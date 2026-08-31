@@ -1,7 +1,7 @@
 /**
- * Appearance and font-size row slot stores: mirrors of the theme service
- * snapshot. The plugin's apply-world change listener is the only writer; the
- * row components read via props.useStore.
+ * Appearance, font-size, and font-face row slot stores: mirrors of the theme
+ * service snapshot. The plugin's apply-world change listener is the only
+ * writer; the row components read via props.useStore.
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
 import { DEFAULT_FONT_SIZE, type ThemePreference } from '../theme-settings.ts'
@@ -61,6 +61,45 @@ export function createFontSizeRowStore(): EngineStoreHandle<FontSizeRowState, Fo
         if (revision <= d.revision) return
         d.fontSize = fontSize
         d.revision = revision
+      },
+    },
+  })
+}
+
+/** Store state mirrored from the theme snapshot's font family. */
+export interface FontFaceRowState {
+  /** Persisted font family name ('' = built-in default). */
+  font: string
+  /** Installed font family names for the picker's options. */
+  families: string[]
+  /** Whether the installed-font load is still in flight. */
+  loading: boolean
+  /** Service revision; -1 until first sync so revision 0 lands as a change. */
+  revision: number
+}
+
+/** Declared action shape giving the exported factory a stable return type. */
+type FontFaceRowActions = {
+  sync: (draft: FontFaceRowState, font: string, revision: number) => void
+  setFamilies: (draft: FontFaceRowState, families: string[], loading: boolean) => void
+}
+
+/**
+ * Declares the font-face row state and write surface.
+ * @returns the store handle.
+ */
+export function createFontFaceRowStore(): EngineStoreHandle<FontFaceRowState, FontFaceRowActions> {
+  return defineStore({
+    init: (): FontFaceRowState => ({ font: '', families: [], loading: true, revision: -1 }),
+    actions: {
+      sync: (d, font: string, revision: number) => {
+        if (revision <= d.revision) return
+        d.font = font
+        d.revision = revision
+      },
+      setFamilies: (d, families: string[], loading: boolean) => {
+        d.families = families
+        d.loading = loading
       },
     },
   })

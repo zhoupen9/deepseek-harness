@@ -9,7 +9,7 @@
  * @module @deepseek-ai/dsh-electron
  */
 
-import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { spawnDshWeb, type DshWebServer } from './dsh-server.ts'
 import { IS_MAXIMIZED_CHANNEL, MAXIMIZED_CHANGED_CHANNEL, NOTIFY_CHANNEL, WINDOW_CHANNEL } from './ipc.ts'
@@ -17,6 +17,21 @@ import { IS_MAXIMIZED_CHANNEL, MAXIMIZED_CHANGED_CHANNEL, NOTIFY_CHANNEL, WINDOW
 let server: DshWebServer | undefined
 let mainWindow: BrowserWindow | undefined
 let quitting = false
+
+// The Local Font Access API (window.queryLocalFonts) — powering the Settings
+// font pickers — is behind a Chromium feature flag and a permission prompt.
+// Enable it, and grant it for the shell's own webContents so the pickers act
+// on the host's real installed fonts without prompting. Only the served
+// origin reaches a window (other navigation is sent to the platform browser),
+// so scoping the grant to the shell's own pages is no broader than the session.
+app.commandLine.appendSwitch('enable-features', 'LocalFontAccess')
+app.whenReady().then(() => {
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    // The bundled Electron types predate the 'local-fonts' permission name;
+    // compare against the raw string so a newer runtime still grants it.
+    callback(String(permission) === 'local-fonts')
+  })
+})
 
 /** Stop the child server, letting its own SIGTERM handler dispose the tree. */
 function terminateServer(): void {

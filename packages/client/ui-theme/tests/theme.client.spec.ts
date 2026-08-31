@@ -66,9 +66,34 @@ describe('ThemeRuntime', () => {
     expect(host.set).not.toHaveBeenCalled()
   })
 
+  it('setVariantFont and setMonoFont switch, write through the scope, and reject invalid families', () => {
+    const { theme, events, host } = make()
+    theme.setVariantFont('Georgia')
+    expect(theme.getTheme().variantFont).toBe('Georgia')
+    expect(theme.getTheme().uiFontStack).toContain('"Georgia"')
+    expect(host.set).toHaveBeenCalledWith('variantFont', 'Georgia')
+
+    theme.setMonoFont('JetBrains Mono')
+    expect(theme.getTheme().monoFont).toBe('JetBrains Mono')
+    expect(theme.getTheme().monoFontStack).toContain('"JetBrains Mono"')
+    expect(host.set).toHaveBeenCalledWith('monoFont', 'JetBrains Mono')
+    expect(events).toHaveLength(2)
+
+    // Same value is a no-op; invalid values throw before writing.
+    theme.setVariantFont('Georgia')
+    expect(events).toHaveLength(2)
+    expect(() => { theme.setVariantFont('x'.repeat(65)) }).toThrow('invalid')
+    expect(() => { theme.setMonoFont('x'.repeat(65)) }).toThrow('invalid')
+    expect(host.set).toHaveBeenCalledTimes(2)
+
+    // '' restores the built-in default stack.
+    theme.setVariantFont('')
+    expect(theme.getTheme().uiFontStack).toContain('-apple-system')
+  })
+
   it('adopts a published Host font size without writing it back', () => {
     const { theme, events, host } = make()
-    host.publish({ status: 'ready', value: { preference: 'system', fontSize: 12 }, revision: 1, writable: true })
+    host.publish({ status: 'ready', value: { preference: 'system', fontSize: 12, variantFont: 'default', monoFont: 'default' }, revision: 1, writable: true })
     expect(theme.getTheme().fontSize).toBe(12)
     expect(events).toHaveLength(1)
     expect(host.set).not.toHaveBeenCalled()
@@ -92,17 +117,17 @@ describe('ThemeRuntime', () => {
 
   it('adopts a published Host section without writing it back', () => {
     const { theme, events, host } = make()
-    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14 }, revision: 1, writable: true })
+    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14, variantFont: 'default', monoFont: 'default' }, revision: 1, writable: true })
     expect(theme.getTheme().preference).toBe('dark')
     expect(events).toHaveLength(1)
     expect(host.set).not.toHaveBeenCalled()
-    host.publish({ value: { preference: 'dark', fontSize: 14 }, revision: 2 })
+    host.publish({ value: { preference: 'dark', fontSize: 14, variantFont: 'default', monoFont: 'default' }, revision: 2 })
     expect(events).toHaveLength(1)
   })
 
   it('adopts a section already standing at construction', () => {
     const host = stubSettingsScope<ThemeSettings>()
-    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14 }, revision: 1, writable: true })
+    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14, variantFont: 'default', monoFont: 'default' }, revision: 1, writable: true })
     const { theme } = make(host)
     expect(theme.getTheme().preference).toBe('dark')
   })

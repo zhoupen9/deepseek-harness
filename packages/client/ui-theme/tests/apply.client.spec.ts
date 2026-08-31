@@ -12,7 +12,9 @@ import type { AppearanceRowInjected, FontSizeRowInjected, ThemeRuntime } from '@
 import { THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema } from '../src/theme-settings.ts'
 import { AppearanceRow } from '../src/client/AppearanceRow.tsx'
 import { FontSizeRow } from '../src/client/FontSizeRow.tsx'
-import type { createAppearanceRowStore, createFontSizeRowStore } from '../src/client/settings-store.ts'
+import { FontFaceRow } from '../src/client/FontFaceRow.tsx'
+import type { FontFaceRowInjected } from '../src/client/FontFaceRow.tsx'
+import type { createAppearanceRowStore, createFontFaceRowStore, createFontSizeRowStore } from '../src/client/settings-store.ts'
 
 // These specs assert the shipped Chinese copy. The lane has no jsdom `window`,
 // so browser-language detection never runs and a fresh LocaleRuntime opens on
@@ -32,7 +34,7 @@ async function bench(isLoopback = true) {
   const locale = new LocaleRuntime(ctx)
   locale.setLocale('zh')
   ctx.provide('locale', locale)
-  const section: Record<string, unknown> = { preference: 'system', fontSize: 14 }
+  const section: Record<string, unknown> = { preference: 'system', fontSize: 14, variantFont: '', monoFont: '' }
   const namespace = () => ({
     ns: THEME_SETTINGS_NAMESPACE,
     schema: ThemeSettingsSchema.toJSON(),
@@ -83,6 +85,15 @@ function fontSizeFaceOf(slots: SlotRegistry) {
   const handle = entry.store as ReturnType<typeof createFontSizeRowStore>
   const instance = handle.create()
   const face = (entry.inject as unknown as (a: typeof instance.actions) => FontSizeRowInjected)(instance.actions)
+  return { entry, instance, face }
+}
+
+/** The same choreography for a font-face row entry, selected by slot id. */
+function fontFaceOf(slots: SlotRegistry, id: 'variant-font' | 'mono-font') {
+  const entry = slots.entries(SLOT).find(e => e.component === FontFaceRow && (e.options as { id?: string }).id === id)!
+  const handle = entry.store as ReturnType<typeof createFontFaceRowStore>
+  const instance = handle.create()
+  const face = (entry.inject as unknown as (a: typeof instance.actions) => FontFaceRowInjected)(instance.actions)
   return { entry, instance, face }
 }
 
@@ -153,6 +164,31 @@ describe('ui-theme apply', () => {
     await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(2) })
   })
 
+  it('projects font-face snapshots into each row store and routes face writes back', async () => {
+    const b = await bench()
+    declareItems(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const theme = b.ctx.get('theme') as ThemeRuntime
+    // An event ahead of any inject hits the unbound-actions arm.
+    theme.setVariantFont('Georgia')
+
+    const variant = fontFaceOf(b.slots, 'variant-font')
+    const mono = fontFaceOf(b.slots, 'mono-font')
+    expect(variant.entry.options).toMatchObject({ id: 'variant-font', order: 12 })
+    expect(mono.entry.options).toMatchObject({ id: 'mono-font', order: 13 })
+    expect(variant.instance.getSnapshot().font).toBe('Georgia')
+    expect(mono.instance.getSnapshot().font).toBe('')
+
+    variant.face.setFont('Arial')
+    expect(theme.getTheme().variantFont).toBe('Arial')
+    expect(variant.instance.getSnapshot().font).toBe('Arial')
+
+    mono.face.setFont('JetBrains Mono')
+    expect(theme.getTheme().monoFont).toBe('JetBrains Mono')
+    expect(mono.instance.getSnapshot().font).toBe('JetBrains Mono')
+    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(3) })
+  })
+
   it('loads Host settings at boot, refreshes its namespace, and keeps remote browsers process-local', async () => {
     const b = await bench()
     // The shared mirror read once at bench time; a Host-side change reaches it
@@ -218,7 +254,7 @@ describe('ui-theme apply', () => {
     const b = await bench()
     const host = declareItems(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    expect(b.slots.entries(SLOT)).toHaveLength(2)
+    expect(b.slots.entries(SLOT)).toHaveLength(4)
 
     // Collapse: the declarer dies, the cascade removes our entries while the
     // apply closure still holds its (now stale) disposers.
@@ -236,7 +272,7 @@ describe('ui-theme apply', () => {
     declareItems(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(b.slots.entries(SLOT)).toHaveLength(2)
+    expect(b.slots.entries(SLOT)).toHaveLength(4)
     await fiber.dispose()
     expect(b.slots.entries(SLOT)).toHaveLength(0)
     // Dictionary disposal: translation falls back to the bare key.

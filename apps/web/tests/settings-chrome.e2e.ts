@@ -40,7 +40,27 @@ describe('web e2e: settings modal and General preferences', () => {
     browser = await chromium.launch()
     // Chinese browser: the shared page asserts the localized settings surface
     // the client derives from it (the English default has its own spec below).
-    page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    // Grant local-fonts (no prompt/gesture) so the font picker can enumerate
+    // installed families through queryLocalFonts().
+    const context = await browser.newContext({
+      viewport: { width: 1680, height: 1000 },
+      locale: ZH_BROWSER_LOCALE,
+      permissions: ['local-fonts'],
+    })
+    // The Local Font Access API is not exposed in headless Chromium; stub it
+    // with a deterministic installed-font set so the picker exercises its real
+    // load path independent of the host's fontconfig.
+    await context.addInitScript(() => {
+      Object.defineProperty(window, 'queryLocalFonts', {
+        configurable: true,
+        value: async () => [
+          { family: 'DejaVu Sans' },
+          { family: 'DejaVu Sans Mono' },
+          { family: 'Arial' },
+        ],
+      })
+    })
+    page = await context.newPage()
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -404,6 +424,55 @@ describe('web e2e: settings modal and General preferences', () => {
     await decrease.click()
     await restored.getByText('14', { exact: true }).waitFor({ timeout: 5_000 })
     await expect.poll(readFontSize, { timeout: 5_000 }).toBe('14px')
+    await page.keyboard.press('Escape')
+    expect(tripwire.pageErrors).toEqual([])
+  }, 90_000)
+
+  it('selects the variant and monospace fonts, applies them to body, and persists across reload', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-font-face'))
+    const readFontStack = async (target: Page = page): Promise<string> => await target.evaluate(
+      () => document.documentElement.style.getPropertyValue('--dsh-ui-font-family'),
+    )
+    const readMonoStack = async (target: Page = page): Promise<string> => await target.evaluate(
+      () => document.documentElement.style.getPropertyValue('--dsh-mono-font-family'),
+    )
+    expect(await readFontStack()).toContain('-apple-system')
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.waitFor({ timeout: 10_000 })
+
+    // Variant font: pick an installed face and confirm the body stack moves.
+    const variant = dialog.getByLabel('字体', { exact: true })
+    await variant.selectOption({ label: 'DejaVu Sans' })
+    await expect.poll(readFontStack, { timeout: 5_000 }).toContain('"DejaVu Sans"')
+
+    // Fixed-width font: pick an installed monospace face for the code stack.
+    const mono = dialog.getByLabel('等宽字体')
+    await mono.selectOption({ label: 'DejaVu Sans Mono' })
+    await expect.poll(readMonoStack, { timeout: 5_000 }).toContain('"DejaVu Sans Mono"')
+
+    await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
+      .toMatch(/ui-theme:\n(?:\s+\w+: .*\n)*?\s+variantFont: ['"]?DejaVu Sans['"]?/)
+    await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
+      .toMatch(/ui-theme:\n(?:\s+\w+: .*\n)*?\s+monoFont: ['"]?DejaVu Sans Mono['"]?/)
+    await page.keyboard.press('Escape')
+
+    // Reload: the boot script embeds the durable stacks, so activation never
+    // flashes the defaults while the settings read is in flight.
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await expect.poll(readFontStack, { timeout: 5_000 }).toContain('"DejaVu Sans"')
+    await expect.poll(readMonoStack, { timeout: 5_000 }).toContain('"DejaVu Sans Mono"')
+
+    // Restore the defaults for the specs that follow.
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const restored = page.getByRole('dialog', { name: '设置' })
+    await restored.waitFor({ timeout: 10_000 })
+    await restored.getByLabel('字体', { exact: true }).selectOption({ label: '默认' })
+    await restored.getByLabel('等宽字体').selectOption({ label: '默认' })
+    await expect.poll(readFontStack, { timeout: 5_000 }).toContain('-apple-system')
     await page.keyboard.press('Escape')
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)

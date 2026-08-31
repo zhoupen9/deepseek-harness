@@ -11,6 +11,12 @@ export const zh = {
   'fontSize.unit': 'px',
   'fontSize.increase': '增大字号',
   'fontSize.decrease': '减小字号',
+  'variantFont.title': '字体',
+  'variantFont.description': '界面正文使用的字体',
+  'variantFont.default': '默认',
+  'monoFont.title': '等宽字体',
+  'monoFont.description': '代码块与终端使用的字体',
+  'monoFont.default': '默认',
 } satisfies Record<string, string>
 
 /** The settings.theme namespace key union. */
@@ -27,4 +33,10 @@ export const en = {
   'fontSize.unit': 'px',
   'fontSize.increase': 'Increase font size',
   'fontSize.decrease': 'Decrease font size',
+  'variantFont.title': 'Font',
+  'variantFont.description': 'Font used for interface text',
+  'variantFont.default': 'Default',
+  'monoFont.title': 'Monospace font',
+  'monoFont.description': 'Font used for code blocks and terminals',
+  'monoFont.default': 'Default',
 } satisfies Record<ThemeKey, string>
