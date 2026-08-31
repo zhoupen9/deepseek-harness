@@ -151,6 +151,13 @@ async function start(): Promise<void> {
   })
   mainWindow.once('ready-to-show', () => { mainWindow?.show() })
   mainWindow.on('closed', () => { mainWindow = undefined })
+  // F12 opens the DevTools dock for the main window.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      mainWindow?.webContents.toggleDevTools()
+      event.preventDefault()
+    }
+  })
   // Keep the title bar's maximize glyph in sync with the real window state:
   // the preload subscribes to these pushes after its one-time state query.
   mainWindow.on('maximize', () => { mainWindow?.webContents.send(MAXIMIZED_CHANGED_CHANNEL, true) })
