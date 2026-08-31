@@ -73,6 +73,9 @@
       "path": "../workspace-controller/tsconfig.client.json"
     },
     {
+      "path": "../git-controller"
+    },
+    {
       "path": "../workspace-files-controller"
     },
     {

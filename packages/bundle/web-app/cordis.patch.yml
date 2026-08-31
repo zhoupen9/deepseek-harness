@@ -100,6 +100,10 @@
     - id: workspace-files-controller
       name: '@deepseek-ai/dsh-api-workspace-files-controller'
 
+    # Fenced commit-history reads for the Git graph (ctx.remote.git).
+    - id: git-controller
+      name: '@deepseek-ai/dsh-api-git-controller'
+
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
 

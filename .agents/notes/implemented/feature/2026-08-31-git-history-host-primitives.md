@@ -1,0 +1,52 @@
+# Agent Note: Git-history Host primitives
+
+Status: implemented
+
+English | [中文](2026-08-31-git-history-host-primitives.zh.md)
+
+## Problem
+
+The browser Git tab needs commit history, but the Host exposes only per-file VCS *status* decoration (`workspaceFiles`). No Remote namespace carries commits, parent links, refs, or repo facts; `workspaceFiles`'s status vocabulary is per-file and collapsed to one icon, with no history verb. The browser cannot run `git log` or read a repository, so every commit fact must cross the wire from the Host. The ui-git client half (built in user space) already codes against the contract and renders a "requires host" notice until a `ctx.remote.git` namespace exists.
+
+## Decision
+
+**A separate Remote namespace, not a widening of workspaceFiles.** A new Host service `gitController` extends `TypertRemoteService` under namespace `git` and exposes two Agent-scoped verbs that surface as `ctx.remote.git`:
+
+- `log(options?, signal)` — the workspace repository's commit window, newest first, plus its repo context and HEAD facts.
+- `show(hash, signal)` — one commit's full message, committer, changed files, and bounded patch.
+
+The verb takes an `agent: Agent` first parameter resolved from the wire by the existing `agent` lookup, so the client signature is `log(agentId, options?, signal?)` and the controller fences every read to `agent.session.header.cwd` (the same value `SessionSummary.cwd` carries). `options` is JSON-encoded and `acceptsUndefined`, mirroring `workspaceFiles/list`'s optional `path`.
+
+**The fence is Host-enforced and gitlink-aware.** Discovery walks up from the realpath'd session cwd for the `.git` entry, then reads the authoritative facts with `git rev-parse` (`--show-toplevel`, `--absolute-git-dir`, `--abbrev-ref HEAD`, `HEAD`). A `.git` DIRECTORY at or above the cwd is the enclosing repo and is followed — the reported `vcs.root` may lie above the cwd, which is informational. A `.git` FILE (gitlink / linked worktree / submodule) is followed only when its resolved gitdir stays inside the fence root: a gitlink whose literal `gitdir:` target lies outside resolves `vcs: { kind: 'none' }`, and a gitlink whose real path escapes the fence (a symlinked target) answers the loud `git/outside-root` error. The Host never runs git against an out-of-fence worktree.
+
+**The log is one bounded subprocess with a stable NUL format.** `git log --topo-order -z --decorate=full --first-parent --max-count=<maxCount+1> [--all]` uses the format `%H%x00%P%x00%an%x00%ae%x00%at%x00%s%x00%D%x00`, run with `-c core.hooksPath=/dev/null -c core.fsmonitor=false --no-optional-locks` at the fence root. Records split on NUL (seven fields plus `-z`'s separator NUL); `%P` splits on spaces (empty is a root), `%at` is multiplied by 1000, and `%D` folds to `head`/`branch`/`tag`/`remote` with short display names. `--decorate=full` is added so refs fold unambiguously: the spec's `refs/heads/main` → `branch main`, `refs/tags/v1.2` → `tag v1.2`, `refs/remotes/origin/main` → `remote origin/main` mappings assume full ref names, while default short decoration would leave bare branch/remote names unclassifiable. One extra record is probed so `truncated` is true exactly when the bound cut the history. `--first-parent` runs by default (the `firstParent` Config defaults to true): the log follows only each commit's first parent, so the graph renders the linear mainline instead of full merge topology. Because `--first-parent` narrows traversal without narrowing `%P`, the controller also trims each commit's parents to its first parent, keeping every parent reference resolvable and the graph free of dangling side lanes. `maxCount` defaults to 200, `all` to false, and `firstParent` to true via the validated `Config`.
+
+**`show` returns one commit's full detail plus its modifications.** `git show -s <hash>^{commit} --format=%H%x00%P%x00%an%x00%ae%x00%at%x00%cn%x00%ce%x00%ct%x00%B%x00%D` yields the metadata, with `%B` split into subject and body; the `^{commit}` peel enforces that the hash is a commit in the fenced repo (a tree, blob, tag, or absent hash fails). `git show <hash> --format= --name-status` yields the changed files, folded to `added`/`deleted`/`modified`/`renamed`/`copied`/`typechanged`/`unmerged` with the rename/copy source, and `git show <hash> --format=` yields the unified patch, byte-bounded by `maxDiffBytes` (default 1 MiB) with `diffTruncated` marking the cut. `core.quotePath=false` keeps filenames unquoted. A malformed hash answers `gateway/bad-request` at the wire boundary; a hash that is not a commit answers `git/commit-not-found` with `{ hash }`.
+
+**Git failures are context, not errors.** Missing git and no-followable-repo both resolve `vcs: { kind: 'none' }`; a present-but-broken repository or a failing log/show resolves `vcs: { kind: 'error', message }` — the verbs always resolve, never throw for git failures. The thrown typed failures are `git/outside-root` (the fence) and `git/commit-not-found` (a hash that is not a commit in the fenced repo), each mirrored onto the wire (like `DirectoryPickerErrorCode`) as `{ path }` / `{ hash }` so the client maps business codes without string matching; a malformed hash answers the carrier's `gateway/bad-request`. An aborted signal kills the git child (execFile's signal) and answers `gateway/cancelled`.
+
+The package ships as its own Loader entry in the web-app bundle, and its generated `./remote` contribution joins the `dsh-api-remotes` assembly, so `ctx.remote.git` exists with no other client change.
+
+## Alternatives considered
+
+**Widen `workspaceFiles` with a history verb.** Rejected: its status vocabulary is per-file and per-directory, and its listing contract is a level of a tree, not a commit graph. A separate namespace keeps per-file status and per-commit history independent and gives each its own fence and failure vocabulary.
+
+**Pass an explicit session or agent id on the wire.** Rejected: the Typert `agent` lookup already resolves the live `Agent` from the wire identity. An explicit parameter would duplicate a mechanism the gateway owns and let a caller name a session other than its own.
+
+**Discover only with the manual `.git` walk, or only with `git rev-parse`.** Rejected both solo: the walk alone returns the lexical `.git` location but not git's authoritative toplevel/gitdir for edge cases (linked worktrees), and `rev-parse` alone resolves gitlinks without a place to enforce the file-vs-directory fence. The split — walk for the fence decision, `rev-parse` for the facts — keeps the security check lexical while the response carries git's own resolution.
+
+**Treat every out-of-fence gitlink as `none`.** Rejected as incomplete: a gitlink whose literal target is inside the fence but realpaths outside (a symlink) is the exact "worktree escapes the session fence" the error vocabulary names, so it fails loud with `git/outside-root` rather than silently degrading.
+
+**Default short `%D` decoration.** Rejected: short decoration renders non-HEAD branches and remotes as bare names (`feature`, `origin/main`) with no prefix to fold by, so `--decorate=full` is required for the unambiguous `refs/heads/`/`refs/tags/`/`refs/remotes/` folds the contract specifies.
+
+**Always show full merge topology.** Rejected as the default: a busy repository's first-parent graph is one linear mainline, which is the view most useful for scanning history, while the full topology interleaves every side branch into a wide, hard-to-read graph. `firstParent` defaults to `true` and remains a per-request opt-out (`firstParent: false`), so the full graph is never lost — it is just not the default.
+
+## Consequences
+
+The graph is workspace-scoped by construction: no verb can reach outside the session cwd, and a gitlink that escapes is either refused (`none`) or answered loudly (`git/outside-root`). The fence realpaths the gitdir once, so a gitlink retargeted between the check and the log is a TOCTOU window shared with workspace-files.
+
+Refs are folded server-side to short names plus kind; a consumer never sees a raw ref name. `log` surfaces author time only, while `show` adds committer time. A commit's patch is byte-bounded by `maxDiffBytes`, and a clean merge's `show` diff is empty. There is no paging, live refresh, or cross-session browsing — the client re-fetches on mount, and each read is rooted at its session's cwd.
+
+## Testing
+
+Package tests cover `parseRefs` (the `HEAD -> branch`, `refs/heads/`, `refs/tags/`, `refs/remotes/`, `tag:` folds and unknown-shape drops), `parseLog` (NUL record parsing, root/merge parent lists, seconds-to-ms), `parseNameStatus` (code folds and rename old/new pairing), and the controller over real repositories: the first-parent mainline newest-first with hash/parents/author/subject/refs (a merge collapsed to one parent, the side branch omitted), the full topology under `firstParent: false` (a merge with two parents and the side branch present), the `none` context outside a repo, the `error` context for a broken repo, an out-of-fence gitlink resolving `none`, a realpath-escaped gitlink answering `git/outside-root`, the `maxCount` truncation flag, and the `gateway/cancelled` code for an aborted signal. `show` tests cover the full subject/body and committer of a multi-line message, the changed-file fold (modify/delete/rename/add), the patch content, a root commit's empty parents, `git/commit-not-found` for an absent hash, `gateway/bad-request` for a malformed hash, the `none` context outside a repo, and the `maxDiffBytes` patch truncation. A real Loader composition mounts the controller with defaulted config and removes it on disposal. The generated `./remote` artifact is validated by the Typert generator's export check during build.
