@@ -265,6 +265,7 @@ async function bench(snapshot = historySnapshot(NODES)) {
   }
   const binding: ConversationBinding = {
     snapshot: conversationStore,
+    activate: () => {},
     target: target => targetSources[target],
   }
   vi.spyOn(uiConversation, 'binding').mockReturnValue(binding)
@@ -390,6 +391,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
         actions={conversation.actions}
         renderSlot={() => null}
         open={vi.fn()}
+        selectView={conversation.actions.setView}
         t={tConversation}
       />
       <ConversationSession
@@ -399,6 +401,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
         actions={conversation.actions}
         renderSlot={renderSlot}
         bindDraftMirror={() => () => {}}
+        openView={conversation.actions.openView}
       />
     </>,
   )
