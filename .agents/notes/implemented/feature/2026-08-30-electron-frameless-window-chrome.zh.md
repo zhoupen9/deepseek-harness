@@ -27,7 +27,7 @@ Electron 桌面外壳（`apps/electron`）此前打开一个标准的 `BrowserWi
 ## 后果
 
 - 外壳现在拥有自己的窗口外框；所有平台上的系统标题栏都被移除。macOS 以失去原生红绿灯按钮为代价，换来自定义按钮组。
-- 这些控件悬浮在内容之上，不预留任何空间；透明的拖动区域覆盖每个页面的顶部 28px，使无边框窗口仍可移动。
+- 后续的 [Electron 标题栏位于页面内容之下](../architecture/2026-09-02-electron-titlebar-under-content.zh.md) 保留悬浮布局，但把拖动顶栏移到页面内容之下（z-order），并按分段切换拖动遮罩：与顶栏重叠的可交互控件接收交互，窗口只在顶栏的惰性区域可拖动。
 - `apps/electron` 新增 `src/ipc.ts`、`src/window-chrome.ts` 与 `src/preload.ts`；`src/preload.cjs` 与 `scripts/copy-preload.mjs` 被移除。构建产物为 `lib/main.js`（ESM）与 `lib/preload.cjs`（CJS），包级 `tsconfig.json` 为渲染侧 preload 增加了 DOM lib。
 - `WindowChrome` 接缝是 preload 把 Electron IPC 适配到 DOM 模块的唯一位置，使 `ipc.ts` 中的通道名由两个进程共享。
 

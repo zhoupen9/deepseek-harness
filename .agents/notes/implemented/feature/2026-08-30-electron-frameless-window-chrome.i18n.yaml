@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-30-electron-frameless-window-chrome.md
-2026-08-30-electron-frameless-window-chrome.md: 7a98b47a501ba3f29d02d6d175c6dc6fc3565c51
-2026-08-30-electron-frameless-window-chrome.zh.md: 269420e31aa3c0276a20d288b3ad835cce9bfcb0
+2026-08-30-electron-frameless-window-chrome.md: f71d010ef13588a850c2cc685476c8777527864a
+2026-08-30-electron-frameless-window-chrome.zh.md: f59f955e675022a4e5596f07bd73ad2efb3ea426

@@ -27,7 +27,7 @@ The Electron desktop shell (`apps/electron`) opened a standard `BrowserWindow` a
 ## Consequences
 
 - The shell now owns its window chrome; the OS title bar is gone on every platform. macOS loses the native traffic lights in exchange for the custom button group.
-- The controls float over the content with no reserved space; the transparent drag region overlays the top 28px of every page so the frameless window stays movable.
+- A follow-up ([Electron title bar under page content](../architecture/2026-09-02-electron-titlebar-under-content.md)) keeps the floating layout but moves the drag strip below page content in z-order and toggles the drag mask per segment: interactive controls that overlap the strip receive the interaction, and the window is draggable only over the inert parts of the top strip.
 - `apps/electron` gains `src/ipc.ts`, `src/window-chrome.ts`, and `src/preload.ts`; `src/preload.cjs` and `scripts/copy-preload.mjs` are removed. The build emits `lib/main.js` (ESM) and `lib/preload.cjs` (CJS), and the package `tsconfig.json` adds the DOM lib for the renderer-side preload.
 - The `WindowChrome` seam is the one place the preload adapts Electron IPC to the DOM module, keeping channel names in `ipc.ts` shared by both processes.
 
