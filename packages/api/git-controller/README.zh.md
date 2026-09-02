@@ -22,7 +22,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## Use this package
 
-`log(options?, signal)` 用 `git rev-parse` 发现拥有会话 cwd 的仓库，然后以稳定的 NUL 分隔格式读取 `git log --topo-order`，并由 `maxCount`（默认 200）限定数量。`firstParent` 默认为 `true`，因此日志只跟随每个提交的第一父提交——即主线——并把合并折叠为单条通道（合并的其他父提交会从窗口中裁掉）；传入 `firstParent: false` 可获得完整的分支拓扑。每个提交携带完整的 40 位对象 id、有序的父提交 id、作者姓名/邮箱/时间（纪元毫秒）、主题（首行），以及折叠为 `head`/`branch`/`tag`/`remote` 并带短显示名的引用。仅当边界切断了历史时 `truncated` 才为真（会额外探测一条记录）。`all: true` 记录所有引用的祖先链，而非仅 HEAD 的。
+`log(options?, signal)` 用 `git rev-parse` 发现拥有会话 cwd 的仓库，然后以稳定的 NUL 分隔格式读取 `git log --topo-order`，并由 `maxCount`（默认 200）限定数量。`firstParent` 默认为 `true`，因此日志只跟随每个提交的第一父提交——即主线——并把合并折叠为单条通道（合并的其他父提交会从窗口中裁掉）；传入 `firstParent: false` 可获得完整的分支拓扑。`maxParents: 1 | 2`（无默认值）是一个透传为 git `--max-parents=<n>` 的列表上限：`1` 隐藏所有合并提交，`2` 隐藏 octopus 合并（多于两个父提交的合并），而幸存的合并提交保留它的两个父提交，使图仍能画出合并通道。每个提交携带完整的 40 位对象 id、有序的父提交 id、作者姓名/邮箱/时间（纪元毫秒）、主题（首行），以及折叠为 `head`/`branch`/`tag`/`remote` 并带短显示名的引用。仅当边界切断了历史时 `truncated` 才为真（会额外探测一条记录）。`all: true` 记录所有引用的祖先链，而非仅 HEAD 的。
 
 `show(hash, signal)` 接受缩写或完整的提交对象 id，并返回该提交的完整详情——主题与正文、作者与提交者、父提交与引用——外加其变更文件（路径、折叠为 `added`/`deleted`/`modified`/`renamed`/`copied`/`typechanged`/`unmerged` 的状态，以及重命名/复制的源路径）与统一补丁。补丁按字节受 `maxDiffBytes`（默认 1 MiB）限制，`diffTruncated` 标记截断；不是被围栏仓库中提交的 hash 返回 `git/commit-not-found`，格式错误的 hash 返回 `gateway/bad-request`。
 

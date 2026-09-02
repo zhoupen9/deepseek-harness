@@ -43,6 +43,12 @@ export interface GitLogOptions {
   readonly all?: boolean
   /** `true` follows only each commit's first parent (the mainline); `false` shows full topology. */
   readonly firstParent?: boolean
+  /**
+   * Keep only commits with at most this many parents: `1` hides merge commits,
+   * `2` hides octopus merges (more than two parents). Passed through as git's
+   * `--max-parents=<n>`; the Host never slices a surviving merge's parents.
+   */
+  readonly maxParents?: 1 | 2
 }
 
 /** The host `git` namespace's one verb result. */

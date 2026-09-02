@@ -239,6 +239,111 @@ describe('GitController.log', () => {
   })
 })
 
+describe('GitController.log traversal modes', () => {
+  // Five plain commits (root, main work, and one topic commit on each of three
+  // branches) plus one two-parent merge and one three-parent octopus merge, so
+  // every traversal mode has a distinguishable window.
+  let traversalRepo: string
+  let traversalCtx: Context
+  let traversalController: GitController
+
+  beforeAll(async () => {
+    traversalRepo = await mkdtemp(join(tmpdir(), 'dsh-git-traverse-'))
+    git(traversalRepo, ['init', '-q'])
+    git(traversalRepo, ['config', 'user.email', 't@example.test'])
+    git(traversalRepo, ['config', 'user.name', 't'])
+    git(traversalRepo, ['branch', '-M', 'main'])
+    await writeFile(join(traversalRepo, 'base.txt'), 'base\n')
+    git(traversalRepo, ['add', 'base.txt'])
+    git(traversalRepo, ['commit', '-qm', 'root'])
+    git(traversalRepo, ['checkout', '-qb', 'one'])
+    await writeFile(join(traversalRepo, 'one.txt'), 'one\n')
+    git(traversalRepo, ['add', 'one.txt'])
+    git(traversalRepo, ['commit', '-qm', 'one work'])
+    git(traversalRepo, ['checkout', '-qb', 'two', 'main'])
+    await writeFile(join(traversalRepo, 'two.txt'), 'two\n')
+    git(traversalRepo, ['add', 'two.txt'])
+    git(traversalRepo, ['commit', '-qm', 'two work'])
+    git(traversalRepo, ['checkout', '-qb', 'three', 'main'])
+    await writeFile(join(traversalRepo, 'three.txt'), 'three\n')
+    git(traversalRepo, ['add', 'three.txt'])
+    git(traversalRepo, ['commit', '-qm', 'three work'])
+    git(traversalRepo, ['checkout', '-q', 'main'])
+    await writeFile(join(traversalRepo, 'main.txt'), 'main\n')
+    git(traversalRepo, ['add', 'main.txt'])
+    git(traversalRepo, ['commit', '-qm', 'main work'])
+    git(traversalRepo, ['merge', '--no-edit', '-q', 'one'])
+    git(traversalRepo, ['merge', '--no-edit', '-q', 'two', 'three'])
+
+    traversalCtx = new Context()
+    traversalController = new GitController(traversalCtx, { maxCount: 200, all: false, firstParent: true, maxDiffBytes: 1024 * 1024 })
+  })
+
+  afterAll(async () => {
+    await traversalCtx.fiber.dispose()
+    await rm(traversalRepo, { recursive: true, force: true })
+  })
+
+  it('follows only the first parent when firstParent is true, one parent per row', async () => {
+    const result = await traversalController.log(agent(traversalRepo), { firstParent: true }, signal())
+    expect(result.commits.map(commit => commit.subject)).toEqual([
+      "Merge branches 'two' and 'three'",
+      "Merge branch 'one'",
+      'main work',
+      'root',
+    ])
+    for (const commit of result.commits) expect(commit.parents.length).toBeLessThanOrEqual(1)
+    // The mainline rows link up: each row's sole parent is the next row.
+    expect(result.commits[0]!.parents[0]).toBe(result.commits[1]!.hash)
+    expect(result.commits[1]!.parents[0]).toBe(result.commits[2]!.hash)
+  })
+
+  it('maxParents 1 hides every merge commit and keeps the plain chains', async () => {
+    const result = await traversalController.log(agent(traversalRepo), { firstParent: false, maxParents: 1 }, signal())
+    expect(result.commits.map(commit => commit.subject).sort()).toEqual([
+      'main work',
+      'one work',
+      'root',
+      'three work',
+      'two work',
+    ])
+    for (const commit of result.commits) expect(commit.parents.length).toBeLessThanOrEqual(1)
+  })
+
+  it('maxParents 2 keeps two-parent merges with both parents and drops the octopus merge', async () => {
+    const result = await traversalController.log(agent(traversalRepo), { firstParent: false, maxParents: 2 }, signal())
+    const subjects = result.commits.map(commit => commit.subject)
+    expect(subjects).toContain("Merge branch 'one'")
+    expect(subjects).not.toContain("Merge branches 'two' and 'three'")
+    for (const commit of result.commits) expect(commit.parents.length).toBeLessThanOrEqual(2)
+    // A surviving merge keeps both parents, exactly as git reports them unfiltered.
+    const full = await traversalController.log(agent(traversalRepo), { firstParent: false }, signal())
+    const kept = result.commits.find(commit => commit.subject === "Merge branch 'one'")!
+    const keptFull = full.commits.find(commit => commit.subject === "Merge branch 'one'")!
+    expect(kept.parents).toEqual(keptFull.parents)
+  })
+
+  it('treats an absent maxParents exactly as before the option existed', async () => {
+    const result = await traversalController.log(agent(traversalRepo), { firstParent: false }, signal())
+    expect(result.commits.length).toBe(7)
+    expect(result.commits.find(commit => commit.subject === "Merge branches 'two' and 'three'")!.parents.length).toBe(3)
+    expect(result.commits.find(commit => commit.subject === "Merge branch 'one'")!.parents.length).toBe(2)
+  })
+
+  it('still probes the cut at maxCount under a max-parents filter', async () => {
+    const bounded = new Context()
+    const small = new GitController(bounded, { maxCount: 2, all: false, firstParent: true, maxDiffBytes: 1024 * 1024 })
+    try {
+      const result = await small.log(agent(traversalRepo), { firstParent: false, maxParents: 1 }, signal())
+      expect(result.commits.length).toBe(2)
+      expect(result.truncated).toBe(true)
+      for (const commit of result.commits) expect(commit.parents.length).toBeLessThanOrEqual(1)
+    } finally {
+      await bounded.fiber.dispose()
+    }
+  })
+})
+
 describe('GitController.show', () => {
   let showRepo: string
   let showCtx: Context

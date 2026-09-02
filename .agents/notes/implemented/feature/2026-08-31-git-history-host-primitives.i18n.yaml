@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-31-git-history-host-primitives.md
-2026-08-31-git-history-host-primitives.md: 7cf63d767480c221309085a21ae6294b93bab940
-2026-08-31-git-history-host-primitives.zh.md: a2d2b32f77ccf384dad39c0355c52e6923d18f7c
+2026-08-31-git-history-host-primitives.md: 3775973f8f4e0252f9d4d03280d9635e061fde8b
+2026-08-31-git-history-host-primitives.zh.md: 8634b3ed39baad8d4debde367fb7f479e4d9d864

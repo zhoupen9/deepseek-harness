@@ -395,6 +395,7 @@ async function runLog(
   maxCount: number,
   all: boolean,
   firstParent: boolean,
+  maxParents: 1 | 2 | undefined,
   signal: AbortSignal,
 ): Promise<LogOutcome> {
   // Probe one extra record so a full window can prove it was cut without a second call.
@@ -402,6 +403,7 @@ async function runLog(
     '-C', fenceRoot, ...GIT_SAFE_ARGS,
     'log', '--topo-order', '-z', '--decorate=full',
     ...(firstParent ? ['--first-parent'] : []),
+    ...(maxParents !== undefined ? ['--max-parents=' + String(maxParents)] : []),
     '--max-count=' + String(maxCount + 1),
     ...(all ? ['--all'] : []),
     '--format=' + GIT_LOG_FORMAT,
@@ -534,7 +536,7 @@ export class GitController extends TypertRemoteService {
   /**
    * Log the workspace repository's commit history for a Remote caller's graph.
    * @param agent - target Agent resolved from the Session identity on the wire; its cwd is the fence root.
-   * @param options - commit bound, ref selection, and first-parent collapse; absent applies the configured defaults.
+   * @param options - commit bound, ref selection, and the traversal mode; absent applies the configured defaults.
    * @param signal - caller lifetime; abort kills the git child and rejects with the signal reason.
    * @returns the repo context, HEAD facts, and the bounded newest-first commit window.
    */
@@ -591,9 +593,10 @@ export class GitController extends TypertRemoteService {
     const maxCount = options.maxCount ?? this.config.maxCount
     const all = options.all ?? this.config.all
     const firstParent = options.firstParent ?? this.config.firstParent
+    const maxParents = options.maxParents
     let outcome: LogOutcome
     try {
-      outcome = await runLog(repo.fenceRoot, maxCount, all, firstParent, signal)
+      outcome = await runLog(repo.fenceRoot, maxCount, all, firstParent, maxParents, signal)
     } catch (error) {
       if (signal.aborted) throw asError(signal.reason)
       // git present but the log command failed: a context, not a thrown error.
