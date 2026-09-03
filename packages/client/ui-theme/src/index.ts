@@ -11,8 +11,9 @@ import {
 
 export {
   DEFAULT_FONT_SIZE, DEFAULT_MONO_FONT, DEFAULT_PREFERENCE, DEFAULT_VARIANT_FONT,
-  FONT_FAMILY_MAX_LENGTH, FONT_SIZE_FIELD, FONT_SIZE_MAX, FONT_SIZE_MIN, MONO_FONT_FIELD,
-  THEME_PREFERENCE_FIELD, THEME_PREFERENCES, THEME_SETTINGS_NAMESPACE, VARIANT_FONT_FIELD,
+  FONT_COLOR_DARK_FIELD, FONT_COLOR_LIGHT_FIELD, FONT_FAMILY_MAX_LENGTH, FONT_SIZE_FIELD,
+  FONT_SIZE_MAX, FONT_SIZE_MIN, MONO_FONT_FIELD, THEME_PREFERENCE_FIELD, THEME_PREFERENCES,
+  THEME_SETTINGS_NAMESPACE, VARIANT_FONT_FIELD,
   type ThemePreference, type ThemeSettings,
 } from './theme-settings.ts'
 
@@ -25,6 +26,8 @@ function readSection(ctx: Context): ThemeSettings {
     fontSize: DEFAULT_FONT_SIZE,
     variantFont: DEFAULT_VARIANT_FONT,
     monoFont: DEFAULT_MONO_FONT,
+    fontColorLight: '',
+    fontColorDark: '',
   }
   const settings = ctx.get('settings')
   if (settings === undefined) return fallback

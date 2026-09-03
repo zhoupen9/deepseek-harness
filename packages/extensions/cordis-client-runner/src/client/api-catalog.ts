@@ -857,7 +857,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ThemeSnapshot',
-    declaration: 'export interface ThemeSnapshot {\n    preference: ThemePreference;\n    fontSize: number;\n    variantFont: string;\n    monoFont: string;\n    uiFontStack: string;\n    monoFontStack: string;\n    active: ThemeDefinition;\n    themes: readonly ThemeDefinition[];\n    revision: number;\n}',
+    declaration: 'export interface ThemeSnapshot {\n    preference: ThemePreference;\n    fontSize: number;\n    variantFont: string;\n    monoFont: string;\n    fontColorLight: string;\n    fontColorDark: string;\n    uiFontStack: string;\n    monoFontStack: string;\n    active: ThemeDefinition;\n    themes: readonly ThemeDefinition[];\n    revision: number;\n}',
   },
   {
     name: 'ThemeTokenModes',

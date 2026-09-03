@@ -10,7 +10,7 @@ const DARK_THEME_COLOR = 'rgb(21, 21, 23)'
 function snapshot(colorScheme: 'light' | 'dark', tokens: Record<string, string> = {}, fontSize = 14, uiFontStack = 'ui-stack', monoFontStack = 'mono-stack'): ThemeSnapshot {
   // The presenter must key off colorScheme, not the id — keep them distinct.
   const active = { id: `${colorScheme}-test`, colorScheme, tokens }
-  return { preference: colorScheme, fontSize, variantFont: 'default', monoFont: 'default', uiFontStack, monoFontStack, active, themes: [active], revision: 1 }
+  return { preference: colorScheme, fontSize, variantFont: 'default', monoFont: 'default', fontColorLight: '', fontColorDark: '', uiFontStack, monoFontStack, active, themes: [active], revision: 1 }
 }
 
 function clearThemePresentation(): void {

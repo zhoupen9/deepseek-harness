@@ -20,6 +20,12 @@ export const VARIANT_FONT_FIELD = 'variantFont'
 /** Field carrying the selected fixed-width (monospace) font family name. */
 export const MONO_FONT_FIELD = 'monoFont'
 
+/** Field carrying the default text color while the light palette is active. */
+export const FONT_COLOR_LIGHT_FIELD = 'fontColorLight'
+
+/** Field carrying the default text color while the dark palette is active. */
+export const FONT_COLOR_DARK_FIELD = 'fontColorDark'
+
 /** Empty family name: fall back to the built-in default stack. */
 export const DEFAULT_VARIANT_FONT = ''
 
@@ -55,10 +61,43 @@ export interface ThemeSettings {
   variantFont: string
   /** Selected fixed-width (monospace) font family name; empty = built-in default. */
   monoFont: string
+  /**
+   * Default text color while the light palette is active. Empty or absent =
+   * no override, so the shipped alias palette applies.
+   */
+  fontColorLight?: string
+  /**
+   * Default text color while the dark palette is active. Empty or absent =
+   * no override, so the shipped alias palette applies.
+   */
+  fontColorDark?: string
 }
 
 /** A validated font-family name: non-empty strings and '' (the default). */
 const fontFamilyField = () => z.string().max(FONT_FAMILY_MAX_LENGTH).default('')
+
+/**
+ * Anchored matcher for one persistable default-text-color value: the empty
+ * string (no override) or a solid CSS color — #rgb/#rrggbb hex, or rgb()/hsl()
+ * in the comma or space-separated form. Alpha-bearing forms (rgba(), a /
+ * <alpha> channel, #rrggbbaa) are rejected because text color must stay
+ * solid: alpha text composites differently over surfaces and makes contrast
+ * unguaranteed.
+ */
+const FONT_COLOR_PATTERN = new RegExp(
+  [
+    '^(?:|#(?:[0-9a-f]{3}){1,2}',
+    '|rgb\\(\\s*-?\\d+(?:\\.\\d+)?%?\\s*,\\s*-?\\d+(?:\\.\\d+)?%?\\s*,\\s*-?\\d+(?:\\.\\d+)?%?\\s*\\)',
+    '|rgb\\(\\s*-?\\d+(?:\\.\\d+)?%?\\s+-?\\d+(?:\\.\\d+)?%?\\s+-?\\d+(?:\\.\\d+)?%?\\s*\\)',
+    '|hsl\\(\\s*-?\\d+(?:\\.\\d+)?(?:deg|grad|rad|turn)?\\s*,\\s*-?\\d+(?:\\.\\d+)?%\\s*,\\s*-?\\d+(?:\\.\\d+)?%\\s*\\)',
+    '|hsl\\(\\s*-?\\d+(?:\\.\\d+)?(?:deg|grad|rad|turn)?\\s+-?\\d+(?:\\.\\d+)?%\\s+-?\\d+(?:\\.\\d+)?%\\s*\\)',
+    ')$',
+  ].join(''),
+  'i',
+)
+
+/** A validated default-text-color field: '' (no override) or a solid CSS color. */
+const fontColorField = () => z.string().pattern(FONT_COLOR_PATTERN).default('')
 
 /** Durable theme schema; also the wire envelope the browser scope validates against. */
 export const ThemeSettingsSchema: z<ThemeSettings> = z.object({
@@ -66,6 +105,8 @@ export const ThemeSettingsSchema: z<ThemeSettings> = z.object({
   [FONT_SIZE_FIELD]: z.number().step(1).min(FONT_SIZE_MIN).max(FONT_SIZE_MAX).default(DEFAULT_FONT_SIZE),
   [VARIANT_FONT_FIELD]: fontFamilyField(),
   [MONO_FONT_FIELD]: fontFamilyField(),
+  [FONT_COLOR_LIGHT_FIELD]: fontColorField(),
+  [FONT_COLOR_DARK_FIELD]: fontColorField(),
 })
 
 /**
@@ -85,4 +126,14 @@ export function isThemePreference(value: unknown): value is ThemePreference {
  */
 export function isFontFamily(value: unknown): value is string {
   return value === '' || (typeof value === 'string' && value.length <= FONT_FAMILY_MAX_LENGTH)
+}
+
+/**
+ * Validate a persisted default text color: the empty string (no override) or
+ * a solid CSS color accepted by {@link ThemeSettingsSchema}.
+ * @param value - value crossing the settings boundary.
+ * @returns whether the value is persistable as a default text color.
+ */
+export function isFontColor(value: unknown): value is string {
+  return value === '' || (typeof value === 'string' && FONT_COLOR_PATTERN.test(value))
 }

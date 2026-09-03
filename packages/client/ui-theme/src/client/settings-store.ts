@@ -1,7 +1,7 @@
 /**
- * Appearance, font-size, and font-face row slot stores: mirrors of the theme
- * service snapshot. The plugin's apply-world change listener is the only
- * writer; the row components read via props.useStore.
+ * Appearance, font-size, font-color, and font-face row slot stores: mirrors of
+ * the theme service snapshot. The plugin's apply-world change listener is the
+ * only writer; the row components read via props.useStore.
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
 import { DEFAULT_FONT_SIZE, type ThemePreference } from '../theme-settings.ts'
@@ -60,6 +60,39 @@ export function createFontSizeRowStore(): EngineStoreHandle<FontSizeRowState, Fo
       sync: (d, fontSize: number, revision: number) => {
         if (revision <= d.revision) return
         d.fontSize = fontSize
+        d.revision = revision
+      },
+    },
+  })
+}
+
+/** Store state mirrored from the theme snapshot's default text colors. */
+export interface FontColorRowState {
+  /** Default text color while the light palette is active ('' = no override). */
+  fontColorLight: string
+  /** Default text color while the dark palette is active ('' = no override). */
+  fontColorDark: string
+  /** Service revision; -1 until first sync so revision 0 lands as a change. */
+  revision: number
+}
+
+/** Declared action shape giving the exported factory a stable return type. */
+type FontColorRowActions = {
+  sync: (draft: FontColorRowState, fontColorLight: string, fontColorDark: string, revision: number) => void
+}
+
+/**
+ * Declares the font-color row state and write surface.
+ * @returns the store handle.
+ */
+export function createFontColorRowStore(): EngineStoreHandle<FontColorRowState, FontColorRowActions> {
+  return defineStore({
+    init: (): FontColorRowState => ({ fontColorLight: '', fontColorDark: '', revision: -1 }),
+    actions: {
+      sync: (d, fontColorLight: string, fontColorDark: string, revision: number) => {
+        if (revision <= d.revision) return
+        d.fontColorLight = fontColorLight
+        d.fontColorDark = fontColorDark
         d.revision = revision
       },
     },

@@ -8,13 +8,14 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject, SETTINGS_NS } from '@deepseek-ai/dsh-client-ui-theme/client'
-import type { AppearanceRowInjected, FontSizeRowInjected, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
+import type { AppearanceRowInjected, FontColorRowInjected, FontSizeRowInjected, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema } from '../src/theme-settings.ts'
 import { AppearanceRow } from '../src/client/AppearanceRow.tsx'
 import { FontSizeRow } from '../src/client/FontSizeRow.tsx'
 import { FontFaceRow } from '../src/client/FontFaceRow.tsx'
+import { FontColorRow } from '../src/client/FontColorRow.tsx'
 import type { FontFaceRowInjected } from '../src/client/FontFaceRow.tsx'
-import type { createAppearanceRowStore, createFontFaceRowStore, createFontSizeRowStore } from '../src/client/settings-store.ts'
+import type { createAppearanceRowStore, createFontColorRowStore, createFontFaceRowStore, createFontSizeRowStore } from '../src/client/settings-store.ts'
 
 // These specs assert the shipped Chinese copy. The lane has no jsdom `window`,
 // so browser-language detection never runs and a fresh LocaleRuntime opens on
@@ -79,6 +80,15 @@ function faceOf(slots: SlotRegistry) {
   return { entry, instance, face }
 }
 
+/** The same choreography for the font-color row entry. */
+function fontColorFaceOf(slots: SlotRegistry) {
+  const entry = slots.entries(SLOT).find(e => e.component === FontColorRow)!
+  const handle = entry.store as ReturnType<typeof createFontColorRowStore>
+  const instance = handle.create()
+  const face = (entry.inject as unknown as (a: typeof instance.actions) => FontColorRowInjected)(instance.actions)
+  return { entry, instance, face }
+}
+
 /** The same choreography for the font-size row entry. */
 function fontSizeFaceOf(slots: SlotRegistry) {
   const entry = slots.entries(SLOT).find(e => e.component === FontSizeRow)!
@@ -115,6 +125,11 @@ describe('ui-theme apply', () => {
     const fontEntry = before.slots.entries(SLOT).find(e => e.component === FontSizeRow)!
     expect(fontEntry.options).toMatchObject({ id: 'font-size', order: 11 })
     expect(fontEntry.locale).toBe(SETTINGS_NS)
+    const colorEntry = before.slots.entries(SLOT).find(e => e.component === FontColorRow)!
+    // Order 11.5 places the row between the font-size stepper (11) and the
+    // variant-font picker (12) in the General section.
+    expect(colorEntry.options).toMatchObject({ id: 'font-color', order: 11.5 })
+    expect(colorEntry.locale).toBe(SETTINGS_NS)
 
     const after = await bench()
     const fiber = after.ctx.plugin({ inject: [...inject], apply })
@@ -124,6 +139,7 @@ describe('ui-theme apply', () => {
     await Promise.resolve()
     expect(after.slots.entries(SLOT).some(e => e.component === AppearanceRow)).toBe(true)
     expect(after.slots.entries(SLOT).some(e => e.component === FontSizeRow)).toBe(true)
+    expect(after.slots.entries(SLOT).some(e => e.component === FontColorRow)).toBe(true)
   })
 
   it('projects service snapshots into the row store and routes face writes back', async () => {
@@ -144,6 +160,29 @@ describe('ui-theme apply', () => {
     expect(theme.getTheme().preference).toBe('system')
     expect(instance.getSnapshot().preference).toBe('system')
     await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(2) })
+  })
+
+  it('projects font-color snapshots into its row store and routes face writes back', async () => {
+    const b = await bench()
+    declareItems(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const theme = b.ctx.get('theme') as ThemeRuntime
+    // An event ahead of any inject hits the unbound-actions arm.
+    theme.setFontColorLight('#101010')
+
+    const { entry, instance, face } = fontColorFaceOf(b.slots)
+    // The inject-time re-sync sealed the init window: the mirror is current.
+    expect(instance.getSnapshot().fontColorLight).toBe('#101010')
+    expect(instance.getSnapshot().fontColorDark).toBe('')
+    expect(entry.options).toMatchObject({ id: 'font-color', order: 11.5 })
+
+    face.setFontColorDark('#202020')
+    expect(theme.getTheme().fontColorDark).toBe('#202020')
+    expect(instance.getSnapshot().fontColorDark).toBe('#202020')
+    face.setFontColorLight('')
+    expect(theme.getTheme().fontColorLight).toBe('')
+    expect(instance.getSnapshot().fontColorLight).toBe('')
+    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(3) })
   })
 
   it('projects font-size snapshots into its row store and routes face writes back', async () => {
@@ -254,7 +293,7 @@ describe('ui-theme apply', () => {
     const b = await bench()
     const host = declareItems(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    expect(b.slots.entries(SLOT)).toHaveLength(4)
+    expect(b.slots.entries(SLOT)).toHaveLength(5)
 
     // Collapse: the declarer dies, the cascade removes our entries while the
     // apply closure still holds its (now stale) disposers.
@@ -265,6 +304,7 @@ describe('ui-theme apply', () => {
     await Promise.resolve()
     expect(b.slots.entries(SLOT).some(e => e.component === AppearanceRow)).toBe(true)
     expect(b.slots.entries(SLOT).some(e => e.component === FontSizeRow)).toBe(true)
+    expect(b.slots.entries(SLOT).some(e => e.component === FontColorRow)).toBe(true)
   })
 
   it('teardown removes the rows and the dictionaries; teardown without a declaration is quiet', async () => {
@@ -272,7 +312,7 @@ describe('ui-theme apply', () => {
     declareItems(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(b.slots.entries(SLOT)).toHaveLength(4)
+    expect(b.slots.entries(SLOT)).toHaveLength(5)
     await fiber.dispose()
     expect(b.slots.entries(SLOT)).toHaveLength(0)
     // Dictionary disposal: translation falls back to the bare key.

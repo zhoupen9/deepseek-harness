@@ -1,0 +1,90 @@
+/* Font-color row: title + per-mode color controls, same cell rhythm as the
+ * font-size row (gap 8, pad 16/0, hairline separator). Each mode line carries
+ * a caption, the native color swatch, and a text reset. */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 48px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.desc {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Two stacked mode lines; the swatch is the only wide control, so lines stay
+   compact and the row keeps the title-to-control baseline alignment. */
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modeLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modeLabel {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Native color swatch: a flat square chip whose border reads as the l2 edge;
+   the browser draws the picked color inside it. */
+.swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+
+/* Text reset per mode: quiet tertiary action that raises on hover. */
+.reset {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.reset:hover {
+  color: var(--dsw-alias-label-primary);
+}

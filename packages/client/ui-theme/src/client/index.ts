@@ -22,14 +22,17 @@ import type { FontSizeRowInjected } from './FontSizeRow.tsx'
 import { FontSizeRow } from './FontSizeRow.tsx'
 import type { FontFaceRowInjected } from './FontFaceRow.tsx'
 import { FontFaceRow } from './FontFaceRow.tsx'
-import { createAppearanceRowStore, createFontFaceRowStore, createFontSizeRowStore } from './settings-store.ts'
+import type { FontColorRowInjected } from './FontColorRow.tsx'
+import { FontColorRow } from './FontColorRow.tsx'
+import { createAppearanceRowStore, createFontColorRowStore, createFontFaceRowStore, createFontSizeRowStore } from './settings-store.ts'
 import { installThemeStyles } from './styles.ts'
 import { en, zh, type ThemeKey } from './locales.ts'
 import {
   DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, DEFAULT_VARIANT_FONT,
-  FONT_SIZE_FIELD, FONT_SIZE_MAX, FONT_SIZE_MIN, isFontFamily,
-  isThemePreference, MONO_FONT_FIELD, THEME_PREFERENCE_FIELD, THEME_SETTINGS_NAMESPACE,
-  VARIANT_FONT_FIELD, type ThemePreference, type ThemeSettings,
+  FONT_COLOR_DARK_FIELD, FONT_COLOR_LIGHT_FIELD, FONT_SIZE_FIELD, FONT_SIZE_MAX,
+  FONT_SIZE_MIN, isFontColor, isFontFamily, isThemePreference, MONO_FONT_FIELD,
+  THEME_PREFERENCE_FIELD, THEME_SETTINGS_NAMESPACE, VARIANT_FONT_FIELD,
+  type ThemePreference, type ThemeSettings,
 } from '../theme-settings.ts'
 import {
   loadInstalledFonts, MONO_FONT_ID_ATTRIBUTE, monoFontStack, UI_FONT_ID_ATTRIBUTE,
@@ -37,9 +40,10 @@ import {
 } from '../styles/font-stacks.ts'
 
 export type { AppearanceRowComponentProps, AppearanceRowInjected } from './AppearanceRow.tsx'
+export type { FontColorRowComponentProps, FontColorRowInjected } from './FontColorRow.tsx'
 export type { FontSizeRowComponentProps, FontSizeRowInjected } from './FontSizeRow.tsx'
 export type { FontFaceRowComponentProps, FontFaceRowInjected } from './FontFaceRow.tsx'
-export type { AppearanceRowState, FontFaceRowState, FontSizeRowState } from './settings-store.ts'
+export type { AppearanceRowState, FontColorRowState, FontFaceRowState, FontSizeRowState } from './settings-store.ts'
 export type { ThemeKey } from './locales.ts'
 export type { ThemePreference, ThemeSettings } from '../theme-settings.ts'
 
@@ -94,6 +98,10 @@ export interface ThemeSnapshot {
   variantFont: string
   /** Selected fixed-width (monospace) font family name ('' = built-in default). */
   monoFont: string
+  /** Default text color while the light palette is active ('' = no override). */
+  fontColorLight: string
+  /** Default text color while the dark palette is active ('' = no override). */
+  fontColorDark: string
   /** Resolved CSS font-family stack for the variant font. */
   uiFontStack: string
   /** Resolved CSS font-family stack for the fixed-width font. */
@@ -139,6 +147,9 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/** Alias token the per-mode font-color preference overrides. */
+const LABEL_PRIMARY_TOKEN = '--dsw-alias-label-primary'
+
 const BUILTIN_THEMES: readonly ThemeDefinition[] = Object.freeze([
   Object.freeze({ id: 'light', colorScheme: 'light' as const, tokens: Object.freeze({}) }),
   Object.freeze({ id: 'dark', colorScheme: 'dark' as const, tokens: Object.freeze({}) }),
@@ -152,7 +163,7 @@ const BUILTIN_INSPECT_TOKENS: readonly ThemeTokenInspection[] = Object.freeze([
   { name: '--dsw-alias-border-l1', description: 'Primary subtle border.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-border-l1' },
   { name: '--dsw-alias-border-l2', description: 'Secondary stronger border.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-border-l2' },
   { name: '--dsw-alias-brand-primary', description: 'Primary brand accent.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-brand-primary' },
-  { name: '--dsw-alias-label-primary', description: 'Primary text color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-label-primary' },
+  { name: LABEL_PRIMARY_TOKEN, description: 'Primary text color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: LABEL_PRIMARY_TOKEN },
   { name: '--dsw-alias-label-secondary', description: 'Secondary text color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-label-secondary' },
   { name: '--dsw-alias-state-error-primary', description: 'Primary error state color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-state-error-primary' },
   { name: '--dsw-alias-state-success-primary', description: 'Primary success state color.', valueType: 'CSS color', requiresLightAndDark: true, cssVariable: '--dsw-alias-state-success-primary' },
@@ -179,6 +190,8 @@ export class ThemeRuntime {
   private fontSize: number = bootstrapFontSize()
   private variantFont: string = bootstrapFontFamily(UI_FONT_ID_ATTRIBUTE)
   private monoFont: string = bootstrapFontFamily(MONO_FONT_ID_ATTRIBUTE)
+  private fontColorLight = ''
+  private fontColorDark = ''
   private revision = 0
   private snapshot: ThemeSnapshot
   private readonly media: MediaQueryList | undefined
@@ -300,16 +313,51 @@ export class ThemeRuntime {
     this.publish()
   }
 
+  /**
+   * Change the default text color while the light palette is active — a write
+   * entry mirroring {@link setTheme}. Accepted values are written through the
+   * settings scope and emit `theme/change`; the color reaches the document as
+   * the active theme's `--dsw-alias-label-primary` override.
+   * @param color - a solid CSS color ('' restores the shipped palette default); invalid colors throw.
+   */
+  setFontColorLight(color: string): void {
+    if (!isFontColor(color)) throw new Error('light-mode text color is invalid')
+    if (this.fontColorLight === color) return
+    this.fontColorLight = color
+    void this.host.set(FONT_COLOR_LIGHT_FIELD, color)
+    this.publish()
+  }
+
+  /**
+   * Change the default text color while the dark palette is active — a write
+   * entry mirroring {@link setFontColorLight}.
+   * @param color - a solid CSS color ('' restores the shipped palette default); invalid colors throw.
+   */
+  setFontColorDark(color: string): void {
+    if (!isFontColor(color)) throw new Error('dark-mode text color is invalid')
+    if (this.fontColorDark === color) return
+    this.fontColorDark = color
+    void this.host.set(FONT_COLOR_DARK_FIELD, color)
+    this.publish()
+  }
+
   /** Adopt the scope's accepted durable preference without writing it back. */
   private adopt(): void {
     const section = this.host.getSnapshot().value
     if (section === undefined) return
+    // Sections written before the color fields existed carry no keys; absent
+    // means the same no-override value as ''.
+    const fontColorLight = section.fontColorLight ?? ''
+    const fontColorDark = section.fontColorDark ?? ''
     if (this.preference === section.preference && this.fontSize === section.fontSize
-      && this.variantFont === section.variantFont && this.monoFont === section.monoFont) return
+      && this.variantFont === section.variantFont && this.monoFont === section.monoFont
+      && this.fontColorLight === fontColorLight && this.fontColorDark === fontColorDark) return
     this.preference = section.preference
     this.fontSize = section.fontSize
     this.variantFont = section.variantFont
     this.monoFont = section.monoFont
+    this.fontColorLight = fontColorLight
+    this.fontColorDark = fontColorDark
     this.publish()
   }
 
@@ -379,6 +427,8 @@ export class ThemeRuntime {
       fontSize: this.fontSize,
       variantFont: this.variantFont,
       monoFont: this.monoFont,
+      fontColorLight: this.fontColorLight,
+      fontColorDark: this.fontColorDark,
       uiFontStack: variantFontStack(this.variantFont),
       monoFontStack: monoFontStack(this.monoFont),
       active: this.composeActive(active),
@@ -388,19 +438,25 @@ export class ThemeRuntime {
   }
 
   /**
-   * Fold the override layers into the active definition: seq order, later
-   * layers win per-token, each value picked for the active color scheme (the
-   * presenter consumes the composed snapshot and needs no override awareness).
-   * Without layers the registered definition passes through by identity.
+   * Fold the override layers and the per-mode font-color preference into the
+   * active definition: seq order, later layers win per-token, each value
+   * picked for the active color scheme (the presenter consumes the composed
+   * snapshot and needs no override awareness). While the active mode has a
+   * font color set, the primary text token carries it; when unset the token is
+   * absent entirely, so the shipped alias palette shows and the presenter's
+   * retraction removes any earlier override. Without layers and without a
+   * font color the registered definition passes through by identity.
    */
   private composeActive(active: ThemeDefinition): ThemeDefinition {
-    if (this.overrides.size === 0) return active
+    const fontColor = active.colorScheme === 'light' ? this.fontColorLight : this.fontColorDark
+    if (this.overrides.size === 0 && fontColor === '') return active
     const tokens: ThemeTokens = { ...active.tokens }
     for (const layer of [...this.overrides.values()].sort((a, b) => a.seq - b.seq)) {
       for (const [name, modes] of Object.entries(layer.tokens)) {
         tokens[name] = modes[active.colorScheme]
       }
     }
+    if (fontColor !== '') tokens[LABEL_PRIMARY_TOKEN] = fontColor
     return Object.freeze({ ...active, tokens: Object.freeze(tokens) })
   }
 
@@ -504,9 +560,12 @@ export function apply(ctx: ClientContext): void {
   let bound: BoundActions<typeof store> | undefined
   const fontSizeStore = createFontSizeRowStore()
   let fontSizeBound: BoundActions<typeof fontSizeStore> | undefined
+  const fontColorStore = createFontColorRowStore()
+  let fontColorBound: BoundActions<typeof fontColorStore> | undefined
   const sync = (snapshot: ThemeSnapshot): void => {
     bound?.sync(snapshot.preference, snapshot.revision)
     fontSizeBound?.sync(snapshot.fontSize, snapshot.revision)
+    fontColorBound?.sync(snapshot.fontColorLight, snapshot.fontColorDark, snapshot.revision)
   }
   ctx.on('theme/change', sync)
   const injected = (actions: BoundActions<typeof store>): AppearanceRowInjected => {
@@ -542,6 +601,23 @@ export function apply(ctx: ClientContext): void {
     locale: SETTINGS_NS,
     inject: fontSizeInjected,
   }, FontSizeRow))
+
+  const fontColorInjected = (actions: BoundActions<typeof fontColorStore>): FontColorRowInjected => {
+    fontColorBound = actions
+    sync(theme.getTheme())
+    return {
+      setFontColorLight: (color) => { theme.setFontColorLight(color) },
+      setFontColorDark: (color) => { theme.setFontColorDark(color) },
+    }
+  }
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'font-color',
+    order: 11.5,
+    store: fontColorStore,
+    locale: SETTINGS_NS,
+    inject: fontColorInjected,
+  }, FontColorRow))
 
   const variantFontStore = createFontFaceRowStore()
   let variantFontBound: BoundActions<typeof variantFontStore> | undefined

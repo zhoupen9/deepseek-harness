@@ -266,6 +266,70 @@ describe('ThemeRuntime', () => {
     expect(host.listenerCount()).toBe(0)
   })
 
+  it('defaults both font colors to no override and switches them through the scope', () => {
+    const { theme, events, host } = make()
+    expect(theme.getTheme().fontColorLight).toBe('')
+    expect(theme.getTheme().fontColorDark).toBe('')
+    theme.setFontColorLight('#0f1115')
+    expect(theme.getTheme().fontColorLight).toBe('#0f1115')
+    expect(host.set).toHaveBeenCalledWith('fontColorLight', '#0f1115')
+    expect(events).toHaveLength(1)
+    theme.setFontColorDark('#f9fafb')
+    expect(theme.getTheme().fontColorDark).toBe('#f9fafb')
+    expect(host.set).toHaveBeenCalledWith('fontColorDark', '#f9fafb')
+    expect(events).toHaveLength(2)
+    // Same value is a no-op; invalid colors throw before writing.
+    theme.setFontColorLight('#0f1115')
+    expect(events).toHaveLength(2)
+    expect(() => { theme.setFontColorLight('red') }).toThrow('invalid')
+    expect(() => { theme.setFontColorDark('rgba(0, 0, 0, 0.5)') }).toThrow('invalid')
+    expect(host.set).toHaveBeenCalledTimes(2)
+    theme.setFontColorDark('#f9fafb')
+    expect(events).toHaveLength(2)
+    expect(host.set).toHaveBeenCalledTimes(2)
+    // '' restores no override.
+    theme.setFontColorDark('')
+    expect(theme.getTheme().fontColorDark).toBe('')
+    expect(events).toHaveLength(3)
+  })
+
+  it('folds the active mode font color into the primary text token and omits it when unset', () => {
+    const { theme } = make()
+    theme.setTheme('light')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBeUndefined()
+    theme.setFontColorLight('#101010')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBe('#101010')
+    // Unset dark leaves no override once the dark scheme is active.
+    theme.setTheme('dark')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBeUndefined()
+    theme.setFontColorDark('#202020')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBe('#202020')
+    // Each scheme carries its own value; resetting removes the token.
+    theme.setTheme('light')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBe('#101010')
+    theme.setFontColorLight('')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBeUndefined()
+  })
+
+  it('adopts font colors from the Host section, treating absent keys as no override', () => {
+    const { theme, events, host } = make()
+    const withColors = { preference: 'light' as const, fontSize: 14, variantFont: 'default', monoFont: 'default', fontColorLight: '#123456', fontColorDark: '#abcdef' }
+    host.publish({ status: 'ready', value: withColors, revision: 1, writable: true })
+    expect(theme.getTheme().fontColorLight).toBe('#123456')
+    expect(theme.getTheme().fontColorDark).toBe('#abcdef')
+    expect(events).toHaveLength(1)
+    expect(host.set).not.toHaveBeenCalled()
+    // Re-publishing the same section does not republish.
+    host.publish({ value: withColors, revision: 2 })
+    expect(events).toHaveLength(1)
+    // A section written before the color fields existed (no keys) resets to ''.
+    host.publish({ value: { preference: 'light', fontSize: 14, variantFont: 'default', monoFont: 'default' }, revision: 3 })
+    expect(theme.getTheme().fontColorLight).toBe('')
+    expect(theme.getTheme().fontColorDark).toBe('')
+    expect(events).toHaveLength(2)
+    expect(host.set).not.toHaveBeenCalled()
+  })
+
   describe('prefers-color-scheme resolution (stubbed matchMedia)', () => {
     type Listener = () => void
     const stubMedia = (initialMatches: boolean) => {

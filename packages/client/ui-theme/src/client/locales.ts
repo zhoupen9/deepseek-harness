@@ -1,4 +1,4 @@
-/** `settings.theme` namespace dictionaries (the Appearance and font-size rows' copy). */
+/** `settings.theme` namespace dictionaries (the theme feature's General settings rows). */
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
@@ -11,6 +11,12 @@ export const zh = {
   'fontSize.unit': 'px',
   'fontSize.increase': '增大字号',
   'fontSize.decrease': '减小字号',
+  'fontColor.title': '字体颜色',
+  'fontColor.description': '浅色与深色模式下的默认文字颜色',
+  'fontColor.light': '浅色模式',
+  'fontColor.dark': '深色模式',
+  'fontColor.reset': '重置',
+  'fontColor.invalid': '请输入有效颜色',
   'variantFont.title': '字体',
   'variantFont.description': '界面正文使用的字体',
   'variantFont.default': '默认',
@@ -33,6 +39,12 @@ export const en = {
   'fontSize.unit': 'px',
   'fontSize.increase': 'Increase font size',
   'fontSize.decrease': 'Decrease font size',
+  'fontColor.title': 'Font color',
+  'fontColor.description': 'Default text color for light and dark mode',
+  'fontColor.light': 'Light mode',
+  'fontColor.dark': 'Dark mode',
+  'fontColor.reset': 'Reset',
+  'fontColor.invalid': 'Enter a valid color',
   'variantFont.title': 'Font',
   'variantFont.description': 'Font used for interface text',
   'variantFont.default': 'Default',
