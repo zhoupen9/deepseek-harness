@@ -1,14 +1,14 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Inline code links" [disabled]
-  - tablist:
-    - tab "Chat" [selected]
-    - tab "Trajectory"
   - button "Session log":
     - text: Session log
     - img
   - button "Open the sidebar":
     - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
 - text: Show the local preview URL. {{clock}}
 - button "Copy":
   - img

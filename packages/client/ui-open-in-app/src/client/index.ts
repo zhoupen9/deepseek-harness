@@ -35,8 +35,8 @@ export function apply(ctx: ClientContext): void {
   const controller = new OpenInAppController()
   void controller.load()
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'open-in-app: dictionaries')
-  ctx.slots.inject('conversation.session.header.tabs.utilities', () => ctx.slots.register({
-    name: 'conversation.session.header.tabs.utilities',
+  ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
+    name: 'conversation.session.header.utilities',
     id: 'open-in-app',
     order: -10,
     locale: NS,

@@ -3,14 +3,14 @@
     - 'button "Plan a small change: add" [disabled]'
   - img
   - text: Standard mode
-  - tablist:
-    - tab "Chat" [selected]
-    - tab "Trajectory"
   - button "Session log":
     - text: Session log
     - img
   - button "Open the sidebar":
     - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
 - img
 - text: plan Plan mode on. Use /plan off to leave.
 - button "System prompt":

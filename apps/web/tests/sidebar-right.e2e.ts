@@ -336,7 +336,7 @@ describe('web e2e: shipped right Sidebar', () => {
       await expand.waitFor({ timeout: 15_000 })
       expect(await frame.getAttribute('data-rightbar-collapsed')).toBe('true')
       expect(await column.locator('[data-sidebar-right-open]').count()).toBe(0)
-      const utilities = page.locator('[class*="tabsUtilities"]')
+      const utilities = page.locator('[class*="headerUtilities"]')
       const expandBox = await expand.boundingBox()
       const rowBox = await utilities.boundingBox()
       if (expandBox === null || rowBox === null) throw new Error('header utilities are not rendered')

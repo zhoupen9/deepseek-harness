@@ -133,8 +133,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session'
       owner: ConversationHeaderActionOwnerProps
     }
-    /** Right-aligned Session utilities on the View tab row in ascending order. */
-    'conversation.session.header.tabs.utilities': {
+    /** Right-aligned Session utilities in ascending order. */
+    'conversation.session.header.utilities': {
       kind: 'list'
       scope: 'session'
       owner: ConversationHeaderActionOwnerProps
@@ -394,7 +394,7 @@ export type ConversationSessionHeaderSlotProps =
   & PropsRenderSlots<
     'conversation.session.header.lineage'
     | 'conversation.session.header.actions'
-    | 'conversation.session.header.tabs.utilities'
+    | 'conversation.session.header.utilities'
     | 'conversation.session.header.corner'
   >
   & PropsStore<ConversationStore>

@@ -19,7 +19,7 @@ export interface OpenInAppActionInjected {
 
 /** Full props for the Session-header open-in-app split button. */
 export type OpenInAppActionProps =
-  PropsRuntime<'conversation.session.header.tabs.utilities'>
+  PropsRuntime<'conversation.session.header.utilities'>
   & PropsLocale<typeof NS>
   & InjectFace<OpenInAppActionInjected>
 

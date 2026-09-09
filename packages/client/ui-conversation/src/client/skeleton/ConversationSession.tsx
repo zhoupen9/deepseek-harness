@@ -130,31 +130,29 @@ export function ConversationSessionHeader({
                 {renderSlot('conversation.session.header.actions', {})}
               </div>
             </div>
-          </div>
-          <div className={css.tabsRow}>
-            {tabs.length > 1 && (
-              <div className={css.tabs} role="tablist">
-                {tabs.map(viewTab => (
-                  <button
-                    key={viewTab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={viewTab.id === active?.id}
-                    className={clsx(css.tab, viewTab.id === active?.id && css.tabActive)}
-                    onClick={() => { selectView(viewTab.id) }}
-                  >
-                    {viewTab.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className={css.tabsUtilities}>
-              {renderSlot('conversation.session.header.tabs.utilities', {})}
+            <div className={css.headerUtilities}>
+              {renderSlot('conversation.session.header.utilities', {})}
             </div>
             <div className={css.headerCorner} data-conversation-header-corner="">
               {renderSlot('conversation.session.header.corner', {})}
             </div>
           </div>
+          {tabs.length > 1 && (
+            <div className={css.tabs} role="tablist">
+              {tabs.map(viewTab => (
+                <button
+                  key={viewTab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={viewTab.id === active?.id}
+                  className={clsx(css.tab, viewTab.id === active?.id && css.tabActive)}
+                  onClick={() => { selectView(viewTab.id) }}
+                >
+                  {viewTab.label}
+                </button>
+              ))}
+            </div>
+          )}
         </>
       )}
     </header>

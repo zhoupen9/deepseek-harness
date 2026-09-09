@@ -1,14 +1,14 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Clickable links gallery" [disabled]
-  - tablist:
-    - tab "Chat" [selected]
-    - tab "Trajectory"
   - button "Session log":
     - text: Session log
     - img
   - button "Open the sidebar":
     - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
 - text: "Assemble the link gallery: write the report and styles, inspect the sources, and summarize. {{clock}}"
 - button "Copy":
   - img

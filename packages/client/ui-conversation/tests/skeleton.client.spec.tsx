@@ -445,17 +445,8 @@ describe('ConversationRoot resident composer', () => {
     expect(seat?.contains(textarea)).toBe(true)
     expect(b.slotCalls).toContain('conversation.session.header.lineage')
     expect(b.slotCalls).toContain('conversation.session.header.actions')
-    expect(b.slotCalls).toContain('conversation.session.header.tabs.utilities')
+    expect(b.slotCalls).toContain('conversation.session.header.utilities')
     expect(b.slotCalls).toContain('conversation.session.header.corner')
-  })
-
-  it('renders the tab-row utilities slot even with a single view tab', () => {
-    const b = mount(sessionSnapshotOf(), undefined, undefined, {
-      viewTabs: [{ id: 'chat', label: 'Chat' }],
-    })
-    expect(b.slotCalls).toContain('conversation.session.header.tabs.utilities')
-    expect(b.view.queryByRole('tablist')).toBeNull()
-
   })
 
   it('sticky composer seat wraps the whole overlay chain, not only the fallback stack', () => {

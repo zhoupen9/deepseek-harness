@@ -1,14 +1,14 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Use the ask_user_question tool to" [disabled]
-  - tablist:
-    - tab "Chat" [selected]
-    - tab "Trajectory"
   - button "Session log":
     - text: Session log
     - img
   - button "Open the sidebar":
     - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
 - button "System prompt":
   - img
   - img

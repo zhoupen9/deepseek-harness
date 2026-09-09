@@ -1206,11 +1206,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     source: 'packages/client/ui-conversation/src/client/contract/slots.ts:125',
   },
   {
-    key: 'conversation.session.header.tabs.utilities',
+    key: 'conversation.session.header.utilities',
     kind: 'list',
     scope: 'session',
-    summary: 'Right-aligned Session utilities on the View tab row in ascending order.',
-    doc: 'Right-aligned Session utilities on the View tab row in ascending order.',
+    summary: 'Right-aligned Session utilities in ascending order.',
+    doc: 'Right-aligned Session utilities in ascending order.',
     registerOptions: [
       {
         name: 'id',
@@ -1259,7 +1259,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'session-log-export SessionLogDownloadHeaderAction id \'session-log-download\'',
     ],
     replaceRisk: 'none',
-    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.header.tabs.utilities\', () => ctx.slots.register(\n      { name: \'conversation.session.header.tabs.utilities\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.header.utilities\', () => ctx.slots.register(\n      { name: \'conversation.session.header.utilities\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
     source: 'packages/client/ui-conversation/src/client/contract/slots.ts:137',
   },
   {

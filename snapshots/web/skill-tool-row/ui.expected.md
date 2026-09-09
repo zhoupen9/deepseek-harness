@@ -1,14 +1,14 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Load the editing-cordis-compositions ski" [disabled]
-  - tablist:
-    - tab "Chat" [selected]
-    - tab "Trajectory"
   - button "Session log":
     - text: Session log
     - img
   - button "Open the sidebar":
     - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
 - button "System prompt":
   - img
   - img

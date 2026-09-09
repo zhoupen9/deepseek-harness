@@ -1,14 +1,14 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Reference order target" [disabled]
-  - tablist:
-    - tab "Chat" [selected]
-    - tab "Trajectory"
   - button "Session log":
     - text: Session log
     - img
   - button "Open the sidebar":
     - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
 - text: Research notes what changed? Referenced session · Research notes {{clock}}
 - button "Copy":
   - img

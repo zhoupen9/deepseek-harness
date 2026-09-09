@@ -3,14 +3,14 @@
     - button "Reply with a one-sentence description" [disabled]
   - img
   - text: Standard mode
-  - tablist:
-    - tab "Chat" [selected]
-    - tab "Trajectory"
   - button "Session log":
     - text: Session log
     - img
   - button "Open the sidebar":
     - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
 - navigation "Turn navigation":
   - button "Jump to turn 1"
   - button "Jump to turn 2"
