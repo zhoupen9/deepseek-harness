@@ -12,7 +12,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { spawnDshWeb, type DshWebServer } from './dsh-server.ts'
-import { IS_MAXIMIZED_CHANNEL, MAXIMIZED_CHANGED_CHANNEL, NOTIFY_CHANNEL, WINDOW_CHANNEL } from './ipc.ts'
+import { NOTIFY_CHANNEL } from './ipc.ts'
 
 let server: DshWebServer | undefined
 let mainWindow: BrowserWindow | undefined
@@ -99,30 +99,6 @@ ipcMain.on(NOTIFY_CHANNEL, (_event, payload: unknown) => {
 })
 
 /**
- * Toggle the main window between maximized and restored; a no-op before the
- * window exists. The title bar's maximize button drives this through the
- * `dsh:window` channel.
- */
-function toggleMaximize(): void {
-  if (mainWindow === undefined) return
-  if (mainWindow.isMaximized()) mainWindow.unmaximize()
-  else mainWindow.maximize()
-}
-
-// Frameless-window controls from the injected title bar (preload.ts). The
-// channel carries one action word; anything else is ignored, so an unknown
-// action from the renderer cannot reach window state.
-ipcMain.on(WINDOW_CHANNEL, (_event, action: unknown) => {
-  if (action === 'minimize') mainWindow?.minimize()
-  else if (action === 'toggle-maximize') toggleMaximize()
-  else if (action === 'close') mainWindow?.close()
-})
-
-// The title bar asks for the current maximize state once when it installs,
-// before any 'maximize'/'unmaximize' push could have reached it.
-ipcMain.handle(IS_MAXIMIZED_CHANNEL, () => mainWindow?.isMaximized() ?? false)
-
-/**
  * Boot the child server, then create and load the window. A boot or load
  * failure is surfaced in a native dialog and exits the app.
  */
@@ -152,9 +128,10 @@ async function start(): Promise<void> {
     minHeight: 480,
     title: 'DeepSeek Harness',
     show: false,
-    // The shell draws its own window chrome: a frameless window drops the OS
-    // title bar, and the preload injects a slim top strip with minimize /
-    // maximize / close controls (preload.ts). The menu bar stays hidden.
+    // The shell runs frameless: no OS title bar and no injected window
+    // controls; the preload installs a transparent drag strip along the top so
+    // the window stays movable (preload.ts), while minimize / restore / close
+    // ride the OS or window-manager shortcuts. The menu bar stays hidden.
     frame: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -173,11 +150,6 @@ async function start(): Promise<void> {
       event.preventDefault()
     }
   })
-  // Keep the title bar's maximize glyph in sync with the real window state:
-  // the preload subscribes to these pushes after its one-time state query.
-  mainWindow.on('maximize', () => { mainWindow?.webContents.send(MAXIMIZED_CHANGED_CHANNEL, true) })
-  mainWindow.on('unmaximize', () => { mainWindow?.webContents.send(MAXIMIZED_CHANGED_CHANNEL, false) })
-
   // Keep the renderer inside the served origin; hand anything else to the
   // platform browser so links into the wider web never escape the shell.
   const allowOrigin = (url: string): boolean => url.startsWith(origin)

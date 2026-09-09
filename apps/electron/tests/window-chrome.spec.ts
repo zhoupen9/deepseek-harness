@@ -1,35 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { installWindowChrome, type WindowChrome } from '../src/window-chrome.ts'
-
-function makeChrome() {
-  const send = vi.fn<(action: Parameters<WindowChrome['send']>[0]) => void>()
-  const isMaximized = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
-  const maximizedListeners: Array<(maximized: boolean) => void> = []
-  const chrome: WindowChrome = {
-    send,
-    isMaximized,
-    onMaximized: (listener) => { maximizedListeners.push(listener) },
-  }
-  return { chrome, send, isMaximized, maximizedListeners }
-}
+import { installWindowChrome } from '../src/window-chrome.ts'
 
 function titlebar(): HTMLElement {
   const el = document.getElementById('dsh-titlebar')
   if (el === null) throw new Error('drag strip was not injected')
   return el
-}
-
-function controls(): HTMLElement {
-  const el = document.getElementById('dsh-window-controls')
-  if (el === null) throw new Error('window controls were not injected')
-  return el
-}
-
-function button(id: 'minimize' | 'maximize' | 'close'): HTMLButtonElement {
-  const el = controls().querySelector(`[data-action='${id}']`)
-  if (el === null) throw new Error('missing window control button: ' + id)
-  return el as HTMLButtonElement
 }
 
 function segments(): HTMLElement[] {
@@ -91,27 +67,25 @@ afterEach(() => {
 })
 
 describe('installWindowChrome', () => {
-  it('keeps the original floating layout: transparent strip below content, controls on top', () => {
-    installWindowChrome(makeChrome().chrome)
+  it('injects a transparent drag strip below content and no window controls', () => {
+    installWindowChrome()
     const css = stylesheet()
     // No reserved band and no dedicated title bar: the strip rule itself
-    // paints nothing (transparent), unlike the button hover states.
+    // paints nothing (transparent).
     expect(css).not.toContain('padding-top')
     expect(css).not.toContain('--dsh-titlebar-height')
     const stripRule = css.slice(css.indexOf('#dsh-titlebar'), css.indexOf('.dsh-drag-segment'))
     expect(stripRule).not.toContain('background')
-    // The drag strip is prepended below the app at the root stacking context.
+    // The drag strip is prepended below the app at the root stacking context,
+    // and it is the only element the chrome injects.
+    expect(document.body.children).toHaveLength(1)
     expect(document.body.firstElementChild).toBe(titlebar())
     expect(css).toContain('z-index: 0')
-    // The floating controls ride on top at the top-right, like before.
-    expect(document.body.lastElementChild).toBe(controls())
-    expect(css).toContain('z-index: 2147483000')
+    expect(document.getElementById('dsh-window-controls')).toBeNull()
   })
 
-  it('fills the strip with drag segments and floats minimize, maximize, and close in order', () => {
-    installWindowChrome(makeChrome().chrome)
-    const actions = Array.from(controls().querySelectorAll('.dsh-wc')).map(el => el.getAttribute('data-action'))
-    expect(actions).toEqual(['minimize', 'maximize', 'close'])
+  it('fills the strip with drag segments that flip to no-drag when covered', () => {
+    installWindowChrome()
     expect(segments().length).toBeGreaterThan(0)
     const css = stylesheet()
     expect(css).toContain('.dsh-drag-segment')
@@ -120,26 +94,8 @@ describe('installWindowChrome', () => {
     expect(css).toContain('-webkit-app-region: no-drag')
   })
 
-  it('labels each control for assistive tech and tooltips', () => {
-    installWindowChrome(makeChrome().chrome)
-    expect(button('minimize').getAttribute('aria-label')).toBe('Minimize')
-    expect(button('maximize').getAttribute('aria-label')).toBe('Maximize')
-    expect(button('close').getAttribute('aria-label')).toBe('Close')
-  })
-
-  it('routes each button click to its window command', () => {
-    const { chrome, send } = makeChrome()
-    installWindowChrome(chrome)
-    button('minimize').click()
-    button('maximize').click()
-    button('close').click()
-    expect(send).toHaveBeenNthCalledWith(1, 'minimize')
-    expect(send).toHaveBeenNthCalledWith(2, 'toggle-maximize')
-    expect(send).toHaveBeenNthCalledWith(3, 'close')
-  })
-
-  it('keeps segments draggable over the window chrome and inert page content', () => {
-    installWindowChrome(makeChrome().chrome)
+  it('keeps segments draggable over the strip and inert page content', () => {
+    installWindowChrome()
     flushRaf()
     const segs = segments()
     mockSegmentRects(segs)
@@ -150,20 +106,15 @@ describe('installWindowChrome', () => {
     flushRaf()
     expect(segs.every(seg => !seg.classList.contains('covered'))).toBe(true)
 
-    // The strip itself and the floating controls are chrome, not content.
+    // The strip itself is chrome, not content.
     elementFromPoint.mockImplementation(() => titlebar())
-    window.dispatchEvent(new MouseEvent('pointermove', { clientY: 10 }))
-    flushRaf()
-    expect(segs.every(seg => !seg.classList.contains('covered'))).toBe(true)
-
-    elementFromPoint.mockImplementation(() => button('close'))
     window.dispatchEvent(new MouseEvent('pointermove', { clientY: 10 }))
     flushRaf()
     expect(segs.every(seg => !seg.classList.contains('covered'))).toBe(true)
   })
 
   it('flips a segment to no-drag when an interactive control covers it, and back when it does not', () => {
-    installWindowChrome(makeChrome().chrome)
+    installWindowChrome()
     flushRaf()
     const segs = segments()
     mockSegmentRects(segs)
@@ -190,7 +141,7 @@ describe('installWindowChrome', () => {
   })
 
   it('treats a descendant of an interactive control as covered', () => {
-    installWindowChrome(makeChrome().chrome)
+    installWindowChrome()
     flushRaf()
     const segs = segments()
     mockSegmentRects(segs)
@@ -209,7 +160,7 @@ describe('installWindowChrome', () => {
   })
 
   it('refreshes on pointer moves near the strip but not far below it', () => {
-    installWindowChrome(makeChrome().chrome)
+    installWindowChrome()
     flushRaf()
     elementFromPoint.mockClear()
     window.dispatchEvent(new MouseEvent('pointermove', { clientY: 200 }))
@@ -222,7 +173,7 @@ describe('installWindowChrome', () => {
   })
 
   it('refreshes on scroll, resize, and pointer down', () => {
-    installWindowChrome(makeChrome().chrome)
+    installWindowChrome()
     flushRaf()
     elementFromPoint.mockClear()
     window.dispatchEvent(new Event('scroll'))
@@ -237,42 +188,5 @@ describe('installWindowChrome', () => {
     elementFromPoint.mockClear()
     window.dispatchEvent(new MouseEvent('pointerdown'))
     expect(elementFromPoint).toHaveBeenCalled()
-  })
-
-  it('toggles maximize on a strip double-click, but not on a control', () => {
-    const { chrome, send } = makeChrome()
-    installWindowChrome(chrome)
-    titlebar().dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
-    expect(send).toHaveBeenCalledWith('toggle-maximize')
-
-    send.mockClear()
-    button('maximize').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
-    expect(send).not.toHaveBeenCalledWith('toggle-maximize')
-  })
-
-  it('swaps the maximize glyph and label when the window becomes maximized', () => {
-    const { chrome, maximizedListeners } = makeChrome()
-    installWindowChrome(chrome)
-    const maximize = button('maximize')
-    expect(maximize.dataset.maximized).toBe('false')
-    expect(maximize.querySelector('[data-glyph="maximize"]')?.getAttribute('style')).toBe('display: block')
-    expect(maximize.querySelector('[data-glyph="restore"]')?.getAttribute('style')).toBe('display: none')
-
-    maximizedListeners.forEach((listener) => { listener(true) })
-
-    expect(maximize.dataset.maximized).toBe('true')
-    expect(maximize.getAttribute('aria-label')).toBe('Restore')
-    expect(maximize.querySelector('[data-glyph="maximize"]')?.getAttribute('style')).toBe('display: none')
-    expect(maximize.querySelector('[data-glyph="restore"]')?.getAttribute('style')).toBe('display: block')
-  })
-
-  it('applies an already-maximized initial state', async () => {
-    const { chrome, isMaximized } = makeChrome()
-    isMaximized.mockResolvedValue(true)
-    installWindowChrome(chrome)
-    await vi.waitFor(() => {
-      expect(button('maximize').dataset.maximized).toBe('true')
-      expect(button('maximize').getAttribute('aria-label')).toBe('Restore')
-    })
   })
 })

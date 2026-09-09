@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-30-electron-frameless-window-chrome.md
-2026-08-30-electron-frameless-window-chrome.md: f71d010ef13588a850c2cc685476c8777527864a
-2026-08-30-electron-frameless-window-chrome.zh.md: f59f955e675022a4e5596f07bd73ad2efb3ea426

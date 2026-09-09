@@ -1,6 +1,7 @@
 # Agent Note: Electron 无边框窗口与注入式标题栏控制
 
 Status: implemented
+Archived: 2026-09-09
 
 [English](2026-08-30-electron-frameless-window-chrome.md) | 中文
 

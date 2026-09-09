@@ -1,6 +1,7 @@
 # Agent Note: Electron frameless window with injected title-bar controls
 
 Status: implemented
+Archived: 2026-09-09
 
 English | [中文](2026-08-30-electron-frameless-window-chrome.zh.md)
 

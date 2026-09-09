@@ -16,9 +16,9 @@ The server process lives and dies with the window: closing the window sends `SIG
 
 ## Window chrome
 
-The window is frameless — the OS title bar is removed (`frame: false`) and the shell draws its own chrome. There is **no dedicated title bar and no reserved space**: a transparent drag strip rides the top of the page, and a floating **minimize / maximize / close** button group sits at the top-right, exactly as before. The drag strip lives **below page content in z-order**, so the page never has a dead band at the top: interactive controls (buttons, links, inputs, tabs, menu items) that overlap the strip receive the interaction, and the window is draggable only over the inert parts of the top strip (header padding, background, empty areas).
+The window is frameless — the OS title bar is removed (`frame: false`) and the shell draws no window controls: minimize / restore / close ride the OS or window-manager shortcuts. There is **no dedicated title bar and no reserved space**: a transparent drag strip rides the top of the page so the window stays movable. The drag strip lives **below page content in z-order**, so the page never has a dead band at the top: interactive controls (buttons, links, inputs, tabs, menu items) that overlap the strip receive the interaction, and the window is draggable only over the inert parts of the top strip (header padding, background, empty areas).
 
-Electron's `-webkit-app-region` drag regions are geometric rectangles, not z-order aware — a drag region blocks clicks on anything beneath it regardless of stacking. The strip is therefore split into drag segments, and the preload re-evaluates each segment with `document.elementFromPoint` (on pointer moves near the strip, scroll, resize, and pointer down), flipping a segment to `no-drag` when an interactive control is the topmost element over it, so that control's area is carved out of the drag mask. The native mask updates asynchronously, so a click landing within a frame of the pointer entering a covered segment may still begin a window drag; the pointer-down and pointer-move refreshes keep that window short. The buttons drive the window over IPC; the maximize button swaps to a restore glyph while the window is maximized, and double-clicking the strip toggles maximize, mirroring the native title bar. The controls follow the Web UI theme through the same `--dsw-*` design tokens.
+Electron's `-webkit-app-region` drag regions are geometric rectangles, not z-order aware — a drag region blocks clicks on anything beneath it regardless of stacking. The strip is therefore split into drag segments, and the preload re-evaluates each segment with `document.elementFromPoint` (on pointer moves near the strip, scroll, resize, and pointer down), flipping a segment to `no-drag` when an interactive control is the topmost element over it, so that control's area is carved out of the drag mask. The native mask updates asynchronously, so a click landing within a frame of the pointer entering a covered segment may still begin a window drag; the pointer-down and pointer-move refreshes keep that window short.
 
 ## Notifications
 
@@ -52,7 +52,7 @@ pnpm --filter @deepseek-ai/dsh-electron run dev
 
 - `build` — bundle `src/main.ts` to `lib/main.js` (ESM) and `src/preload.ts` to `lib/preload.cjs` (CommonJS, with `electron` external) via tsdown.
 - `typecheck` — `tsc -b`.
-- `test` — unit tests (URL-line parser, bin resolution, and title-bar injection).
+- `test` — unit tests (URL-line parser, bin resolution, and drag-strip injection).
 - `start` — run `scripts/electron.mjs` over the built `lib/main.js`.
 - `dev` — build, then run `scripts/electron.mjs`.
 
