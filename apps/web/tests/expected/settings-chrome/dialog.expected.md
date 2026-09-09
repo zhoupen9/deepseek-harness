@@ -40,7 +40,13 @@
     - img
   - button "减小字号":
     - img
-  - text: px 字体 界面正文使用的字体
+  - text: px 字体颜色 浅色与深色模式下的默认文字颜色 浅色模式
+  - textbox "浅色模式": "#0f1115"
+  - button "重置 浅色模式": 重置
+  - text: 深色模式
+  - textbox "深色模式": "#f9fafb"
+  - button "重置 深色模式": 重置
+  - text: 字体 界面正文使用的字体
   - combobox "字体":
     - option "默认" [selected]
     - option "Arial"
@@ -56,7 +62,7 @@
     - option "Arial"
     - option "DejaVu Sans"
     - option "DejaVu Sans Mono"
-  - text: 繁忙时 Enter 键行为 仅在智能体运行时生效；Cmd/Ctrl+Enter 使用另一行为
+  - text: 繁忙时的发送行为 智能体运行时 Enter 键和发送按钮的行为；Cmd/Ctrl+Enter 使用另一行为
   - button "排队发送":
     - text: 排队发送
     - img

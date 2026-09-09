@@ -183,6 +183,36 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
 
+<a id="ctxgitcontroller--gitcontroller"></a>
+
+### `ctx.gitController` — `GitController`
+
+Host service backing the generated `ctx.remote.git` namespace. Its two verbs are Agent-scoped: the `agent` lookup resolves the caller's session, whose cwd is the fence root every read is bounded to.
+
+```ts cordis-catalog
+/**
+ * Log the workspace repository's commit history for a Remote caller's graph.
+ * @param agent - target Agent resolved from the Session identity on the wire; its cwd is the fence root.
+ * @param options - commit bound, ref selection, and the traversal mode; absent applies the configured defaults.
+ * @param signal - caller lifetime; abort kills the git child and rejects with the signal reason.
+ * @returns the repo context, HEAD facts, and the bounded newest-first commit window.
+ */
+@Remote('log') async log(agent: Agent, options: GitLogOptions | undefined, signal: AbortSignal): Promise<GitLogResult>
+
+/**
+ * Show one commit's full message and modifications for a Remote caller.
+ * @param agent - target Agent resolved from the Session identity on the wire; its cwd is the fence root.
+ * @param hash - abbreviated or full commit object id to show.
+ * @param signal - caller lifetime; abort kills the git child and rejects with the signal reason.
+ * @returns the repo context, the commit detail, its changed files, and the bounded patch.
+ */
+@Remote('show') async show(agent: Agent, hash: string, signal: AbortSignal): Promise<GitShowResult>
+```
+
+Types: [Agent](core.zh.md)
+
+Source: [`packages/api/git-controller/src/index.ts`](../../packages/api/git-controller/src/index.ts)
+
 <a id="ctxworkspacecontroller--workspacecontroller"></a>
 
 ### `ctx.workspaceController` — `WorkspaceController`
@@ -242,35 +272,67 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 
 Source: [`packages/api/workspace-controller/src/index.ts`](../../packages/api/workspace-controller/src/index.ts)
 
-<a id="ctxworkspacefilescontroller--workspacefilescontroller"></a>
+<a id="ctxworkspacefiles--workspacefiles"></a>
 
-### `ctx.workspaceFilesController` — `WorkspaceFilesController`
+### `ctx.workspaceFiles` — `WorkspaceFiles`
 
-Host service backing the generated `ctx.remote.workspaceFiles` namespace. Its two verbs are Agent-scoped: the `agent` lookup resolves the caller's session, whose cwd is the workspace root every listing and read is fenced to.
+Host Remote service over the composed filesystem, confined to one workspace.
 
 ```ts cordis-catalog
 /**
- * List one directory level for a Remote caller's explorer.
- * @param agent - target Agent resolved from the Session identity on the wire; its cwd is the fence root.
- * @param path - absolute directory to list; absent lists the workspace root.
- * @param signal - caller lifetime; abort stops the scan instead of letting it outlive a disconnected caller.
- * @returns the level's listing with its ancestry.
+ * Read one page of lines from a UTF-8 text file inside the Agent's workspace.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param range - the line window; omitted fields take the page defaults.
+ * @param signal - caller cancellation.
+ * @returns the page, the file's version at the stat before it, and whether it reaches the last line.
  */
-@Remote('list') async list(agent: Agent, path: string | undefined, signal: AbortSignal): Promise<WorkspaceFilesListing>
+@Remote async read(agent: Agent, path: string, range: WorkspaceFileRange, signal: AbortSignal): Promise<WorkspaceFileText>
 
 /**
- * Read one text file's bounded content for a Remote caller's explorer.
- * @param agent - target Agent resolved from the Session identity on the wire; its cwd is the fence root.
- * @param path - absolute file to read.
- * @param signal - caller lifetime; abort stops the read and closes the handle.
- * @returns the bounded UTF-8 content with binary and truncation flags.
+ * Read one byte window of a regular file inside the Agent's workspace: raw
+ * bytes, no text decoding and no binary rejection.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param range - the byte window; omitted fields take the window defaults.
+ * @param signal - caller cancellation.
+ * @returns the window in base64, the file's version and size at the stat before it, and whether it reaches the last byte.
  */
-@Remote('read') async read(agent: Agent, path: string, signal: AbortSignal): Promise<WorkspaceFilesContent>
+@Remote async readBytes(agent: Agent, path: string, range: WorkspaceByteRange, signal: AbortSignal): Promise<WorkspaceFileBytes>
+
+/**
+ * Report one regular file's identity, version, and size without its content.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param signal - caller cancellation.
+ * @returns the file's absolute path, current version, and byte size.
+ */
+@Remote async stat(agent: Agent, path: string, signal: AbortSignal): Promise<WorkspaceFileStat>
+
+/**
+ * List the direct children of one directory inside the Agent's workspace.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param signal - caller cancellation.
+ * @returns the directory's children in the backend's stable name order, bounded by the entry cap.
+ */
+@Remote async list(agent: Agent, path: string, signal: AbortSignal): Promise<WorkspaceDirectoryListing>
+
+/**
+ * Stream every `fs/observed` observation of a file inside the Agent's
+ * workspace. Only Agent filesystem operations report here; the OS is not
+ * watched.
+ * @param agent - target Agent resolved from the Session identity on the wire.
+ * @param signal - generation cancellation.
+ * @returns `ready` once the Host observation queue is active and the workspace
+ *   root is resolved, then queued and live observations in emission order.
+ */
+@Remote({ mode: 'stream' }) changes(agent: Agent, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame>
 ```
 
 Types: [Agent](core.zh.md)
 
-Source: [`packages/api/workspace-files-controller/src/index.ts`](../../packages/api/workspace-files-controller/src/index.ts)
+Source: [`packages/api/workspace-files/src/index.ts`](../../packages/api/workspace-files/src/index.ts)
 
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 

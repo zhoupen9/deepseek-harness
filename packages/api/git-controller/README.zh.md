@@ -6,21 +6,21 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## Summary
+## 概述
 
 `@deepseek-ai/dsh-api-git-controller` 拥有主机侧 `ctx.gitController` 服务与生成的客户端 `ctx.remote.git` 命名空间。它的两个 Agent 作用域 Remote 动词在浏览器不接触 git 的情况下读取工作区仓库：`log(options?, signal)` 列出提交历史——每个提交的 hash、父提交、作者、主题与装饰性引用，按最新在前排列——而 `show(hash, signal)` 返回单个提交的完整消息、提交者、变更文件与有界补丁。每次读取都被围栏在调用会话的工作区根目录内，因此浏览器侧的图永远无法读取自身工作区之外的仓库。当客户端需要在不自行运行 git 的情况下渲染 git 历史时，请通过 API Gateway 使用它。
 
-## Table of Contents
+## 目录
 
-- [Use this package](#use-this-package)
-- [Model Experience](#model-experience)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
-- [Dev Note](#dev-note)
+- [使用本包](#use-this-package)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
 
 -----
 
 <a id="use-this-package"></a>
-## Use this package
+## 使用本包
 
 `log(options?, signal)` 用 `git rev-parse` 发现拥有会话 cwd 的仓库，然后以稳定的 NUL 分隔格式读取 `git log --topo-order`，并由 `maxCount`（默认 200）限定数量。`firstParent` 默认为 `true`，因此日志只跟随每个提交的第一父提交——即主线——并把合并折叠为单条通道（合并的其他父提交会从窗口中裁掉）；传入 `firstParent: false` 可获得完整的分支拓扑。`maxParents: 1 | 2`（无默认值）是一个透传为 git `--max-parents=<n>` 的列表上限：`1` 隐藏所有合并提交，`2` 隐藏 octopus 合并（多于两个父提交的合并），而幸存的合并提交保留它的两个父提交，使图仍能画出合并通道。每个提交携带完整的 40 位对象 id、有序的父提交 id、作者姓名/邮箱/时间（纪元毫秒）、主题（首行），以及折叠为 `head`/`branch`/`tag`/`remote` 并带短显示名的引用。仅当边界切断了历史时 `truncated` 才为真（会额外探测一条记录）。`all: true` 记录所有引用的祖先链，而非仅 HEAD 的。
 
@@ -31,15 +31,15 @@ kind: "package-reference"
 -----
 
 <a id="model-experience"></a>
-## Model Experience
+## 模型体验
 
 无——提交图浏览属于浏览器与主机控制状态，不注册任何 prompt、工具或会话事件。
 
-#### KV Cache effect
+#### KV Cache 影响
 
 无直接影响；commit-log 读取不会改变模型请求。
 
-## Known Limitations and Deferred Work
+## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
@@ -52,7 +52,7 @@ kind: "package-reference"
 - 围栏只对 gitdir 做一次 realpath；在检查与读取之间被重定向的 gitlink 是与 workspace-files 共有的 TOCTOU 窗口。
 
 <a id="dev-note"></a>
-### Dev Note
+### 开发备注
 
 <details>
 <summary>供维护者的工作上下文——点击展开</summary>

@@ -1,19 +1,21 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Reference order target" [disabled]
-  - button "Session log":
-    - text: Session log
-    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "Session log":
+    - text: Session log
+    - img
+  - button "Open the sidebar":
+    - img
 - text: Research notes what changed? Referenced session · Research notes {{clock}}
 - button "Copy":
   - img
 - button "Session recall Research notes":
   - img
   - text: Session recall Research notes
-- textbox "Message or run a task... / commands, @ files or sessions"
+- textbox "Message or run a task, / commands, @ files or sessions"
 - button "Commands":
   - img
 - button "Add attachment":

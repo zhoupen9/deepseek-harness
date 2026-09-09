@@ -2,6 +2,7 @@
 /** FontColorRow behavior: copy, per-mode swatch values, color writes, and resets. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -33,6 +34,9 @@ function emptyWorkspaces() {
   return bindSnapshotSelector(store)
 }
 
+// Every session-scope fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
+const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
+
 type AttentionSnapshot = Parameters<Parameters<FontColorRowComponentProps['useSessionPendingInteraction']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: FontColorRowComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
@@ -44,6 +48,7 @@ function mount(light = '', dark = '') {
   const setFontColorLight = vi.fn()
   const setFontColorDark = vi.fn()
   const props: FontColorRowComponentProps = {
+    useResource,
     useSessions: emptySessions(),
     useSessionPendingInteraction,
     useWorkspaces: emptyWorkspaces(),

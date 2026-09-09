@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/api/git-controller/README.md
 README.md: e3e89b99042b8a5e57bd5d1c5d70cb907c76df09
-README.zh.md: c3c428ed578258b4568f3d49e96e66987a43383b
+README.zh.md: 504e23341d7d0ee15bead90b97ff5ba3cedd04f6

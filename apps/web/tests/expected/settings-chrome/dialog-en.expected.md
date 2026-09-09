@@ -40,7 +40,13 @@
     - img
   - button "Decrease font size":
     - img
-  - text: px Font Font used for interface text
+  - text: px Font color Default text color for light and dark mode Light mode
+  - textbox "Light mode": "#0f1115"
+  - button "Reset Light mode": Reset
+  - text: Dark mode
+  - textbox "Dark mode": "#f9fafb"
+  - button "Reset Dark mode": Reset
+  - text: Font Font used for interface text
   - combobox "Font":
     - option "Default" [selected]
   - text: Conversation display Controls process content in completed turns
@@ -50,7 +56,7 @@
   - text: Monospace font Font used for code blocks and terminals
   - combobox "Monospace font":
     - option "Default" [selected]
-  - text: Enter behavior while busy Busy only; Cmd/Ctrl+Enter uses the other behavior
+  - text: Send behavior while busy What Enter and the Send button do while the agent is running; Cmd/Ctrl+Enter uses the other behavior
   - button "Queue":
     - text: Queue
     - img

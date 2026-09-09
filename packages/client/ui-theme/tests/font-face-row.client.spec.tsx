@@ -4,6 +4,7 @@
  * displayed value follows the store mirror. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -31,6 +32,9 @@ function emptyWorkspaces() {
   return bindSnapshotSelector(store)
 }
 
+// Every session-scope fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
+const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
+
 type AttentionSnapshot = Parameters<Parameters<FontFaceRowComponentProps['useSessionPendingInteraction']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: FontFaceRowComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
@@ -41,6 +45,7 @@ function mount(families: string[], font = '') {
   store.actions.setFamilies(families, false)
   const setFont = vi.fn()
   const props: FontFaceRowComponentProps = {
+    useResource,
     useSessions: emptySessions(),
     useSessionPendingInteraction,
     useWorkspaces: emptyWorkspaces(),

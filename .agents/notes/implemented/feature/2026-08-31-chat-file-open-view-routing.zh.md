@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-聊天页面的文件链接通过 `openFile` 打开：`chatFileMentions` 提及解析器、回合尾部芯片和文件工具行都调用它，它会在主机上原生打开路径（`openWorkspacePath` → `openNativePath`，[在操作系统中打开工具调用文件](2026-07-28-tool-call-file-open-in-os.zh.md)）。树外的 `ui-files` 插件希望聊天文件链接在其 Files 资源管理器中打开，并将会话切换到该标签页。平台已经提供了这种手势：`ConversationSession` 将 `openView(view, focus)` 传递给每个 `conversation.view` 组件，它会设置活动标签页并向被寻址的视图发送一次性焦点请求（Files 视图以 `focus = path` 响应 `view === 'files'`）。但是聊天文件打开的所有者——`TurnTailOwnerProps`（`chatFileMentions` 提供者的 `forClosing(owner)` 所接收的）和 `ChatNodeOwnerProps`（键控节点渲染器，包括文件工具行）——只携带 `openFile`，而且聊天的文件打开入口点总是原生打开，因此没有任何界面可以将打开路由到会话视图。
+聊天页面的文件链接通过 `openFile` 打开：`chatFileMentions` 提及解析器、回合尾部芯片和文件工具行都调用它，它会在主机上原生打开路径（`openWorkspacePath` → `openNativePath`，[在操作系统中打开工具调用文件](../../archived/feature/2026-07-28-tool-call-file-open-in-os.md)）。树外的 `ui-files` 插件希望聊天文件链接在其 Files 资源管理器中打开，并将会话切换到该标签页。平台已经提供了这种手势：`ConversationSession` 将 `openView(view, focus)` 传递给每个 `conversation.view` 组件，它会设置活动标签页并向被寻址的视图发送一次性焦点请求（Files 视图以 `focus = path` 响应 `view === 'files'`）。但是聊天文件打开的所有者——`TurnTailOwnerProps`（`chatFileMentions` 提供者的 `forClosing(owner)` 所接收的）和 `ChatNodeOwnerProps`（键控节点渲染器，包括文件工具行）——只携带 `openFile`，而且聊天的文件打开入口点总是原生打开，因此没有任何界面可以将打开路由到会话视图。
 
 ## Decision
 

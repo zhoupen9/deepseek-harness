@@ -1,12 +1,14 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Clickable links gallery" [disabled]
-  - button "Session log":
-    - text: Session log
-    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "Session log":
+    - text: Session log
+    - img
+  - button "Open the sidebar":
+    - img
 - text: "Assemble the link gallery: write the report and styles, inspect the sources, and summarize. {{clock}}"
 - button "Copy":
   - img
@@ -176,7 +178,6 @@
 - button "Open site/app.js": app.js
 - button "Open src/tokens.css": tokens.css
 - text: + 1 file
-- button "Show in folder"
 - button "Copy":
   - img
 - button "Good response":
@@ -191,7 +192,7 @@
 - text: {{clock}}
 - button "Back to bottom":
   - img
-- textbox "Message or run a task... / commands, @ files or sessions"
+- textbox "Message or run a task, / commands, @ files or sessions"
 - button "Commands":
   - img
 - button "Add attachment":
@@ -201,4 +202,6 @@
   - text: DeepSeek-V4-Flash
   - img
 - button "Send message" [disabled]
-- text: 1 turns · 2 steps LLM {{duration}} · Tool call {{duration}}
+- button "1 turns 2 steps":
+  - img
+  - text: 1 turns 2 steps
