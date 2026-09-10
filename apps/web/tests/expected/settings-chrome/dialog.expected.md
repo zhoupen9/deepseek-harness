@@ -53,8 +53,8 @@
     - option "DejaVu Sans"
     - option "DejaVu Sans Mono"
   - text: 对话显示 控制已完成轮次的过程内容
-  - button "Compact":
-    - text: Compact
+  - button "紧凑":
+    - text: 紧凑
     - img
   - text: 等宽字体 代码块与终端使用的字体
   - combobox "等宽字体":
