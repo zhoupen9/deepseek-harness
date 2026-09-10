@@ -52,7 +52,7 @@ pnpm --filter @deepseek-ai/dsh-electron run dev
 
 - `build` —— 将 `src/main.ts` 打包为 `lib/main.js`（ESM），并将 `src/preload.ts` 打包为 `lib/preload.cjs`（CommonJS，`electron` 保持外部依赖），通过 tsdown 完成。
 - `typecheck` —— `tsc -b`。
-- `test` —— 单元测试（URL 行解析、bin 解析与拖动顶栏注入）。
+- `test` —— 单元测试（URL 行解析、bin 解析、拖动顶栏注入与授予的权限集合）。
 - `start` —— 在构建好的 `lib/main.js` 上运行 `scripts/electron.mjs`。
 - `dev` —— 构建，然后运行 `scripts/electron.mjs`。
 

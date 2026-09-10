@@ -13,6 +13,7 @@ import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } fro
 import { fileURLToPath } from 'node:url'
 import { spawnDshWeb, type DshWebServer } from './dsh-server.ts'
 import { NOTIFY_CHANNEL } from './ipc.ts'
+import { permissionGranted } from './permissions.ts'
 
 let server: DshWebServer | undefined
 let mainWindow: BrowserWindow | undefined
@@ -27,9 +28,7 @@ let quitting = false
 app.commandLine.appendSwitch('enable-features', 'LocalFontAccess')
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    // The bundled Electron types predate the 'local-fonts' permission name;
-    // compare against the raw string so a newer runtime still grants it.
-    callback(String(permission) === 'local-fonts')
+    callback(permissionGranted(permission))
   })
 })
 

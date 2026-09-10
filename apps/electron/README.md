@@ -52,7 +52,7 @@ pnpm --filter @deepseek-ai/dsh-electron run dev
 
 - `build` — bundle `src/main.ts` to `lib/main.js` (ESM) and `src/preload.ts` to `lib/preload.cjs` (CommonJS, with `electron` external) via tsdown.
 - `typecheck` — `tsc -b`.
-- `test` — unit tests (URL-line parser, bin resolution, and drag-strip injection).
+- `test` — unit tests (URL-line parser, bin resolution, drag-strip injection, and the granted permission set).
 - `start` — run `scripts/electron.mjs` over the built `lib/main.js`.
 - `dev` — build, then run `scripts/electron.mjs`.
 
