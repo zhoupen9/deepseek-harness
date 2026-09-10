@@ -34,6 +34,7 @@ function emptyWorkspaces() {
 
 // Every session-scope fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
+const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
 
 type AttentionSnapshot = Parameters<Parameters<FontFaceRowComponentProps['useSessionPendingInteraction']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
@@ -46,6 +47,7 @@ function mount(families: string[], font = '') {
   const setFont = vi.fn()
   const props: FontFaceRowComponentProps = {
     useResource,
+    usePanelInfo,
     useSessions: emptySessions(),
     useSessionPendingInteraction,
     useWorkspaces: emptyWorkspaces(),
