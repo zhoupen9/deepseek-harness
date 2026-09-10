@@ -1,4 +1,4 @@
-# Maintainer: Your Name <you@example.com>
+# Maintainer: Zhou Peng <zhoupen9@outlook.com>
 #
 # Builds the DeepSeek Harness (dsh) CLI and its Electron desktop launcher from
 # the local source checkout at ~/Sources/deepseek-harness (electron branch).
@@ -45,9 +45,13 @@ _exclude_pi_ai=${_exclude_pi_ai:-0}
 # cover that. corepack activates the pnpm version pinned in package.json.
 makedepends=('git' 'nodejs' 'corepack' 'python')
 
+# The returned string must equal the pkgver= above: when it differs, makepkg
+# rewrites pkgver= to this value and forces pkgrel=1 (update_pkgver), which
+# drops a release bump.
 pkgver() {
   cd "$srcdir/deepseek-harness"
-  node -p "require('./package.json').version.replace('-rc.', '_rc').replace('-', '_')"
+  # '_rc.' keeps the dot of the '-rc.' it replaces: 0.1.5-rc.1 -> 0.1.5_rc.1.
+  node -p "require('./package.json').version.replace('-rc.', '_rc.').replace('-', '_')"
 }
 
 prepare() {
