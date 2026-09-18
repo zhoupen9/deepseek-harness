@@ -16,7 +16,7 @@
 
 pkgbase=deepseek-harness
 pkgname=('deepseek-harness' 'deepseek-harness-desktop')
-pkgver=0.1.6_alpha.1
+pkgver=0.1.6_alpha.2
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/deepseek-ai/deepseek-harness"
@@ -50,7 +50,7 @@ makedepends=('git' 'nodejs' 'corepack' 'python')
 # drops a release bump.
 pkgver() {
   cd "$srcdir/deepseek-harness"
-  # Arch pkgver forbids '-'; the separator maps to '_': 0.1.6-alpha.1 -> 0.1.6_alpha.1.
+  # Arch pkgver forbids '-'; the separator maps to '_': 0.1.6-alpha.2 -> 0.1.6_alpha.2.
   node -p "require('./package.json').version.replace('-rc.', '_rc.').replace('-', '_')"
 }
 
