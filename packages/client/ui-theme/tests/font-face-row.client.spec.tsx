@@ -22,7 +22,7 @@ const COPY: Record<string, string> = {
 
 function emptySessions() {
   const store = createSnapshotStore<SessionListState>(
-    { ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined })
+    { ids: [], byId: {}, phase: 'ready', subagentsByParent: {}, jobsBySession: {} })
   return bindSnapshotSelector(store)
 }
 function emptyWorkspaces() {
@@ -36,9 +36,9 @@ function emptyWorkspaces() {
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
 const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
 
-type AttentionSnapshot = Parameters<Parameters<FontFaceRowComponentProps['useSessionPendingInteraction']>[0]>[0]
-const noAttention: AttentionSnapshot = new Map()
-const useSessionPendingInteraction: FontFaceRowComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+type StatusSnapshot = Parameters<Parameters<FontFaceRowComponentProps['useSessionStatus']>[0]>[0]
+const noStatus: StatusSnapshot = new Map()
+const useSessionStatus: FontFaceRowComponentProps['useSessionStatus'] = selector => selector(noStatus)
 
 function mount(families: string[], font = '') {
   const store = createFontFaceRowStore().create()
@@ -49,7 +49,8 @@ function mount(families: string[], font = '') {
     useResource,
     usePanelInfo,
     useSessions: emptySessions(),
-    useSessionPendingInteraction,
+    useSessionStatus,
+    useSessionRetainInfo: () => undefined,
     useWorkspaces: emptyWorkspaces(),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,

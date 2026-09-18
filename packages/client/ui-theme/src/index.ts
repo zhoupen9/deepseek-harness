@@ -3,7 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-settings'
-import { bootThemeInjection } from './boot-theme.ts'
+import { bootThemeInjections } from './boot-theme.ts'
 import {
   DEFAULT_FONT_SIZE, DEFAULT_MONO_FONT, DEFAULT_PREFERENCE, DEFAULT_VARIANT_FONT,
   THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema, type ThemeSettings,
@@ -48,6 +48,6 @@ export function apply(ctx: Context): void {
   })
   ctx.on('webserver/index-inject', (table) => {
     const section = readSection(ctx)
-    table.push(bootThemeInjection(section.preference, section.fontSize, section.variantFont, section.monoFont))
-  })
+    table.push(...bootThemeInjections(section.preference, section.fontSize, section.variantFont, section.monoFont))
+  }, { prepend: true })
 }
