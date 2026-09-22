@@ -73,8 +73,11 @@ export interface ThemeSettings {
   fontColorDark?: string
 }
 
-/** A validated font-family name: non-empty strings and '' (the default). */
-const fontFamilyField = () => z.string().max(FONT_FAMILY_MAX_LENGTH).default('')
+/**
+ * A validated font-family name: non-empty strings and '' (the default).
+ * @returns the schema field for one selectable font family.
+ */
+export const fontFamilyField = () => z.string().max(FONT_FAMILY_MAX_LENGTH).default('')
 
 /**
  * Anchored matcher for one persistable default-text-color value: the empty
@@ -96,8 +99,11 @@ const FONT_COLOR_PATTERN = new RegExp(
   'i',
 )
 
-/** A validated default-text-color field: '' (no override) or a solid CSS color. */
-const fontColorField = () => z.string().pattern(FONT_COLOR_PATTERN).default('')
+/**
+ * A validated default-text-color field: '' (no override) or a solid CSS color.
+ * @returns the schema field for one palette mode's default text color.
+ */
+export const fontColorField = () => z.string().pattern(FONT_COLOR_PATTERN).default('')
 
 /** Durable theme schema; also the wire envelope the browser scope validates against. */
 export const ThemeSettingsSchema: z<ThemeSettings> = z.object({

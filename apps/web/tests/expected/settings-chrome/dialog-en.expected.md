@@ -1,48 +1,23 @@
 - dialog "Settings":
   - navigation:
     - text: Settings
-    - button "General":
-      - img
-      - text: General
-    - button "Models":
-      - img
-      - text: Models
-    - button "Built-in plugins":
-      - img
-      - text: Built-in plugins
-    - button "Agent presets":
-      - img
-      - text: Agent presets
-    - button "Archived sessions":
-      - img
-      - text: Archived sessions
+    - button "General"
+    - button "Models"
+    - button "Built-in plugins"
+    - button "Agent presets"
   - button "Open configuration file"
-  - button "Close":
-    - img
-    - text: Close
+  - button "Close"
   - text: Permission Choose the default permission mode for new sessions
-  - button "Workspace Write":
-    - text: Workspace Write
-    - img
+  - button "Workspace Write"
   - text: Language
-  - button "English":
-    - text: English
-    - img
+  - button "English"
   - text: Appearance
-  - button "Light":
-    - img
-    - text: Light
-  - button "Dark":
-    - img
-    - text: Dark
-  - button "System" [pressed]:
-    - img
-    - text: System
+  - button "Light"
+  - button "Dark"
+  - button "System" [pressed]
   - text: Font size Only affects conversation content 14
-  - button "Increase font size":
-    - img
-  - button "Decrease font size":
-    - img
+  - button "Increase font size"
+  - button "Decrease font size"
   - text: px Font color Default text color for light and dark mode Light mode
   - textbox "Light mode": "#0f1115"
   - button "Reset Light mode": Reset
@@ -52,14 +27,15 @@
   - text: Font Font used for interface text
   - combobox "Font":
     - option "Default" [selected]
-  - text: Conversation display Controls process content in completed turns
-  - button "Compact":
-    - text: Compact
-    - img
+  - text: Work details Controls how turns and steps expand by default
+  - button "Compact"
   - text: Monospace font Font used for code blocks and terminals
   - combobox "Monospace font":
     - option "Default" [selected]
+  - text: Performance & usage Choose how much performance and usage information to show
+  - button "Detailed"
+  - text: Developer tools Show tools and information for debugging and troubleshooting
+  - switch "Developer tools"
   - text: Send behavior while busy What Enter and the Send button do while the agent is running; Cmd/Ctrl+Enter uses the other behavior
-  - button "Queue":
-    - text: Queue
-    - img
+  - button "Queue"
+  - text: "Current version: {{version}}"
