@@ -14,24 +14,51 @@ import { parsePrimaryRuntime, workspaceDependencyPaths, type PrimaryRuntimeManif
 import lock from './lock.json' with { type: 'json' }
 
 /**
+ * Checksum-verified transport mirror for the Node.js distribution. Some networks
+ * reset TLS connections to nodejs.org; the lock digest still decides the accepted bytes.
+ */
+const NODE_DIST_MIRROR = 'https://npmmirror.com/mirrors/node'
+
+/**
  * Download or reuse an archive only when its bytes match the release lock.
  * @param url - Locked archive URL.
  * @param sha256 - Expected SHA-256 digest.
  * @param cache - Download cache directory.
+ * @param mirrors - Transport mirrors tried after the locked URL; the digest still decides the accepted bytes.
  * @returns Verified local archive path.
  */
-export async function downloadPrimaryRuntimeAsset(url: string, sha256: string, cache: string): Promise<string> {
+export async function downloadPrimaryRuntimeAsset(
+  url: string, sha256: string, cache: string, mirrors: readonly string[] = [],
+): Promise<string> {
   const destination = join(cache, sha256)
   let bytes: Buffer
   try { bytes = readFileSync(destination) } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`primary runtime download: ${String(response.status)} ${url}`)
-    bytes = Buffer.from(await response.arrayBuffer())
+    bytes = await fetchFirstAvailable([url, ...mirrors], url)
   }
   if (createHash('sha256').update(bytes).digest('hex') !== sha256) throw new Error(`primary runtime download: checksum mismatch for ${url}`)
   writeFileSync(destination, bytes)
   return destination
+}
+
+/**
+ * Fetch an archive from the first source that answers, so a blocked locked host can fall back to a mirror.
+ * @param sources - The locked URL followed by mirror URLs.
+ * @param url - The locked URL named in the failure message.
+ * @returns The first successful response body.
+ */
+async function fetchFirstAvailable(sources: readonly string[], url: string): Promise<Buffer> {
+  const failures: string[] = []
+  for (const source of sources) {
+    try {
+      const response = await fetch(source)
+      if (!response.ok) { failures.push(`${String(response.status)} ${source}`); continue }
+      return Buffer.from(await response.arrayBuffer())
+    } catch (error) {
+      failures.push(`${error instanceof Error ? error.message : String(error)} ${source}`)
+    }
+  }
+  throw new Error(`primary runtime download failed for ${url}: ${failures.join('; ')}`)
 }
 
 async function pythonArchive(target: keyof typeof lock.targets, cache: string): Promise<string> {
@@ -124,7 +151,9 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
     let pnpmVersion: string | undefined
     if (!options.pythonOnly) {
       const nodeFilename = `node-v${lock.nodeVersion}-${artifact.nodeArchive}`
-      const nodeArchive = await downloadPrimaryRuntimeAsset(`https://nodejs.org/dist/v${lock.nodeVersion}/${nodeFilename}`, artifact.nodeSha256, paths.downloads)
+      const nodeUrl = `https://nodejs.org/dist/v${lock.nodeVersion}/${nodeFilename}`
+      const nodeArchive = await downloadPrimaryRuntimeAsset(nodeUrl, artifact.nodeSha256, paths.downloads,
+        [`${NODE_DIST_MIRROR}/v${lock.nodeVersion}/${nodeFilename}`])
       const unpackedNode = join(staging, 'node')
       mkdirSync(unpackedNode)
       if (target === 'win-x64') await extractZip(nodeArchive, { dir: unpackedNode })

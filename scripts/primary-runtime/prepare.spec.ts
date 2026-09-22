@@ -71,6 +71,28 @@ it('extracts a hash-verified cached library without a Python installer or networ
   }
 })
 
+it('falls back to a mirror when the locked host cannot be reached', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-wheel-'))
+  try {
+    const body = Buffer.from('mirror bytes')
+    const hash = createHash('sha256').update(body).digest('hex')
+    // A file: primary fails without network; the data: mirror returns the verified bytes.
+    const mirror = `data:application/octet-stream;base64,${body.toString('base64')}`
+    const archive = await downloadPrimaryRuntimeAsset('file:///nonexistent/library.bin', hash, root, [mirror])
+    expect(archive).toBe(join(root, hash))
+    expect(await readFile(archive)).toEqual(body)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('reports every source when no mirror serves the archive', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-wheel-'))
+  try {
+    const hash = createHash('sha256').update('missing').digest('hex')
+    await expect(downloadPrimaryRuntimeAsset('file:///nonexistent/library.bin', hash, root, ['file:///also-missing/library.bin']))
+      .rejects.toThrow('primary runtime download failed for file:///nonexistent/library.bin')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 it('fully extracts a large deflate-compressed wheel entry', async () => {
   const root = await mkdtemp(join(tmpdir(), 'desktop-large-wheel-'))
   try {
