@@ -315,7 +315,7 @@ async function main(): Promise<void> {
     const hostInspectPort = developmentHostInspectPort(development)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
       hostInspectPort, process.env, onFailure,
-      development ? join(app.getAppPath(), '.desktop-build', 'targets', `${process.platform === 'darwin' ? 'mac' : 'win'}-${process.arch}`, 'runtime', 'primary-runtime')
+      development ? join(app.getAppPath(), '.desktop-build', 'targets', `${process.platform === 'darwin' ? 'mac' : process.platform === 'linux' ? 'linux' : 'win'}-${process.arch}`, 'runtime', 'primary-runtime')
         : join(process.resourcesPath, 'runtime', 'primary-runtime'),
       resources, (next) => { platformView.setSession(next) })
     return {

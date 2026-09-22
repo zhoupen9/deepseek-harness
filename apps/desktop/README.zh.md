@@ -124,6 +124,8 @@ Desktop 在 Host 启动后、打开工作区前检查模型 API Key 引用是否
 
 ## 打包
 
+Desktop 打包支持 macOS（`mac-arm64`、`mac-x64`）、Windows（`win-x64`）与 Linux（`linux-x64`）。Linux 目标以未签名方式通过 electron-builder 的 AppImage 发布，不声明 Desktop 策略，也不发布更新源；其本地发布设置来自被 Git 忽略的 `apps/desktop/.env.linux`，由 `.env.linux.example` 复制而来。
+
 <a id="release-versions"></a>
 
 ### 发布版本

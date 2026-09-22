@@ -37,6 +37,13 @@ export function resolveDesktopBuildTarget(
 export function desktopTargetBuildPaths(target: DesktopAutoUpdateTarget): DesktopTargetBuildPaths
 
 /**
+ * Resolve the Electron executable inside one target's downloaded distribution.
+ * @param target - Supported Desktop target name.
+ * @returns Absolute path to the Electron executable.
+ */
+export function desktopElectronExecutable(target: DesktopAutoUpdateTarget): string
+
+/**
  * Resolve the paths owned by the target selected in a packaging environment.
  * @param env - Packaging environment.
  * @param hostPlatform - Build-host platform used when no target override exists.

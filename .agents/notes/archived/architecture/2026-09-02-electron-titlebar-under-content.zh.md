@@ -1,6 +1,7 @@
 # Agent Note: Electron 标题栏位于页面内容之下 —— 内容之下（z-order），可交互控件在拖动遮罩上胜出
 
 Status: implemented
+Archived: 2026-09-22
 
 [English](2026-09-02-electron-titlebar-under-content.md) | 中文
 

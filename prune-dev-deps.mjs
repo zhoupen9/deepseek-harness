@@ -5,8 +5,9 @@
 //
 // Three jobs, in order:
 //   1. Prune dev-only packages from node_modules/.pnpm. The runtime closure is
-//      rooted at apps/cli (the `dsh` bin) and apps/electron (the desktop
-//      launcher); every store entry unreachable from those roots through
+//      rooted at apps/cli (the `dsh` bin); the desktop application ships its
+//      own bundled runtime, so it contributes no root. Every store entry
+//      unreachable from those roots through
 //      dependencies/optionalDependencies/peerDependencies is deleted. A few
 //      peer-dependency names are type-checking-only and never keep an entry
 //      (see NEVER_RUNTIME_PEERS).
@@ -40,7 +41,6 @@ const TARGET_ARCH = process.env.DSH_TARGET_ARCH ?? process.arch
 /** Runtime entry points (workspace projects) whose prod closure must be kept. */
 const RUNTIME_ROOTS = [
   join(ROOT, 'apps', 'cli'),
-  join(ROOT, 'apps', 'electron'),
 ]
 
 /**

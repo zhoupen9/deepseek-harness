@@ -1,6 +1,7 @@
 # Agent Note: Electron 外壳的权限请求
 
 Status: implemented
+Archived: 2026-09-22
 
 [English](2026-09-10-electron-shell-permission-requests.md) | 中文
 

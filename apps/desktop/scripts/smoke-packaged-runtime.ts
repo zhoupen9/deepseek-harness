@@ -13,10 +13,17 @@ const target = resolveDesktopBuildTarget()
 const windows = target === 'win-x64'
 if (values.unsigned && !windows) throw new Error('desktop smoke: unsigned artifacts require Windows')
 const artifacts = values.unsigned ? paths.unsignedArtifacts : paths.artifacts
+const linux = target === 'linux-x64'
+// electron-builder lays each platform's unpacked application out differently: a
+// flat directory on Windows and Linux, a bundle whose payload sits under
+// Contents on macOS. Linux keeps Windows' lowercase `resources` convention.
 const application = windows ? join(artifacts, 'win-unpacked')
-  : join(artifacts, target === 'mac-arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app', 'Contents')
-const resources = join(application, windows ? 'resources' : 'Resources')
-const executable = windows ? join(application, 'DeepSeek Harness.exe') : join(application, 'MacOS', 'DeepSeek Harness')
+  : linux ? join(artifacts, 'linux-unpacked')
+    : join(artifacts, target === 'mac-arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app', 'Contents')
+const resources = join(application, windows || linux ? 'resources' : 'Resources')
+const executable = windows ? join(application, 'DeepSeek Harness.exe')
+  : linux ? join(application, 'deepseek-harness')
+    : join(application, 'MacOS', 'DeepSeek Harness')
 const descriptor = await verifyDesktopRuntime(paths.dsh, readDesktopRuntime(paths.dsh).release.version,
   resolveDesktopPackageTarget(target))
 if (windows && !values.unsigned) await verifyWindowsCode(application)

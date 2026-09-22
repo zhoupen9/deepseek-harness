@@ -1,7 +1,7 @@
 # Maintainer: Zhou Peng <zhoupen9@outlook.com>
 #
-# Builds the DeepSeek Harness (dsh) CLI and its Electron desktop launcher from
-# the local source checkout at ~/Sources/deepseek-harness (electron branch).
+# Builds the DeepSeek Harness (dsh) CLI and the Electron desktop application
+# from the local source checkout at ~/Sources/deepseek-harness.
 # The source is consumed read-only via a `git+file://` clone into $srcdir, so
 # nothing inside the source tree is modified by the build.
 #
@@ -11,8 +11,7 @@
 # /usr/lib/dsh. Every symlink pnpm wrote is relative within that tree, so the
 # result is fully self-contained. After the build, prune-dev-deps.mjs removes
 # dev-only packages from node_modules/.pnpm (the runtime closure is rooted at
-# apps/cli and apps/electron), so the package ships production dependencies
-# only.
+# apps/cli), so the package ships production dependencies only.
 
 pkgbase=deepseek-harness
 pkgname=('deepseek-harness' 'deepseek-harness-desktop')
@@ -59,8 +58,9 @@ prepare() {
   # The node:url browser stub (apps/web/src/node-url-stub.ts) and its vite
   # alias already exist in the electron branch, so no patch is needed here.
   corepack prepare pnpm@11.7.0 --activate
-  # deepseek-harness-desktop uses the system Electron package; skip the ~100 MB platform
-  # binary download that Electron's install script would otherwise perform.
+  # The desktop packaging downloads the Electron distribution it bundles through
+  # @electron/get, so skip the duplicate ~100 MB download Electron's own install
+  # script would otherwise perform.
   ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile
 }
 
@@ -68,8 +68,14 @@ build() {
   cd "$srcdir/deepseek-harness"
   DSH_CLIENT_BUILD_PROFILE=official DSH_CLIENT_TITLE='DeepSeek Harness' DSH_CLIENT_REVISION_BADGE=true pnpm run build
   #pnpm run build
-  # the Electron main process is its own tsdown build, not part of `pnpm build`
-  pnpm --filter @deepseek-ai/dsh-electron run build
+  # Package the desktop application: this prepares the bundled runtime (dsh,
+  # Node, pnpm, Python) and assembles an unpacked Electron application under
+  # apps/desktop/.desktop-build/targets/linux-x64/artifacts/linux-unpacked.
+  pnpm run package:desktop:linux:x64:dir
+  # Stage it outside the workspace tree: the runtime prune below deletes
+  # non-runtime workspace members, apps/desktop among them.
+  rm -rf "$srcdir/desktop-app"
+  cp -a apps/desktop/.desktop-build/targets/linux-x64/artifacts/linux-unpacked "$srcdir/desktop-app"
   # Optional: drop the pi-ai multi-provider adapter (and its ~42 MB of vendor
   # SDKs) before pruning. Removes it from the base bundle manifest and its
   # cordis composition so the loader never tries to resolve the missing package.
@@ -105,7 +111,7 @@ console.error('exclude-pi-ai: removed @deepseek-ai/dsh-llm-pi-ai from bundle/bas
 NODE
   fi
   # Now that everything is built, slim the tree: prune dev-only packages from
-  # node_modules/.pnpm (rooted at apps/cli and apps/electron), strip foreign
+  # node_modules/.pnpm (rooted at apps/cli), strip foreign
   # prebuilds, and delete non-runtime workspace members and source/tests/build
   # metadata (see prune-dev-deps.mjs for why `pnpm prune --prod` cannot be
   # used here).
@@ -151,24 +157,34 @@ package_deepseek-harness() {
 }
 
 package_deepseek-harness-desktop() {
-  pkgdesc="DeepSeek Harness desktop launcher (Electron)"
-  depends=('nodejs>=22.19' 'electron' 'deepseek-harness')
+  pkgdesc="DeepSeek Harness desktop application (Electron with a bundled dsh runtime)"
+  # The staged application carries Electron, Node, pnpm, the primary runtime and
+  # the dsh tree, so it needs neither the system Electron nor the CLI package.
+  # The libraries are the ones Electron links against.
+  depends=('gtk3' 'nss' 'libdrm' 'libpulse' 'libxml2' 'libxslt' 'minizip' 'opus'
+           'flac' 'libevent' 'c-ares' 'brotli' 'fontconfig' 'freetype2'
+           'harfbuzz' 'libjpeg-turbo' 'zlib')
+
+  install -d "$pkgdir/usr/lib/deepseek-harness-desktop"
+  cp -a "$srcdir/desktop-app/." "$pkgdir/usr/lib/deepseek-harness-desktop/"
 
   install -Dm755 /dev/stdin "$pkgdir/usr/bin/deepseek-harness-desktop" <<'EOF'
 #!/bin/sh
-exec /usr/bin/electron /usr/lib/deepseek-harness/apps/electron "$@"
+exec /usr/lib/deepseek-harness-desktop/deepseek-harness "$@"
 EOF
+
+  install -Dm644 "$srcdir/desktop-app/resources/icon.png"     "$pkgdir/usr/share/icons/hicolor/1024x1024/apps/deepseek-harness.png"
 
   install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/deepseek-harness-desktop.desktop" <<'EOF'
 [Desktop Entry]
 Name=DeepSeek Harness
-Comment=DeepSeek Harness desktop launcher
+Comment=DeepSeek Harness desktop application
 Exec=deepseek-harness-desktop
-Icon=io.deepseek.harness
+Icon=deepseek-harness
 Terminal=false
 Type=Application
 Categories=Development;Utility;
-StartupWMClass=io.deepseek.harness
+StartupWMClass=deepseek-harness
 EOF
 
   install -Dm644 "$srcdir/deepseek-harness/LICENSE" \

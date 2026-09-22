@@ -1,6 +1,7 @@
 # Agent Note: Electron title bar under page content — z-order below content, interactive controls win over the drag mask
 
 Status: implemented
+Archived: 2026-09-22
 
 English | [中文](2026-09-02-electron-titlebar-under-content.zh.md)
 

@@ -1,6 +1,7 @@
 # Agent Note: Electron shell permission requests
 
 Status: implemented
+Archived: 2026-09-22
 
 English | [中文](2026-09-10-electron-shell-permission-requests.zh.md)
 

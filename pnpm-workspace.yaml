@@ -31,10 +31,6 @@ peerDependencyRules:
 allowBuilds:
   esbuild: true
   lefthook: true
-  # The Electron runtime comes from the system package (see apps/electron/scripts/electron.mjs);
-  # the npm package is kept only for its TypeScript declarations, so deny its postinstall
-  # binary download.
-  electron: false
   # Cross-platform boundary for the persistent PTY backend, including ConPTY on Windows.
   node-pty: true
   # Pulled in by @earendil-works/pi-ai (optional LLM API backend). pnpm lists

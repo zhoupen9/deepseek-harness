@@ -124,6 +124,8 @@ The welcome window follows system appearance with the design’s Platform light/
 
 ## Package
 
+Desktop packaging targets macOS (`mac-arm64`, `mac-x64`), Windows (`win-x64`), and Linux (`linux-x64`). The Linux target ships unsigned through electron-builder's AppImage, declares no Desktop policy and no updater feed, and reads its local release settings from the Git-ignored `apps/desktop/.env.linux`, copied from `.env.linux.example`.
+
 <a id="release-versions"></a>
 
 ### Release versions
