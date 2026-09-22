@@ -32,7 +32,9 @@ def main():
         re.sub(r"[-_.]+", "-", distribution.metadata["Name"]).lower()
         for distribution in importlib.metadata.distributions()
     }
-    assert installed_names == expected_names, {"unexpected": sorted(installed_names - expected_names), "missing": sorted(expected_names - installed_names)}
+    # A system interpreter shares site-packages with unrelated distributions; only a closed payload owns an exact set.
+    if len(sys.argv) <= 4 or sys.argv[4] != "--external":
+        assert installed_names == expected_names, {"unexpected": sorted(installed_names - expected_names), "missing": sorted(expected_names - installed_names)}
     for name, expected in versions.items():
         actual = importlib.metadata.version(name)
         assert actual == expected, (name, actual, expected)

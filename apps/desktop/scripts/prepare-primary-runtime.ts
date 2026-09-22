@@ -2,10 +2,13 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { preparePrimaryRuntime as preparePayload, smokePrimaryRuntime as smokePayload } from '../../../scripts/primary-runtime/prepare.ts'
+import { preparePrimaryRuntime as preparePayload, prepareSystemPrimaryRuntime, smokePrimaryRuntime as smokePayload } from '../../../scripts/primary-runtime/prepare.ts'
 import { parsePrimaryRuntime, workspaceDependencyPaths } from '../../../packages/skill/tool-workspace-dependencies/src/index.ts'
 import { resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
 import { scrubWindowsSigningEnvironment } from './windows-sign.mjs'
+
+/** Environment that selects the build host's Python, Node.js, and pnpm instead of a downloaded payload. */
+export const SYSTEM_RUNTIME_ENV = 'DSH_DESKTOP_SYSTEM_RUNTIME'
 
 /**
  * Prepare Desktop resources for its selected packaging target.
@@ -15,7 +18,13 @@ import { scrubWindowsSigningEnvironment } from './windows-sign.mjs'
 export async function preparePrimaryRuntime(options: { deferSmoke?: boolean } = {}): Promise<void> {
   const paths = resolveDesktopTargetBuildPaths()
   const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
-  await preparePayload({ target: resolveDesktopBuildTarget(), output: paths.runtime, cache: paths.downloads, version })
+  const target = resolveDesktopBuildTarget()
+  if (process.env[SYSTEM_RUNTIME_ENV] === '1') {
+    await prepareSystemPrimaryRuntime({ target, output: paths.runtime, version,
+      python: process.env.DSH_DESKTOP_SYSTEM_PYTHON, node: process.env.DSH_DESKTOP_SYSTEM_NODE, pnpm: process.env.DSH_DESKTOP_SYSTEM_PNPM })
+  } else {
+    await preparePayload({ target, output: paths.runtime, cache: paths.downloads, version })
+  }
   if (!options.deferSmoke) smokePrimaryRuntime(join(paths.runtime, 'primary-runtime'))
 }
 

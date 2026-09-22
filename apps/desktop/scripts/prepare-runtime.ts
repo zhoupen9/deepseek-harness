@@ -9,7 +9,8 @@ import { parseArgs } from 'node:util'
 import { downloadArtifact } from '@electron/get'
 import extractZip from 'extract-zip'
 import { desktopElectronExecutable, resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
-import { preparePrimaryRuntime } from './prepare-primary-runtime.ts'
+import { preparePrimaryRuntime, SYSTEM_RUNTIME_ENV } from './prepare-primary-runtime.ts'
+import { resolveSystemExecutable, resolveSystemPnpm, writeSystemPnpmLauncher } from '../../../scripts/primary-runtime/prepare.ts'
 
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
 const RUNTIME_ROOT = BUILD_PATHS.runtime
@@ -24,6 +25,14 @@ function preparePnpm(): string {
   rmSync(destination, { recursive: true, force: true })
   cpSync(packageDir, destination, { recursive: true })
   return manifest.version
+}
+
+/** Install a launcher for the build host's pnpm so no package-manager copy ships. */
+function prepareSystemPnpm(): string {
+  const node = resolveSystemExecutable('node', process.env.DSH_DESKTOP_SYSTEM_NODE)
+  const { entry, version } = resolveSystemPnpm(node, resolveSystemExecutable('pnpm', process.env.DSH_DESKTOP_SYSTEM_PNPM))
+  writeSystemPnpmLauncher(RUNTIME_ROOT, entry)
+  return version
 }
 
 async function main(): Promise<void> {
@@ -43,7 +52,7 @@ async function main(): Promise<void> {
   }).trim()
   rmSync(RUNTIME_ROOT, { recursive: true, force: true })
   mkdirSync(RUNTIME_ROOT, { recursive: true })
-  const pnpmVersion = preparePnpm()
+  const pnpmVersion = process.env[SYSTEM_RUNTIME_ENV] === '1' ? prepareSystemPnpm() : preparePnpm()
   cpSync(join(import.meta.dirname, 'node-bin'), join(RUNTIME_ROOT, 'bin'), { recursive: true })
   chmodSync(join(RUNTIME_ROOT, 'bin', 'node'), 0o755)
   writeFileSync(join(RUNTIME_ROOT, 'versions.json'), `${JSON.stringify({

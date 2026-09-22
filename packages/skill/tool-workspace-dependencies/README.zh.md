@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-自带脚本运行时的部署（Desktop 的 primary runtime，或容器镜像层）挂载本工具，让 agent 询问随包的 Python、Node.js 与 pnpm 在哪里，而不是自行寻找系统解释器。工具返回绝对路径与记录的发行版版本，不改 `PATH`，不改包管理器设置。payload 或在首次调用时复制到 Harness home 下（Desktop），或原地使用（只读载体）。
+自带脚本运行时的部署（Desktop 的 primary runtime，或容器镜像层）挂载本工具，让 agent 询问其部署提供的 Python、Node.js 与 pnpm 在哪里，而不是自行寻找。工具返回绝对路径与记录的发行版版本，不改 `PATH`，不改包管理器设置。payload 或在首次调用时复制到 Harness home 下（Desktop），或原地使用（只读载体）；声明了绝对系统路径的 payload 始终原地使用。
 
 ## 目录
 
@@ -42,7 +42,7 @@ kind: "package-reference"
 
 ### payload 布局
 
-`runtime.json` 记录 `desktopVersion`、`platform`（`win32`、`darwin` 或 `linux`）、`arch`、可选的 `payloadDigest`、顶层 `python` 与可选的 `node`/`pnpm` 版本，以及完整的 `pythonPackages` 分发包版本表。声明 pnpm 时必须同时声明 Node.js。numpy、pandas 等 Python 库只出现在 `pythonPackages` 中。条目位于 `dependencies/`：`python/bin/python3`（Windows 为 `python/python.exe`）及其下的 `site-packages`；声明了才有的 `node/bin/node`、`node/node_modules` 与 `pnpm/bin/pnpm.mjs`。平台或架构与当前进程不符的清单被拒绝。
+`runtime.json` 记录 `desktopVersion`、`platform`（`win32`、`darwin` 或 `linux`）、`arch`、可选的 `payloadDigest`、顶层 `python` 与可选的 `node`/`pnpm` 版本，以及完整的 `pythonPackages` 分发包版本表。声明 pnpm 时必须同时声明 Node.js。numpy、pandas 等 Python 库只出现在 `pythonPackages` 中。随包 payload 的条目位于 `dependencies/`：`python/bin/python3`（Windows 为 `python/python.exe`）及其下的 `site-packages`；声明了才有的 `node/bin/node`、`node/node_modules` 与 `pnpm/bin/pnpm.mjs`。`external` 块则给出绝对系统路径（`python` 与 `pythonPackages`，可选 `node`、`nodePackages`、`pnpm`）；此类 payload 不含 `dependencies/` 目录，只原地校验，绝不复制。平台或架构与当前进程不符的清单被拒绝。
 
 打包的 `sdk` profile 默认使用随包 Python 和 Office skills；`DSH_PRIMARY_RUNTIME` 覆盖资源位置，空值表示禁用。没有载体默认路径的源码启动仍需显式启用。独立选择 skills 的方式见[运行时配置](../../../python/sdk-runtime/README.zh.md)。缺少 skill 资源会产生启动警告；无效或不完整的外部运行时 payload 在首次工具调用时失败。profile 配置变更需要重启 SDK 进程。
 

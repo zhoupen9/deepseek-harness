@@ -46,8 +46,16 @@ _exclude_pi_ai=${_exclude_pi_ai:-0}
 # installed application runs. Only linux-x64 accepts --skip-runtime-smoke.
 _skip_runtime_smoke=${_skip_runtime_smoke:-1}
 # node-pty and koffi compile native addons; python + base-devel (gcc/make)
-# cover that. corepack activates the pnpm version pinned in package.json.
-makedepends=('git' 'nodejs' 'corepack' 'python')
+# cover that. corepack activates the pnpm version pinned in package.json. The
+# desktop payload uses the build host's Node.js, pnpm and Python packages
+# instead of shipping downloaded interpreters, so they are makedepends too.
+# python-pptx is missing from some Arch mirrors; install it manually (for
+# example `python -m pip install --break-system-packages python-pptx`) before
+# building, or add the package here when the mirror provides it.
+_system_python_packages=(python-numpy python-pandas python-pillow python-lxml
+  python-openpyxl python-docx python-xlsxwriter python-dateutil python-six
+  python-tzdata python-typing_extensions python-et-xmlfile)
+makedepends=('git' 'nodejs' 'pnpm' 'corepack' 'python' "${_system_python_packages[@]}")
 
 # The returned string must equal the pkgver= above: when it differs, makepkg
 # rewrites pkgver= to this value and forces pkgrel=1 (update_pkgver), which
@@ -83,12 +91,17 @@ build() {
   cd "$srcdir/deepseek-harness"
   DSH_CLIENT_BUILD_PROFILE=official DSH_CLIENT_TITLE='DeepSeek Harness' DSH_CLIENT_REVISION_BADGE=true pnpm run build
   #pnpm run build
-  # Package the desktop application: this prepares the bundled runtime (dsh,
-  # Node, pnpm, Python) and assembles an unpacked Electron application under
-  # apps/desktop/.desktop-build/targets/linux-x64/artifacts/linux-unpacked.
+  # Package the desktop application: this assembles an unpacked Electron
+  # application under apps/desktop/.desktop-build/targets/linux-x64/artifacts/
+  # linux-unpacked. DSH_DESKTOP_SYSTEM_RUNTIME selects the host's Python,
+  # Node.js and pnpm for the payload instead of downloading and bundling them.
   local smoke_args=()
   [[ "$_skip_runtime_smoke" == 1 ]] && smoke_args+=(--skip-runtime-smoke)
-  pnpm run package:desktop:linux:x64:dir "${smoke_args[@]}"
+  DSH_DESKTOP_SYSTEM_RUNTIME=1 \
+    DSH_DESKTOP_SYSTEM_PYTHON=/usr/bin/python3 \
+    DSH_DESKTOP_SYSTEM_NODE=/usr/bin/node \
+    DSH_DESKTOP_SYSTEM_PNPM=/usr/bin/pnpm \
+    pnpm run package:desktop:linux:x64:dir "${smoke_args[@]}"
   # Stage the payload outside the workspace tree: the runtime prune below
   # deletes non-runtime workspace members, apps/desktop among them. Only
   # resources/ is staged, because the launcher runs the distribution Electron
@@ -176,12 +189,12 @@ package_deepseek-harness() {
 }
 
 package_deepseek-harness-desktop() {
-  pkgdesc="DeepSeek Harness desktop application (distribution Electron with a bundled dsh runtime)"
-  # The payload carries Node, pnpm, the primary runtime and the dsh tree. Electron
-  # itself comes from the distribution, so this package follows the system
-  # Electron's version and security updates instead of shipping a second copy of
-  # it, and it no longer needs the CLI package.
-  depends=('electron')
+  pkgdesc="DeepSeek Harness desktop application (distribution Electron with system Python and Node.js)"
+  # The payload carries the dsh tree; Electron, Node.js, pnpm and the Python
+  # libraries come from the distribution, so the package follows their version
+  # and security updates and needs neither a second Electron copy nor the CLI
+  # package.
+  depends=('electron' 'nodejs' 'pnpm' 'python' "${_system_python_packages[@]}")
 
   install -d "$pkgdir/usr/lib/deepseek-harness-desktop/resources"
   cp -a "$srcdir/desktop-app/." "$pkgdir/usr/lib/deepseek-harness-desktop/resources/"

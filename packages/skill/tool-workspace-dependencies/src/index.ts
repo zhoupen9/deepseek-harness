@@ -44,6 +44,25 @@ export interface PrimaryRuntimeManifest {
   readonly pnpm?: string
   /** All recorded Python distribution versions; empty for legacy files without a distribution map. */
   readonly pythonPackages: Readonly<Record<string, string>>
+  /**
+   * Absolute system paths used instead of a bundled `dependencies/` tree. Absent for payloads that
+   * carry their own interpreters, so existing carriers and their recorded manifests are unchanged.
+   */
+  readonly external?: ExternalPrimaryRuntime
+}
+
+/** Absolute system interpreter and package paths declared by a payload that bundles no interpreter tree. */
+export interface ExternalPrimaryRuntime {
+  /** System Python executable. */
+  readonly python: string
+  /** System Python `site-packages` directory. */
+  readonly pythonPackages: string
+  /** System Node.js executable; required when `pnpm` is declared. */
+  readonly node?: string
+  /** System Node.js global package directory. */
+  readonly nodePackages?: string
+  /** System pnpm entry script run by the declared Node.js executable. */
+  readonly pnpm?: string
 }
 
 /** Absolute entry points and bundled versions; pnpm runs through the returned Node executable. */
@@ -73,6 +92,27 @@ function isDistributionMap(value: unknown): value is Readonly<Record<string, str
     && typeof version === 'string' && /^\d[\w.!+-]*$/u.test(version))
 }
 
+function isAbsolutePath(value: unknown): value is string {
+  return typeof value === 'string' && isAbsolute(value)
+}
+
+function parseExternalPrimaryRuntime(value: unknown): ExternalPrimaryRuntime {
+  if (!isRecord(value)) throw new Error('primary runtime: invalid metadata')
+  const { python, pythonPackages, node, nodePackages, pnpm } = value
+  if (!isAbsolutePath(python) || !isAbsolutePath(pythonPackages)
+    || (node !== undefined && !isAbsolutePath(node))
+    || (nodePackages !== undefined && (node === undefined || !isAbsolutePath(nodePackages)))
+    || (pnpm !== undefined && (node === undefined || !isAbsolutePath(pnpm)))) {
+    throw new Error('primary runtime: invalid metadata')
+  }
+  return {
+    python, pythonPackages,
+    ...(node === undefined ? {} : { node }),
+    ...(nodePackages === undefined ? {} : { nodePackages }),
+    ...(pnpm === undefined ? {} : { pnpm }),
+  }
+}
+
 /**
  * Validate payload JSON and normalize legacy component fields to top-level versions.
  * @param value - Untrusted decoded runtime.json contents.
@@ -87,6 +127,7 @@ export function parsePrimaryRuntime(value: unknown): PrimaryRuntimeManifest {
     throw new Error('primary runtime: invalid metadata')
   }
   const { desktopVersion, platform, arch, payloadDigest } = value
+  const external = value.external === undefined ? undefined : parseExternalPrimaryRuntime(value.external)
   const { python, node, pnpm } = versions
   const pythonPackages = value.pythonPackages === undefined && legacy ? {} : value.pythonPackages
   if (typeof desktopVersion !== 'string' || desktopVersion.length === 0
@@ -119,6 +160,7 @@ export function parsePrimaryRuntime(value: unknown): PrimaryRuntimeManifest {
     ...(node === undefined ? {} : { node }),
     ...(pnpm === undefined ? {} : { pnpm }),
     pythonPackages,
+    ...(external === undefined ? {} : { external }),
   }
 }
 
@@ -139,6 +181,16 @@ export async function readPrimaryRuntime(root: string): Promise<PrimaryRuntimeMa
  * @returns Absolute paths for explicit script execution and recorded bundled Python versions.
  */
 export function workspaceDependencyPaths(root: string, manifest: PrimaryRuntimeManifest): WorkspaceDependencies {
+  if (manifest.external !== undefined) {
+    const { python, pythonPackages, node, nodePackages, pnpm } = manifest.external
+    return {
+      python, pythonPackages,
+      ...(node === undefined ? {} : { node }),
+      ...(pnpm === undefined ? {} : { pnpm }),
+      ...(nodePackages === undefined ? {} : { nodePackages }),
+      pythonDistributions: manifest.pythonPackages,
+    }
+  }
   const dependencies = join(root, 'dependencies')
   const windows = manifest.platform === 'win32'
   const node = manifest.node === undefined ? {} : {
@@ -203,6 +255,11 @@ export async function resolvePrimaryRuntime(source: string): Promise<WorkspaceDe
  */
 export async function installPrimaryRuntime(source: string, root: string): Promise<WorkspaceDependencies> {
   const manifest = await compatibleManifest(source)
+  if (manifest.external !== undefined) {
+    const paths = workspaceDependencyPaths(source, manifest)
+    await validatePayloadEntries(paths)
+    return paths
+  }
   await mkdir(dirname(root), { recursive: true })
   const previous = `${root}.previous`
   const previousExists = await exists(previous)

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Deployments that ship their own script runtimes (Desktop's primary runtime, or a container image layer) mount this tool so the agent can ask where the bundled Python, Node.js, and pnpm live instead of discovering a system interpreter. The tool returns absolute paths and recorded distribution versions; it changes neither `PATH` nor package-manager settings. The payload is either copied under the Harness home on first use (Desktop) or used where it lies (read-only carriers).
+Deployments that ship their own script runtimes (Desktop's primary runtime, or a container image layer) mount this tool so the agent can ask where the Python, Node.js, and pnpm their deployment provides live instead of discovering them itself. The tool returns absolute paths and recorded distribution versions; it changes neither `PATH` nor package-manager settings. The payload is either copied under the Harness home on first use (Desktop) or used where it lies (read-only carriers); a payload that declares absolute system paths is always used where it lies.
 
 ## Table of Contents
 
@@ -42,7 +42,7 @@ Mount the plugin beside the tool registry with the payload directory. Configurat
 
 ### Payload layout
 
-`runtime.json` records `desktopVersion`, `platform` (`win32`, `darwin`, or `linux`), `arch`, optional `payloadDigest`, top-level `python`, optional `node`/`pnpm` versions, and the complete `pythonPackages` distribution-version map. A pnpm entry requires Node.js. Python libraries, including numpy and pandas, appear only in `pythonPackages`. Entries live under `dependencies/`: `python/bin/python3` (`python/python.exe` on Windows) with `site-packages` beneath it, and, when declared, `node/bin/node` with `node/node_modules` and `pnpm/bin/pnpm.mjs`. A manifest whose platform or architecture differs from the running process is rejected.
+`runtime.json` records `desktopVersion`, `platform` (`win32`, `darwin`, or `linux`), `arch`, optional `payloadDigest`, top-level `python`, optional `node`/`pnpm` versions, and the complete `pythonPackages` distribution-version map. A pnpm entry requires Node.js. Python libraries, including numpy and pandas, appear only in `pythonPackages`. A bundled payload keeps its entries under `dependencies/`: `python/bin/python3` (`python/python.exe` on Windows) with `site-packages` beneath it, and, when declared, `node/bin/node` with `node/node_modules` and `pnpm/bin/pnpm.mjs`. An `external` block instead names absolute system paths (`python` and `pythonPackages`, plus optional `node`, `nodePackages`, and `pnpm`); such a payload carries no `dependencies/` tree, is validated in place, and is never copied. A manifest whose platform or architecture differs from the running process is rejected.
 
 The packaged `sdk` profile uses its bundled Python and Office skills by default; `DSH_PRIMARY_RUNTIME` overrides the resource location, and an empty value opts out. Source launches without a carrier default remain opt-in. See [runtime configuration](../../../python/sdk-runtime/README.md) for independent skill selection. Missing skill resources produce a startup warning; invalid or incomplete external runtime payloads fail the first tool call. Profile configuration changes require restarting the SDK process.
 

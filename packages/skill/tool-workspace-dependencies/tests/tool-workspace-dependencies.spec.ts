@@ -56,6 +56,83 @@ it.each(['win32', 'darwin', 'linux'])('returns %s interpreter and package paths'
   expect(paths.pythonPackages).toBe(join('/runtime', 'dependencies', 'python', ...(platform === 'win32' ? ['Lib'] : ['lib', 'python3.12']), 'site-packages'))
 })
 
+async function externalFixture() {
+  const directory = await mkdtemp(join(tmpdir(), 'dsh-primary-runtime-external-'))
+  roots.push(directory)
+  const source = join(directory, 'resources')
+  const root = join(directory, 'home', 'dsh-runtimes', 'dsh-primary-runtime')
+  const manifest: PrimaryRuntimeManifest = {
+    desktopVersion: '1.0.0', platform: process.platform, arch: process.arch,
+    python: '3.14.7', node: '24.21.0', pnpm: '11.26.0',
+    pythonPackages: { numpy: '2.5.3', pandas: '2.3.3' },
+    external: {
+      python: join(directory, 'usr', 'bin', 'python3'),
+      pythonPackages: join(directory, 'usr', 'lib', 'python3.14', 'site-packages'),
+      node: join(directory, 'usr', 'bin', 'node'),
+      nodePackages: join(directory, 'usr', 'lib', 'node_modules'),
+      pnpm: join(directory, 'usr', 'lib', 'node_modules', 'pnpm', 'bin', 'pnpm.mjs'),
+    },
+  }
+  const paths = workspaceDependencyPaths(source, manifest)
+  for (const path of [paths.python, paths.node, paths.pnpm]) {
+    if (path === undefined) continue
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, 'interpreter')
+  }
+  await mkdir(paths.pythonPackages, { recursive: true })
+  if (paths.nodePackages !== undefined) await mkdir(paths.nodePackages, { recursive: true })
+  await mkdir(source, { recursive: true })
+  await writeFile(join(source, 'runtime.json'), JSON.stringify(manifest))
+  return { directory, source, root, manifest }
+}
+
+it.each([
+  ['python only', { python: '/usr/bin/python3', pythonPackages: '/usr/lib/python3.14/site-packages' }],
+  ['node and pnpm', { python: '/usr/bin/python3', pythonPackages: '/usr/lib/python3.14/site-packages', node: '/usr/bin/node', pnpm: '/usr/lib/node_modules/pnpm/bin/pnpm.mjs' }],
+  ['node packages', { python: '/usr/bin/python3', pythonPackages: '/usr/lib/python3.14/site-packages', node: '/usr/bin/node', nodePackages: '/usr/lib/node_modules' }],
+] as const)('returns declared system paths for %s without deriving a bundled tree', (_name, external) => {
+  const manifest: PrimaryRuntimeManifest = { desktopVersion: '1', platform: 'linux', arch: 'x64', python: '3.14.7',
+    pythonPackages: { numpy: '2.5.3' }, external }
+  expect(workspaceDependencyPaths('/runtime', manifest)).toEqual({ ...external, pythonDistributions: { numpy: '2.5.3' } })
+})
+
+it('round-trips external manifests without bundled components', () => {
+  const base = { desktopVersion: '1', platform: 'linux', arch: 'x64', python: '3.14.7', pythonPackages: { numpy: '2.5.3' } }
+  const pythonOnly = { ...base, external: { python: '/usr/bin/python3', pythonPackages: '/usr/lib/site-packages' } }
+  const withNode = { ...base, node: '24.21.0', external: { python: '/usr/bin/python3', pythonPackages: '/usr/lib/site-packages', node: '/usr/bin/node' } }
+  const withPnpm = { ...base, node: '24.21.0', pnpm: '11.26.0', external: { python: '/usr/bin/python3', pythonPackages: '/usr/lib/site-packages', node: '/usr/bin/node', pnpm: '/usr/bin/pnpm' } }
+  expect(parsePrimaryRuntime(pythonOnly)).toEqual(pythonOnly)
+  expect(parsePrimaryRuntime(withNode)).toEqual(withNode)
+  expect(parsePrimaryRuntime(withPnpm)).toEqual(withPnpm)
+})
+
+it('reads a system payload in place and never copies it into the Harness home', async () => {
+  const { source, root, manifest } = await externalFixture()
+  expect(await installPrimaryRuntime(source, root)).toEqual(workspaceDependencyPaths(source, manifest))
+  await expect(readFile(join(root, 'runtime.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it('rejects a system payload whose declared interpreter path is absent', async () => {
+  const { source, manifest } = await externalFixture()
+  await rm(manifest.external!.python)
+  await expect(resolvePrimaryRuntime(source)).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it.each([
+  { external: 'system' },
+  { external: { python: 'relative', pythonPackages: '/usr/lib/site-packages' } },
+  { external: { python: '/usr/bin/python3' } },
+  { external: { python: '/usr/bin/python3', pythonPackages: '/usr/lib/site-packages', node: 'relative' } },
+  { external: { python: '/usr/bin/python3', pythonPackages: '/usr/lib/site-packages', nodePackages: '/usr/lib/node_modules' } },
+  { external: { python: '/usr/bin/python3', pythonPackages: '/usr/lib/site-packages', node: '/usr/bin/node', nodePackages: 'relative' } },
+  { external: { python: '/usr/bin/python3', pythonPackages: '/usr/lib/site-packages', pnpm: '/usr/bin/pnpm' } },
+  { external: { python: '/usr/bin/python3', pythonPackages: '/usr/lib/site-packages', node: '/usr/bin/node', pnpm: 'relative' } },
+])('rejects malformed external paths: %j', async (invalid) => {
+  const { source, manifest } = await fixture()
+  await writeFile(join(source, 'runtime.json'), JSON.stringify({ ...manifest, ...invalid }))
+  await expect(readPrimaryRuntime(source)).rejects.toThrow('invalid metadata')
+})
+
 it('installs offline, reuses the same release, and leaves environment and user packages unchanged', async () => {
   const { source, root, manifest } = await fixture()
   const environment = { ...process.env }
