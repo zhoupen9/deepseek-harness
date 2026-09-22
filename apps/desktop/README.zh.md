@@ -126,6 +126,22 @@ Desktop 在 Host 启动后、打开工作区前检查模型 API Key 引用是否
 
 Desktop 打包支持 macOS（`mac-arm64`、`mac-x64`）、Windows（`win-x64`）与 Linux（`linux-x64`）。Linux 目标以未签名方式通过 electron-builder 的 AppImage 发布，不声明 Desktop 策略，也不发布更新源；其本地发布设置来自被 Git 忽略的 `apps/desktop/.env.linux`，由 `.env.linux.example` 复制而来。
 
+### 发行版 Electron
+
+组装好的负载不依赖 electron-builder 放在它旁边的 Electron 副本。自行打包 Electron 的发行版只安装 `resources/`（应用归档、`app.asar.unpacked`、准备好的 `runtime/` 与图标），并用发行版自己的 Electron 运行该归档：
+
+```sh
+ELECTRON_FORCE_IS_PACKAGED=true /usr/bin/electron /usr/lib/deepseek-harness-desktop/resources/app.asar
+```
+
+以下两项由该启动器提供：发行版 Electron 会把显式给出的应用路径视为未打包运行，并通过 `process.resourcesPath` 指向它自己的目录。
+
+- `ELECTRON_FORCE_IS_PACKAGED`（任意值）使 `app.isPackaged` 保持为 true，负载因此解析已打包的运行时、策略与 profile；Arch 的 `/usr/bin/electron` wrapper 已经导出该变量。未设置该变量就启动组装负载会在启动时直接失败，而不会去解析开发路径。
+- 负载根目录由应用路径推导，运行时、图标与更新元数据因此都在安装目录下解析。打包出的 macOS、Windows 与 AppImage 产物使用同一布局，不受影响。
+- 发行版 Electron 必须允许 Node 模式，打包后的 Host 进程以 `ELECTRON_RUN_AS_NODE` 启动；Electron 默认的 fuses 允许该模式。
+
+打包的原生模块是 Node-API 插件，可在发行版选定的任意 Electron 中加载；Electron 的 Chromium 与 Node 版本随后跟随发行版的更新节奏。[Arch 软件包](../../PKGBUILD) 即安装该负载并依赖 `electron`，不再自带副本。
+
 <a id="release-versions"></a>
 
 ### 发布版本
@@ -397,7 +413,7 @@ node apps/desktop/node_modules/pnpm/bin/pnpm.mjs --dir apps/desktop run test:upd
 
 ## 底层开发覆盖项
 
-未打包的 Electron 进程使用应用目录下的 `.desktop-build/development/project` 作为开发项目。`DSH_DESKTOP_PNPM_ENTRY` 和 `DSH_DESKTOP_DSH_DIR` 用于选择明确的运行时资源。打包应用会忽略这些变量，从 `process.resourcesPath` 解析签名资源，并使用受管 Desktop profile。
+未打包的 Electron 进程使用应用目录下的 `.desktop-build/development/project` 作为开发项目。`DSH_DESKTOP_PNPM_ENTRY` 和 `DSH_DESKTOP_DSH_DIR` 用于选择明确的运行时资源。打包应用会忽略这些变量，从安装目录的资源目录解析签名资源，并使用受管 Desktop profile。
 
 ## 已知限制
 

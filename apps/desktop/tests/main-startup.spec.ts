@@ -2,7 +2,7 @@ import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from '../src/windows-layout.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IpcMainInvokeEvent } from 'electron'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type { MenuItemConstructorOptions, MessageBoxOptions } from 'electron'
@@ -130,7 +130,9 @@ const harness = await vi.hoisted(async () => {
     getLocale: (): string => 'en-US',
     getPreferredSystemLanguages: () => ['en-US'],
     getVersion: () => '1.0.0',
-    getAppPath: (): string => 'desktop-test-app',
+    // A packaged application runs from `<resources>/app.asar`; the development launcher runs the
+    // application directory itself, and a distribution Electron reports the same archive path.
+    getAppPath: (): string => app.isPackaged ? join('desktop-test-app', 'resources', 'app.asar') : 'desktop-test-app',
     setAboutPanelOptions: vi.fn<(options: Electron.AboutPanelOptionsOptions) => void>(),
     requestSingleInstanceLock: () => true,
     setAsDefaultProtocolClient: vi.fn(),
@@ -240,7 +242,8 @@ vi.mock('electron', () => ({
 vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:fs/promises')>()
   return { ...original, readFile: vi.fn((path: Parameters<typeof original.readFile>[0], encoding?: 'utf8') => {
-    if (path === join('desktop-test-app', 'package.json')) {
+    if (path === join('desktop-test-app', 'package.json')
+      || path === join('desktop-test-app', 'resources', 'app.asar', 'package.json')) {
       return Promise.resolve(JSON.stringify({ dshDesktopAppId: 'com.deepseek.dsh', dshMandatoryUpdatePolicy: harness.embeddedPolicy }))
     }
     return encoding === undefined ? original.readFile(path) : original.readFile(path, encoding)
@@ -323,7 +326,9 @@ beforeEach(() => {
   vi.spyOn(console, 'info').mockImplementation(() => {})
   vi.stubEnv('DSH_DESKTOP_PNPM_ENTRY', 'test-pnpm')
   vi.stubEnv('DSH_DESKTOP_DSH_DIR', 'test-runtime')
-  vi.stubGlobal('process', { ...process, platform: 'win32', arch: 'x64', resourcesPath: 'desktop-test-resources' })
+  // A distribution Electron reports its own resources directory here; every application payload
+  // path must come from the application path instead.
+  vi.stubGlobal('process', { ...process, platform: 'win32', arch: 'x64', resourcesPath: 'electron-dist-resources' })
   vi.stubEnv('DSH_DESKTOP_HOST_INSPECT_PORT', undefined)
   vi.stubEnv('DSH_DESKTOP_DEV_PROJECT_DIR', undefined)
   vi.stubEnv('DSH_DESKTOP_MANDATORY_UPDATE_CONFIG', undefined)
@@ -384,7 +389,7 @@ describe('desktop main startup', () => {
     for (const file of ['update-dialog.html', 'update-dialog.js', 'update-dialog.css', 'update-close.svg', 'mandatory-update.html']) {
       const request = new Request(`dsh-app://shell/${file}`)
       await handler(request)
-      expect(serveWebDocument).toHaveBeenLastCalledWith(request, join('desktop-test-app', 'renderer'))
+      expect(serveWebDocument).toHaveBeenLastCalledWith(request, join(harness.app.getAppPath(), 'renderer'))
     }
     expect(forwardWebRequest).not.toHaveBeenCalled()
     expect((await handler(new Request('dsh-app://unknown/update-dialog.html'))).status).toBe(404)
@@ -416,7 +421,7 @@ describe('desktop main startup', () => {
     const options = harness.app.setAboutPanelOptions.mock.calls[0]![0]
     const expected = JSON.parse(readFileSync(new URL('./expected/about-panel.json', import.meta.url), 'utf8')) as Record<string, unknown>
     expect({ menu: submenu.slice(0, 2), options: { ...options, iconPath: '<app icon>' } }).toEqual(expected[locale])
-    expect(options.iconPath).toBe(packaged ? join('desktop-test-resources', 'icon.png')
+    expect(options.iconPath).toBe(packaged ? join(dirname(harness.app.getAppPath()), 'icon.png')
       : join('desktop-test-app', 'resources', 'icon-windows.png'))
   })
 
@@ -610,7 +615,7 @@ describe('desktop main startup', () => {
     const handler = harness.protocolHandle.mock.calls[0]![1]
     const request = new Request('dsh-app://shell/update-dialog.html')
     expect(await (await handler(request)).text()).toBe('shell document')
-    expect(serveWebDocument).toHaveBeenCalledWith(request, join('desktop-test-app', 'renderer'))
+    expect(serveWebDocument).toHaveBeenCalledWith(request, join(harness.app.getAppPath(), 'renderer'))
     expect((await handler(new Request('dsh-app://foreign/index.html'))).status).toBe(404)
   })
 
@@ -1518,7 +1523,7 @@ describe('desktop main startup', () => {
     expect(harness.hosts[0]).toMatchObject({
       node: process.execPath,
       runtime: join(harness.app.getAppPath(), 'dsh'),
-      primaryRuntime: join('desktop-test-resources', 'runtime', 'primary-runtime'),
+      primaryRuntime: join(dirname(harness.app.getAppPath()), 'runtime', 'primary-runtime'),
       profile: 'desktop-test-profile',
     })
     expect(harness.hosts[0]!.environment).toBe(process.env)

@@ -21,6 +21,7 @@ import {
   type MenuItemConstructorOptions,
 } from 'electron'
 import { resolveDesktopPaths } from './paths.ts'
+import { desktopResourceLayout } from './resource-layout.ts'
 import { DesktopProjectManager } from './project-manager.ts'
 import { DesktopHostProcess, DesktopHostUncleanExitError } from './host-process.ts'
 import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-view.ts'
@@ -92,18 +93,26 @@ interface RuntimeResources {
   readonly node: string
   readonly pnpm: string
   readonly dsh: string
+  /** Resource directory of this installation, for payload files outside the application archive. */
+  readonly root: string
 }
 
 function runtimeResources(): RuntimeResources {
   const development = !app.isPackaged
+  const layout = desktopResourceLayout(app.getAppPath())
+  // A distribution Electron reports an explicit application path as an unpackaged run, so an
+  // assembled payload without the launcher flag would take the development paths below.
+  if (layout.assembled && development) {
+    throw new Error('dsh desktop: launching an assembled payload requires ELECTRON_FORCE_IS_PACKAGED')
+  }
   const node = process.execPath
-  const nodeBin = development ? join(app.getAppPath(), 'scripts', 'node-bin') : join(process.resourcesPath, 'runtime', 'bin')
+  const nodeBin = development ? join(app.getAppPath(), 'scripts', 'node-bin') : join(layout.root, 'runtime', 'bin')
   const pnpm = (development ? process.env.DSH_DESKTOP_PNPM_ENTRY : undefined)
     ?? (development ? join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.mjs')
-      : join(process.resourcesPath, 'runtime', 'pnpm', 'bin', 'pnpm.mjs'))
+      : join(layout.root, 'runtime', 'pnpm', 'bin', 'pnpm.mjs'))
   const dsh = (development ? process.env.DSH_DESKTOP_DSH_DIR : undefined)
     ?? (development ? join(app.getAppPath(), '.desktop-build', 'development', 'project') : join(app.getAppPath(), 'dsh'))
-  return { node, nodeBin, pnpm, dsh }
+  return { node, nodeBin, pnpm, dsh, root: layout.root }
 }
 
 function developmentHostInspectPort(enabled: boolean): number | undefined {
@@ -316,7 +325,7 @@ async function main(): Promise<void> {
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
       hostInspectPort, process.env, onFailure,
       development ? join(app.getAppPath(), '.desktop-build', 'targets', `${process.platform === 'darwin' ? 'mac' : process.platform === 'linux' ? 'linux' : 'win'}-${process.arch}`, 'runtime', 'primary-runtime')
-        : join(process.resourcesPath, 'runtime', 'primary-runtime'),
+        : join(resources.root, 'runtime', 'primary-runtime'),
       resources, (next) => { platformView.setSession(next) })
     return {
       start: async () => {
@@ -738,7 +747,7 @@ async function main(): Promise<void> {
     version: '',
     copyright: '',
     iconPath: development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
-      : join(process.resourcesPath, 'icon.png'),
+      : join(resources.root, 'icon.png'),
   })
   // A custom application menu replaces Electron's default menu, so macOS needs
   // its standard menus and application hide commands declared explicitly.

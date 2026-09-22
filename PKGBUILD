@@ -72,10 +72,12 @@ build() {
   # Node, pnpm, Python) and assembles an unpacked Electron application under
   # apps/desktop/.desktop-build/targets/linux-x64/artifacts/linux-unpacked.
   pnpm run package:desktop:linux:x64:dir
-  # Stage it outside the workspace tree: the runtime prune below deletes
-  # non-runtime workspace members, apps/desktop among them.
+  # Stage the payload outside the workspace tree: the runtime prune below
+  # deletes non-runtime workspace members, apps/desktop among them. Only
+  # resources/ is staged, because the launcher runs the distribution Electron
+  # instead of the Electron copy electron-builder assembles beside it.
   rm -rf "$srcdir/desktop-app"
-  cp -a apps/desktop/.desktop-build/targets/linux-x64/artifacts/linux-unpacked "$srcdir/desktop-app"
+  cp -a apps/desktop/.desktop-build/targets/linux-x64/artifacts/linux-unpacked/resources "$srcdir/desktop-app"
   # Optional: drop the pi-ai multi-provider adapter (and its ~42 MB of vendor
   # SDKs) before pruning. Removes it from the base bundle manifest and its
   # cordis composition so the loader never tries to resolve the missing package.
@@ -157,23 +159,26 @@ package_deepseek-harness() {
 }
 
 package_deepseek-harness-desktop() {
-  pkgdesc="DeepSeek Harness desktop application (Electron with a bundled dsh runtime)"
-  # The staged application carries Electron, Node, pnpm, the primary runtime and
-  # the dsh tree, so it needs neither the system Electron nor the CLI package.
-  # The libraries are the ones Electron links against.
-  depends=('gtk3' 'nss' 'libdrm' 'libpulse' 'libxml2' 'libxslt' 'minizip' 'opus'
-           'flac' 'libevent' 'c-ares' 'brotli' 'fontconfig' 'freetype2'
-           'harfbuzz' 'libjpeg-turbo' 'zlib')
+  pkgdesc="DeepSeek Harness desktop application (distribution Electron with a bundled dsh runtime)"
+  # The payload carries Node, pnpm, the primary runtime and the dsh tree. Electron
+  # itself comes from the distribution, so this package follows the system
+  # Electron's version and security updates instead of shipping a second copy of
+  # it, and it no longer needs the CLI package.
+  depends=('electron')
 
-  install -d "$pkgdir/usr/lib/deepseek-harness-desktop"
-  cp -a "$srcdir/desktop-app/." "$pkgdir/usr/lib/deepseek-harness-desktop/"
+  install -d "$pkgdir/usr/lib/deepseek-harness-desktop/resources"
+  cp -a "$srcdir/desktop-app/." "$pkgdir/usr/lib/deepseek-harness-desktop/resources/"
 
   install -Dm755 /dev/stdin "$pkgdir/usr/bin/deepseek-harness-desktop" <<'EOF'
 #!/bin/sh
-exec /usr/lib/deepseek-harness-desktop/deepseek-harness "$@"
+# A distribution Electron reports an explicit application path as an unpackaged
+# run, and its own resources directory; the flag keeps the payload on its
+# packaged resources and runtime.
+export ELECTRON_FORCE_IS_PACKAGED=true
+exec /usr/bin/electron /usr/lib/deepseek-harness-desktop/resources/app.asar "$@"
 EOF
 
-  install -Dm644 "$srcdir/desktop-app/resources/icon.png"     "$pkgdir/usr/share/icons/hicolor/1024x1024/apps/deepseek-harness.png"
+  install -Dm644 "$srcdir/desktop-app/icon.png"     "$pkgdir/usr/share/icons/hicolor/1024x1024/apps/deepseek-harness.png"
 
   install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/deepseek-harness-desktop.desktop" <<'EOF'
 [Desktop Entry]

@@ -126,6 +126,22 @@ The welcome window follows system appearance with the design’s Platform light/
 
 Desktop packaging targets macOS (`mac-arm64`, `mac-x64`), Windows (`win-x64`), and Linux (`linux-x64`). The Linux target ships unsigned through electron-builder's AppImage, declares no Desktop policy and no updater feed, and reads its local release settings from the Git-ignored `apps/desktop/.env.linux`, copied from `.env.linux.example`.
 
+### Distribution Electron
+
+The assembled payload does not depend on the Electron copy electron-builder places beside it. A distribution that packages Electron itself installs only `resources/` — the application archive, `app.asar.unpacked`, the prepared `runtime/`, and the icon — and runs the archive with its own Electron:
+
+```sh
+ELECTRON_FORCE_IS_PACKAGED=true /usr/bin/electron /usr/lib/deepseek-harness-desktop/resources/app.asar
+```
+
+Two facts come from that launcher, because a distribution Electron reports an explicit application path as an unpackaged run and names its own directory through `process.resourcesPath`:
+
+- `ELECTRON_FORCE_IS_PACKAGED` (any value) keeps `app.isPackaged` true, so the payload resolves its packaged runtime, policy, and profile; the Arch `/usr/bin/electron` wrapper already exports it. Launching an assembled payload without it fails at startup instead of resolving development paths.
+- The payload root derives from the application path, so the runtime, icon, and update metadata resolve under the installation. Bundled macOS, Windows, and AppImage artifacts use the same layout and are unaffected.
+- The distribution Electron must permit Node mode, which the packaged Host process starts with `ELECTRON_RUN_AS_NODE`; Electron's default fuses allow it.
+
+Packaged native modules are Node-API addons, so they load in whichever Electron the distribution selects; Electron's Chromium and Node versions then follow the distribution's update cadence. The [Arch package](../../PKGBUILD) installs this payload and depends on `electron` instead of shipping its own copy.
+
 <a id="release-versions"></a>
 
 ### Release versions
@@ -397,7 +413,7 @@ The downloaded bytes are inert, and the installation call is recorded rather tha
 
 ## Low-level development overrides
 
-An unpackaged Electron process uses `.desktop-build/development/project` under its application directory as its development project. `DSH_DESKTOP_PNPM_ENTRY` and `DSH_DESKTOP_DSH_DIR` select explicit runtime resources. Packaged applications ignore these variables, resolve signed resources from `process.resourcesPath`, and use the managed Desktop profile.
+An unpackaged Electron process uses `.desktop-build/development/project` under its application directory as its development project. `DSH_DESKTOP_PNPM_ENTRY` and `DSH_DESKTOP_DSH_DIR` select explicit runtime resources. Packaged applications ignore these variables, resolve signed resources from the installation's resource directory, and use the managed Desktop profile.
 
 ## Known limitations
 
