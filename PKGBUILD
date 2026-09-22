@@ -15,7 +15,7 @@
 
 pkgbase=deepseek-harness
 pkgname=('deepseek-harness' 'deepseek-harness-desktop')
-pkgver=0.1.6_alpha.2
+pkgver=0.1.7_alpha.1
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/deepseek-ai/deepseek-harness"
@@ -40,6 +40,11 @@ sha256sums=('SKIP'
 # namespace. Default off: the base profile ships pi-ai dormant (zero routes
 # until a settings section enables it).
 _exclude_pi_ai=${_exclude_pi_ai:-0}
+# Set _skip_runtime_smoke=0 to run the packaged Electron smoke checks. They are
+# skipped by default because the Electron binaries link against a globally
+# installed glib that makes the smoke fail on this host even though the
+# installed application runs. Only linux-x64 accepts --skip-runtime-smoke.
+_skip_runtime_smoke=${_skip_runtime_smoke:-1}
 # node-pty and koffi compile native addons; python + base-devel (gcc/make)
 # cover that. corepack activates the pnpm version pinned in package.json.
 makedepends=('git' 'nodejs' 'corepack' 'python')
@@ -62,6 +67,16 @@ prepare() {
   # @electron/get, so skip the duplicate ~100 MB download Electron's own install
   # script would otherwise perform.
   ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile
+  # The Linux packaging reads apps/desktop/.env.linux (see
+  # scripts/desktop-package-environment.mjs). The file is git-ignored, so the
+  # clone lacks it; copy the local copy from the checkout instead of committing
+  # release settings.
+  local env_file="$startdir/apps/desktop/.env.linux"
+  if [[ ! -f "$env_file" ]]; then
+    error "missing $env_file; copy apps/desktop/.env.linux.example and fill it in"
+    return 1
+  fi
+  install -Dm600 "$env_file" apps/desktop/.env.linux
 }
 
 build() {
@@ -71,7 +86,9 @@ build() {
   # Package the desktop application: this prepares the bundled runtime (dsh,
   # Node, pnpm, Python) and assembles an unpacked Electron application under
   # apps/desktop/.desktop-build/targets/linux-x64/artifacts/linux-unpacked.
-  pnpm run package:desktop:linux:x64:dir
+  local smoke_args=()
+  [[ "$_skip_runtime_smoke" == 1 ]] && smoke_args+=(--skip-runtime-smoke)
+  pnpm run package:desktop:linux:x64:dir "${smoke_args[@]}"
   # Stage the payload outside the workspace tree: the runtime prune below
   # deletes non-runtime workspace members, apps/desktop among them. Only
   # resources/ is staged, because the launcher runs the distribution Electron

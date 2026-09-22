@@ -86,6 +86,13 @@ describe('desktop package target', () => {
       .toThrow(/cannot use --prepare-only/u)
   })
 
+  it('skips the Electron runtime smoke only for the Linux target', () => {
+    expect(parseDesktopPackageInvocation(['linux-x64', '--skip-runtime-smoke'], 'linux', 'x64').skipRuntimeSmoke).toBe(true)
+    expect(parseDesktopPackageInvocation(['linux-x64'], 'linux', 'x64').skipRuntimeSmoke).toBe(false)
+    expect(() => parseDesktopPackageInvocation(['win-x64', '--skip-runtime-smoke'], 'win32', 'x64'))
+      .toThrow(/requires linux-x64/u)
+  })
+
   it('removes ambient certificate inputs for unsigned builds and overrides an inherited signing mode', () => {
     const environment = {
       DSH_DESKTOP_APP_ID: 'com.example.desktop',
