@@ -21,7 +21,14 @@ export const DESKTOP_IPC = {
   windowFullscreen: 'dsh-desktop:window-fullscreen',
   windowsAppearance: 'dsh-desktop:windows-appearance',
   windowsMenu: 'dsh-desktop:windows-menu',
+  notify: 'dsh-desktop:notify',
 } as const
+
+/**
+ * Web UI attention discriminators the shell raises a native notification for.
+ * The Web UI sends these through `window.dshNotify`.
+ */
+export type DesktopAttentionKind = 'approval' | 'question' | 'plan-review' | 'turn-complete'
 
 /** Desktop release update state rendered by desktop-owned UI. */
 export type DesktopUpdatePreparationFailureKind = 'stop-failed' | 'tasks-changed' | 'tasks-unavailable'

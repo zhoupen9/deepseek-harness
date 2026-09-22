@@ -36,6 +36,7 @@ const state = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   clipboard: { writeText: state.copy },
   app: {
+    commandLine: { appendSwitch: vi.fn() },
     isPackaged: false,
     name: 'Harness',
     requestSingleInstanceLock: () => true,

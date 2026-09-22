@@ -14,6 +14,7 @@ vi.mock('../src/preload-platform.ts', () => ({ markDocumentPlatform: vi.fn(), sy
 vi.mock('../src/preload-theme.ts', () => ({ syncNativeTheme: vi.fn() }))
 vi.mock('../src/preload-windows.ts', () => ({ syncWindowsAppearance: vi.fn() }))
 vi.mock('../src/preload-mandatory-overlay.ts', () => ({ installMandatoryUpdateOverlay: vi.fn() }))
+vi.mock('../src/window-chrome.ts', () => ({ installWindowChrome: vi.fn() }))
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks(); vi.resetModules() })
 

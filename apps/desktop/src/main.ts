@@ -14,6 +14,7 @@ import {
   powerMonitor,
   nativeTheme,
   net,
+  Notification,
   protocol,
   session,
   shell,
@@ -136,6 +137,15 @@ function chromeFallbackFill(): string {
   return nativeTheme.shouldUseDarkColors ? '#1b1b1c' : '#f9fafb'
 }
 
+// The Settings font pickers enumerate installed fonts through
+// window.queryLocalFonts, which Chromium gates behind this feature flag.
+app.commandLine.appendSwitch('enable-features', 'LocalFontAccess')
+
+/** DevTools dock state: Linux keeps the panel inside the application window. */
+function devToolsDockMode(): 'detach' | 'right' {
+  return process.platform === 'linux' ? 'right' : 'detach'
+}
+
 function createWindow(preload: string, show = false, primary = false): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
@@ -143,6 +153,13 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     minWidth: 520,
     minHeight: 600,
     show,
+    // The primary window runs frameless on Linux: no OS title bar and no menu
+    // bar. The page carries a transparent drag strip (window-chrome.ts) so the
+    // window stays movable, and window management rides the OS shortcuts.
+    ...(process.platform === 'linux' && primary ? {
+      frame: false,
+      autoHideMenuBar: true,
+    } : {}),
     ...(process.platform === 'win32' && primary ? {
       titleBarStyle: 'hidden' as const,
       titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: chromeFallbackFill(),
@@ -521,6 +538,34 @@ async function main(): Promise<void> {
   installDesktopDirectoryPicker(() => mainWindow)
   installMicrophonePermissions(session.defaultSession, () => mainWindow?.webContents)
 
+  /**
+   * Raise a native notification for one Web UI attention kind. A window already
+   * in front of the user shows the event itself, so it is not interrupted.
+   * @param kind - Attention discriminator sent by the Web UI.
+   */
+  const handleAttention = (kind: unknown): void => {
+    if (typeof kind !== 'string') return
+    if (process.env.DSH_DEBUG_NOTIFY !== undefined && process.env.DSH_DEBUG_NOTIFY !== '') {
+      console.log('[dsh-notify]', kind)
+    }
+    const messages = currentDesktopLocale().messages
+    const copy: Record<string, { title: string; body: string }> = {
+      approval: { title: messages.attentionApprovalTitle, body: messages.attentionApprovalBody },
+      question: { title: messages.attentionQuestionTitle, body: messages.attentionQuestionBody },
+      'plan-review': { title: messages.attentionPlanReviewTitle, body: messages.attentionPlanReviewBody },
+      'turn-complete': { title: messages.attentionTurnCompleteTitle, body: messages.attentionTurnCompleteBody },
+    }
+    const selected = copy[kind]
+    if (selected === undefined) return
+    if (mainWindow !== undefined && mainWindow.isFocused()) return
+    if (!Notification.isSupported()) return
+    new Notification({ title: selected.title, body: selected.body }).show()
+  }
+  ipcMain.on(DESKTOP_IPC.notify, (event, payload: unknown) => {
+    assertDesktopSender(event, ['app'])
+    handleAttention(typeof payload === 'object' && payload !== null ? (payload as { kind?: unknown }).kind : undefined)
+  })
+
   ipcMain.handle(DESKTOP_IPC.boot, async (event) => {
     assertDesktopSender(event, ['app'])
     await startup
@@ -779,10 +824,20 @@ async function main(): Promise<void> {
     { role: 'quit', ...(darwin ? { label: currentDesktopLocale().messages.quitApplication }
       : process.platform === 'win32' ? { label: currentDesktopLocale().messages.exitApplication } : {}) },
   ]
-  const devToolsItems: MenuItemConstructorOptions[] = [
-    { role: 'toggleDevTools', visible: false },
-    { role: 'toggleDevTools', visible: false, accelerator: 'F12' },
-  ]
+  // A frameless Linux window draws no menu bar, so these hidden items carry the
+  // DevTools shortcuts and toggle the docked panel themselves. Electron requires
+  // a label or role on every item, and the empty label is never drawn.
+  const toggleDevTools = (): void => {
+    const target = BrowserWindow.getFocusedWindow() ?? mainWindow
+    if (target === undefined || target.isDestroyed()) return
+    if (target.webContents.isDevToolsOpened()) target.webContents.closeDevTools()
+    else target.webContents.openDevTools({ mode: devToolsDockMode() })
+  }
+  const devToolsItems: MenuItemConstructorOptions[] = process.platform === 'linux'
+    ? [{ label: '', visible: false, accelerator: 'Ctrl+Shift+I', click: toggleDevTools },
+      { label: '', visible: false, accelerator: 'F12', click: toggleDevTools }]
+    : [{ role: 'toggleDevTools', visible: false },
+      { role: 'toggleDevTools', visible: false, accelerator: 'F12' }]
   const installMenu = (): void => {
     Menu.setApplicationMenu(Menu.buildFromTemplate(process.platform === 'win32' ? devToolsItems : [{
       label: darwin ? app.name : currentDesktopLocale().messages.application,
@@ -875,7 +930,7 @@ async function main(): Promise<void> {
     }
     welcomeWindow = undefined
     if (development && process.env.DSH_DESKTOP_OPEN_DEVTOOLS !== '0') {
-      window.webContents.openDevTools({ mode: 'detach' })
+      window.webContents.openDevTools({ mode: devToolsDockMode() })
     }
   }
   let openingWelcome: Promise<void> | undefined
@@ -1042,7 +1097,7 @@ async function main(): Promise<void> {
   if (isQuitting()) return
   const window = currentMainWindow()
   if (window !== undefined && development && process.env.DSH_DESKTOP_OPEN_DEVTOOLS !== '0') {
-    window.webContents.openDevTools({ mode: 'detach' })
+    window.webContents.openDevTools({ mode: devToolsDockMode() })
   }
   publishUpdate(updateState)
 }

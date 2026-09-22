@@ -47,7 +47,20 @@ const harness = await vi.hoisted(async () => {
   const updateDownload = vi.fn(async (_version: string): Promise<DesktopUpdateState> => updateState)
   const updateInstall = vi.fn(async (_version: string): Promise<DesktopUpdateState> => updateState)
   const popup = vi.fn<(options: { window: FakeWindow; x?: number; y?: number; callback?: () => void }) => void>()
-  const menuBuilder = vi.fn<(template: MenuItemConstructorOptions[]) => { popup: typeof popup }>(() => ({ popup }))
+  // Electron rejects an item without a label or role; the fake menu applies the
+  // same rule to nested submenus so an accelerator-only template cannot ship.
+  const assertMenuTemplate = (template: MenuItemConstructorOptions[]): void => {
+    for (const item of template) {
+      if (item.type !== 'separator' && item.label === undefined && item.role === undefined) {
+        throw new TypeError('Invalid template for MenuItem: must have at least one of label, role or type')
+      }
+      if (Array.isArray(item.submenu)) assertMenuTemplate(item.submenu)
+    }
+  }
+  const menuBuilder = vi.fn<(template: MenuItemConstructorOptions[]) => { popup: typeof popup }>((template) => {
+    assertMenuTemplate(template)
+    return { popup }
+  })
   const menu = Object.assign(menuBuilder, { buildFromTemplate: menuBuilder, setApplicationMenu: vi.fn() })
   class FakeWindow extends EventEmitter {
     destroyed = false
@@ -126,6 +139,7 @@ const harness = await vi.hoisted(async () => {
   const app = Object.assign(new EventEmitter(), {
     isPackaged: true,
     name: 'Desktop test',
+    commandLine: { appendSwitch: vi.fn() },
     whenReady: () => Promise.resolve(),
     getLocale: (): string => 'en-US',
     getPreferredSystemLanguages: () => ['en-US'],
@@ -168,6 +182,7 @@ const harness = await vi.hoisted(async () => {
     set publishUpdate(value: (state: DesktopUpdateState) => DesktopUpdateState) { publishUpdate = value },
     dialog: { showOpenDialog: vi.fn(), showErrorBox: vi.fn(), showMessageBox: vi.fn() },
     openExternal: vi.fn(),
+    notifications: [] as { title: string; body: string }[],
     protocolHandle: vi.fn<(scheme: string, handler: (request: Request) => Response | Promise<Response>) => void>(),
     applyRelease: vi.fn(() => { preparing.resolve(); return prepared.promise }),
     disableAllPlugins: vi.fn(async () => {
@@ -238,6 +253,11 @@ vi.mock('electron', () => ({
   } },
   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: harness.protocolHandle },
   powerMonitor: harness.powerMonitor,
+  Notification: class {
+    static isSupported(): boolean { return true }
+    constructor(options: { title: string; body: string }) { harness.notifications.push(options) }
+    show(): void {}
+  },
 }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:fs/promises')>()
@@ -692,6 +712,25 @@ describe('desktop main startup', () => {
     window.emit('minimize')
     expect(window.setVibrancy).not.toHaveBeenCalled()
     expect(window.setBackgroundColor).not.toHaveBeenCalled()
+  })
+
+  it('raises a native notification only while the window is in the background', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const window = harness.windows[0]!
+    const listener = harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.notify)![1]
+    const event = { sender: window.webContents, senderFrame: { url: 'dsh-app://app/' } }
+    harness.notifications.length = 0
+    listener(event, { kind: 'approval' })
+    expect(harness.notifications).toEqual([])
+    vi.spyOn(window, 'isFocused').mockReturnValue(false)
+    listener(event, { kind: 'approval' })
+    listener(event, { kind: 'unsupported' })
+    expect(harness.notifications).toHaveLength(1)
+    expect(harness.notifications[0]).toEqual({
+      title: 'Approval requested', body: 'DeepSeek Harness needs your approval to continue.',
+    })
   })
 
   it('follows the Windows primary document language and palette without trusting other frames', async () => {

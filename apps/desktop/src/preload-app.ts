@@ -8,6 +8,7 @@ import { syncNativeTheme } from './preload-theme.ts'
 import { syncWindowsAppearance } from './preload-windows.ts'
 import { installMandatoryUpdateOverlay } from './preload-mandatory-overlay.ts'
 import { createDesktopBrowserBridge } from './preload-browser.ts'
+import { installWindowChrome } from './window-chrome.ts'
 
 function createProductApi(): DshDesktopProductApi {
   return {
@@ -45,6 +46,12 @@ if (location.protocol === `${SCHEME}:` && location.hostname === 'app') {
   contextBridge.exposeInMainWorld('__DSH_HOST_PATHS__', {
     pathFor: (file: File) => webUtils.getPathForFile(file),
   })
+  // The Web UI raises native notifications through this bridge when the user's
+  // attention is needed and the window is not in front of them.
+  contextBridge.exposeInMainWorld('dshNotify', (kind: unknown) => {
+    if (typeof kind !== 'string' || kind === '') return
+    ipcRenderer.send(DESKTOP_IPC.notify, { kind })
+  })
   contextBridge.exposeInMainWorld('dshDesktopBoot', {
     ready: () => ipcRenderer.invoke(DESKTOP_IPC.boot) as Promise<unknown>,
     failed: (message: string) => ipcRenderer.invoke(DESKTOP_IPC.bootFailed, message) as Promise<void>,
@@ -63,6 +70,9 @@ syncNativeTheme()
 contextBridge.exposeInMainWorld('dshDesktop', location.protocol === `${SCHEME}:` && location.hostname === 'app' ? createProductApi() : { protocolVersion: 1 })
 
 if (location.protocol === `${SCHEME}:` && location.hostname === 'app') {
+  // The primary window is frameless on Linux, where the page carries the drag
+  // strip that keeps the window movable.
+  if (process.platform === 'linux') installWindowChrome()
   contextBridge.exposeInMainWorld('__DSH_LOCALE__', {
     read: () => ipcRenderer.invoke(DESKTOP_IPC.localeBootstrap),
     onChange: (locale: string) => { ipcRenderer.send(DESKTOP_IPC.localeChanged, locale) },
