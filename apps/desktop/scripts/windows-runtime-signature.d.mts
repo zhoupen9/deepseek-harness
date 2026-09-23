@@ -46,6 +46,14 @@ export interface WindowsCodeSigningOptions {
 export function windowsRuntimeCode(root: string): Promise<string[]>
 
 /**
+ * Reject absent, linked, or changed Windows code in the resource copy electron-builder made.
+ * @param sourceRoot Owned, materialized dsh directory.
+ * @param resourcesDir Assembled application resources directory.
+ * @returns Resolves after every prepared PE has an identical copy under `dsh/`.
+ */
+export function verifyWindowsRuntimeCopy(sourceRoot: string, resourcesDir: string): Promise<void>
+
+/**
  * Preserve valid signatures and sign unsigned PE files with a supervised signer.
  * @param root Materialized directory to sign.
  * @param options Signer, certificate identity and audit sink.

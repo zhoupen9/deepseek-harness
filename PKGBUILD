@@ -40,10 +40,10 @@ sha256sums=('SKIP'
 # namespace. Default off: the base profile ships pi-ai dormant (zero routes
 # until a settings section enables it).
 _exclude_pi_ai=${_exclude_pi_ai:-0}
-# Set _skip_runtime_smoke=0 to run the packaged Electron smoke checks. They are
-# skipped by default because the Electron binaries link against a globally
-# installed glib that makes the smoke fail on this host even though the
-# installed application runs. Only linux-x64 accepts --skip-runtime-smoke.
+# Set _skip_runtime_smoke=0 to run the packaged payload and Host smoke checks.
+# They execute the packaged payload on the system Node.js and pass on this host,
+# but add a few minutes to every package build. Only linux-x64 accepts
+# --skip-runtime-smoke.
 _skip_runtime_smoke=${_skip_runtime_smoke:-1}
 # node-pty and koffi compile native addons; python + base-devel (gcc/make)
 # cover that. corepack activates the pnpm version pinned in package.json. The

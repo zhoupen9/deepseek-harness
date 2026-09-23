@@ -6,7 +6,7 @@ import { basename, dirname } from 'node:path'
 export interface DesktopResourceLayout {
   /** True when the application runs from an assembled payload instead of a source checkout. */
   readonly assembled: boolean
-  /** Directory holding this application's `runtime`, icons, and update metadata. */
+  /** Directory holding this application's runtime, icons, update metadata, and Harness payload. */
   readonly root: string
 }
 

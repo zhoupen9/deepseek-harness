@@ -88,8 +88,11 @@ describe('installed-update application inputs and builder configuration', () => 
         expect(config.extraMetadata.main).toBe('qualification-bootstrap.mjs')
         expect(config.directories.output).toBe(join(manifest, '..', versions[index]!, 'installer'))
         const dsh = join(manifest, '..', versions[index]!, 'dsh')
-        expect(config.files[2]).toMatchObject({ from: dsh, to: 'dsh' })
-        expect(config.files[3]).toMatchObject({ from: join(dsh, 'node_modules'), to: 'dsh/node_modules' })
+        expect(config.extraResources.slice(-2)).toMatchObject([
+          { from: dsh, to: 'dsh' },
+          { from: join(dsh, 'node_modules'), to: 'dsh/node_modules' },
+        ])
+        expect(config.files).not.toContainEqual(expect.objectContaining({ to: 'dsh' }))
         expect(config.win.forceCodeSigning).toBe(true)
         expect(config.win.signtoolOptions.publisherName).toBe('CN=Fixture,O=Fixture,C=CN')
         expect(typeof config.win.signtoolOptions.sign).toBe('function')

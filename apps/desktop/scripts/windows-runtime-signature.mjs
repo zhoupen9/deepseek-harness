@@ -149,6 +149,23 @@ export async function signWindowsCode(root, options) {
 }
 
 /**
+ * Reject absent, linked, or changed Windows code in the resource copy electron-builder made.
+ * @param {string} sourceRoot Owned, materialized dsh directory.
+ * @param {string} resourcesDir Assembled application resources directory.
+ * @returns {Promise<void>} Resolves after every prepared PE has an identical copy under `dsh/`.
+ */
+export async function verifyWindowsRuntimeCopy(sourceRoot, resourcesDir) {
+  for (const preparedPath of await windowsRuntimeCode(sourceRoot)) {
+    const file = relative(sourceRoot, preparedPath)
+    const copied = join(resourcesDir, 'dsh', file)
+    const stat = await lstat(copied)
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Windows runtime: expected a real PE file: ${file}`)
+    const [prepared, packaged] = await Promise.all([readFile(preparedPath), readFile(copied)])
+    if (!prepared.equals(packaged)) throw new Error(`Windows runtime: PE bytes changed: ${file}`)
+  }
+}
+
+/**
  * Reject any unsigned or invalid PE remaining in a completed directory.
  * @param {string} root Materialized artifact directory.
  * @param {typeof inspectWindowsRuntimeSignature} inspect Public-key verifier.

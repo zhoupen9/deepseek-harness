@@ -1,4 +1,4 @@
-/** Validate the assembled application, including native Office conversion outside ASAR. */
+/** Validate the assembled application and its packaged payload. */
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
@@ -24,7 +24,13 @@ const resources = join(application, windows || linux ? 'resources' : 'Resources'
 const executable = windows ? join(application, 'DeepSeek Harness.exe')
   : linux ? join(application, 'deepseek-harness')
     : join(application, 'MacOS', 'DeepSeek Harness')
-const descriptor = await verifyDesktopRuntime(paths.dsh, readDesktopRuntime(paths.dsh).release.version,
-  resolveDesktopPackageTarget(target))
+const targetSpec = resolveDesktopPackageTarget(target)
+const descriptor = await verifyDesktopRuntime(paths.dsh, readDesktopRuntime(paths.dsh).release.version, targetSpec)
 if (windows && !values.unsigned) await verifyWindowsCode(application)
-await smokePreparedRuntime(join(resources, 'app.asar', 'dsh'), executable, join(resources, 'runtime'), descriptor)
+// The resource copy carries the sealed descriptor, so verifying it against preparation proves the
+// packaged payload is byte-identical to the tree the payload checks were recorded against.
+const packaged = await verifyDesktopRuntime(join(resources, 'dsh'), descriptor.release.version, targetSpec)
+if (JSON.stringify(packaged) !== JSON.stringify(descriptor)) {
+  throw new Error('desktop runtime: packaged payload differs from preparation')
+}
+await smokePreparedRuntime(join(resources, 'dsh'), executable, join(resources, 'runtime'), descriptor)
