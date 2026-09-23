@@ -49,6 +49,7 @@ const harness = await vi.hoisted(async () => {
   let quitCompleted = deferred()
   let policyBlocked = deferred()
   let embeddedPolicy: unknown
+  let payloadRuntimeNode: string | undefined
   let closeWindowsOnQuit = false
   let updateState: DesktopUpdateState = { phase: 'idle' }
   const updateCheck = vi.fn(async (_manual?: boolean): Promise<DesktopUpdateState> => updateState)
@@ -204,6 +205,8 @@ const harness = await vi.hoisted(async () => {
     get dialogShown() { return dialogShown }, get quitCompleted() { return quitCompleted },
     get policyBlocked() { return policyBlocked },
     get embeddedPolicy() { return embeddedPolicy },
+    get payloadRuntimeNode() { return payloadRuntimeNode },
+    set payloadRuntimeNode(value: string | undefined) { payloadRuntimeNode = value },
     set embeddedPolicy(value: unknown) { embeddedPolicy = value },
     nextNavigation() { navigated = deferred(); return navigated.promise },
     nextHostStart() { hostStarted = deferred(); return hostStarted.promise },
@@ -229,6 +232,7 @@ const harness = await vi.hoisted(async () => {
       navigated = deferred(); dialogShown = deferred(); quitCompleted = deferred()
       policyBlocked = deferred()
       embeddedPolicy = undefined
+      payloadRuntimeNode = undefined
     },
   }
 })
@@ -280,6 +284,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }) }
 })
 vi.mock('../src/runtime-tree.ts', () => ({ readDesktopRuntime: () => ({ release: { version: '1.0.0' } }) }))
+vi.mock('../src/runtime-node.ts', () => ({ runtimeNode: () => harness.payloadRuntimeNode }))
 vi.mock('../src/paths.ts', () => ({ resolveDesktopPaths: () => ({ profile: 'desktop-test-profile' }) }))
 vi.mock('../src/project-manager.ts', () => ({
   DesktopProjectManager: class {
@@ -1655,6 +1660,15 @@ describe('desktop main startup', () => {
     expect(harness.hosts[0]!.start).toHaveBeenCalledTimes(1)
     expect(harness.windows).toHaveLength(1)
     expect(window.urls).toEqual(['dsh-app://app/'])
+  })
+
+  it('runs the Host on the Node the payload declares', async () => {
+    harness.payloadRuntimeNode = join('desktop-test-app', 'runtime', 'primary-runtime', 'dependencies', 'node', 'bin', 'node')
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    harness.prepared.resolve()
+    await harness.hostStarted.promise
+    expect(harness.hosts[0]).toMatchObject({ node: harness.payloadRuntimeNode })
   })
 
   it('prepares an independent plugin profile for the unpackaged Host', async () => {

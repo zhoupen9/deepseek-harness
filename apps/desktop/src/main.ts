@@ -23,6 +23,7 @@ import {
 } from 'electron'
 import { resolveDesktopPaths } from './paths.ts'
 import { desktopResourceLayout } from './resource-layout.ts'
+import { runtimeNode } from './runtime-node.ts'
 import { DesktopProjectManager } from './project-manager.ts'
 import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError } from './host-process.ts'
 import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-view.ts'
@@ -124,9 +125,12 @@ protocol.registerSchemesAsPrivileged([{
 
 interface RuntimeResources {
   readonly nodeBin: string
+  /** Node.js runtime that runs the Host; Electron's Node only when the payload declares none. */
   readonly node: string
   readonly pnpm: string
   readonly dsh: string
+  /** Primary runtime the Host starts its plugins and tools from. */
+  readonly primaryRuntime: string
   /** Resource directory of this installation, for payload files outside the application archive. */
   readonly root: string
 }
@@ -139,14 +143,17 @@ function runtimeResources(): RuntimeResources {
   if (layout.assembled && development) {
     throw new Error('dsh desktop: launching an assembled payload requires ELECTRON_FORCE_IS_PACKAGED')
   }
-  const node = process.execPath
+  const primaryRuntime = development
+    ? join(app.getAppPath(), '.desktop-build', 'targets', `${process.platform === 'darwin' ? 'mac' : process.platform === 'linux' ? 'linux' : 'win'}-${process.arch}`, 'runtime', 'primary-runtime')
+    : join(layout.root, 'runtime', 'primary-runtime')
+  const node = runtimeNode(primaryRuntime) ?? process.execPath
   const nodeBin = development ? join(app.getAppPath(), 'scripts', 'node-bin') : join(layout.root, 'runtime', 'bin')
   const pnpm = (development ? process.env.DSH_DESKTOP_PNPM_ENTRY : undefined)
     ?? (development ? join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.mjs')
       : join(layout.root, 'runtime', 'pnpm', 'bin', 'pnpm.mjs'))
   const dsh = (development ? process.env.DSH_DESKTOP_DSH_DIR : undefined)
     ?? (development ? join(app.getAppPath(), '.desktop-build', 'development', 'project') : join(app.getAppPath(), 'dsh'))
-  return { node, nodeBin, pnpm, dsh, root: layout.root }
+  return { node, nodeBin, pnpm, dsh, primaryRuntime, root: layout.root }
 }
 
 function developmentHostInspectPort(enabled: boolean): number | undefined {
@@ -396,8 +403,7 @@ async function main(): Promise<void> {
     const hostInspectPort = developmentHostInspectPort(development)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
       hostInspectPort, process.env, onFailure,
-      development ? join(app.getAppPath(), '.desktop-build', 'targets', `${process.platform === 'darwin' ? 'mac' : process.platform === 'linux' ? 'linux' : 'win'}-${process.arch}`, 'runtime', 'primary-runtime')
-        : join(resources.root, 'runtime', 'primary-runtime'),
+      resources.primaryRuntime,
       resources, (next) => { platformView.setSession(next) })
     return {
       start: async () => {

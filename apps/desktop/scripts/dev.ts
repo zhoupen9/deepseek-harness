@@ -9,6 +9,7 @@ import { DESKTOP_HOST_PROTOCOL_VERSION } from '../src/host-protocol.ts'
 import type { DesktopRelease } from '../src/release.ts'
 import { prepareDevelopmentProject } from './development-project.ts'
 import { prepareDevelopmentApp } from './development-app.ts'
+import { declaredElectronRange, resolveSystemElectron } from './system-electron.ts'
 import { preparePrimaryRuntime } from './prepare-primary-runtime.ts'
 
 const APP_ROOT = resolve(import.meta.dirname, '..')
@@ -55,10 +56,33 @@ async function runPackageScript(script: string, cwd: string): Promise<void> {
   await run(process.execPath, [packageManager, 'run', script], cwd)
 }
 
-async function launchElectron(): Promise<void> {
+/** Electron executable for this development run: an installed distribution when one applies. */
+function electronExecutable(): string {
+  const installed = resolveSystemElectron({
+    environment: process.env,
+    platform: process.platform,
+    arch: process.arch,
+    hostPlatform: process.platform,
+    hostArch: process.arch,
+    declaredRange: declaredElectronRange(join(APP_ROOT, 'package.json')),
+    required: false,
+    // Development exercises the Electron the packaged application runs, which on Linux is the
+    // distribution's; the Host itself runs on the payload's Node, so an Electron build only has
+    // to draw the window.
+    discover: true,
+  })
+  if (installed !== undefined) {
+    console.log(`desktop development: using the ${installed.source} Electron ${installed.version} at ${installed.dist}`)
+    return installed.executable
+  }
   const require = createRequire(import.meta.url)
   const electron: unknown = require('electron')
   if (typeof electron !== 'string') throw new Error('desktop development: electron executable is unavailable')
+  return electron
+}
+
+async function launchElectron(): Promise<void> {
+  const electron = electronExecutable()
   const mainPort = debugPort('DSH_DESKTOP_MAIN_INSPECT_PORT', 9229)
   const rendererPort = debugPort('DSH_DESKTOP_RENDERER_DEBUG_PORT', 9222)
   const hostPort = debugPort('DSH_DESKTOP_HOST_INSPECT_PORT', 9230)
@@ -105,7 +129,7 @@ async function main(): Promise<void> {
     schemaVersion: 1,
     version,
     hostProtocolVersion: DESKTOP_HOST_PROTOCOL_VERSION,
-    nodeVersion: execFileSync(createRequire(import.meta.url)('electron') as string, ['-p', 'process.versions.node'],
+    nodeVersion: execFileSync(electronExecutable(), ['-p', 'process.versions.node'],
       { encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }).trim(),
     pnpmVersion,
   }

@@ -48,14 +48,15 @@ _skip_runtime_smoke=${_skip_runtime_smoke:-1}
 # node-pty and koffi compile native addons; python + base-devel (gcc/make)
 # cover that. corepack activates the pnpm version pinned in package.json. The
 # desktop payload uses the build host's Node.js, pnpm and Python packages
-# instead of shipping downloaded interpreters, so they are makedepends too.
+# instead of shipping downloaded interpreters, so they are makedepends too; the
+# build likewise assembles the application against the distribution Electron.
 # python-pptx is missing from some Arch mirrors; install it manually (for
 # example `python -m pip install --break-system-packages python-pptx`) before
 # building, or add the package here when the mirror provides it.
 _system_python_packages=(python-numpy python-pandas python-pillow python-lxml
   python-openpyxl python-docx python-xlsxwriter python-dateutil python-six
   python-tzdata python-typing_extensions python-et-xmlfile)
-makedepends=('git' 'nodejs' 'pnpm' 'corepack' 'python' "${_system_python_packages[@]}")
+makedepends=('git' 'nodejs' 'pnpm' 'corepack' 'python' 'electron' "${_system_python_packages[@]}")
 
 # The returned string must equal the pkgver= above: when it differs, makepkg
 # rewrites pkgver= to this value and forces pkgrel=1 (update_pkgver), which
@@ -71,9 +72,9 @@ prepare() {
   # The node:url browser stub (apps/web/src/node-url-stub.ts) and its vite
   # alias already exist in the electron branch, so no patch is needed here.
   corepack prepare pnpm@11.7.0 --activate
-  # The desktop packaging downloads the Electron distribution it bundles through
-  # @electron/get, so skip the duplicate ~100 MB download Electron's own install
-  # script would otherwise perform.
+  # Packaging assembles the application against the distribution Electron
+  # (DSH_DESKTOP_SYSTEM_ELECTRON below), so Electron's own install script must
+  # not download the ~100 MB copy this build never uses.
   ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile
   # The Linux packaging reads apps/desktop/.env.linux (see
   # scripts/desktop-package-environment.mjs). The file is git-ignored, so the
@@ -94,13 +95,16 @@ build() {
   # Package the desktop application: this assembles an unpacked Electron
   # application under apps/desktop/.desktop-build/targets/linux-x64/artifacts/
   # linux-unpacked. DSH_DESKTOP_SYSTEM_RUNTIME selects the host's Python,
-  # Node.js and pnpm for the payload instead of downloading and bundling them.
+  # Node.js and pnpm for the payload instead of downloading and bundling them,
+  # and assembles the application against the distribution Electron instead of
+  # downloading one of its own.
   local smoke_args=()
   [[ "$_skip_runtime_smoke" == 1 ]] && smoke_args+=(--skip-runtime-smoke)
   DSH_DESKTOP_SYSTEM_RUNTIME=1 \
     DSH_DESKTOP_SYSTEM_PYTHON=/usr/bin/python3 \
     DSH_DESKTOP_SYSTEM_NODE=/usr/bin/node \
     DSH_DESKTOP_SYSTEM_PNPM=/usr/bin/pnpm \
+    DSH_DESKTOP_SYSTEM_ELECTRON=/usr/lib/electron \
     pnpm run package:desktop:linux:x64:dir "${smoke_args[@]}"
   # Stage the payload outside the workspace tree: the runtime prune below
   # deletes non-runtime workspace members, apps/desktop among them. Only

@@ -21,6 +21,9 @@
       "path": "../../packages/api/gateway/tsconfig.host.json"
     },
     {
+      "path": "../../packages/skill/tool-workspace-dependencies"
+    },
+    {
       "path": "../../packages/client/ui-sidebar-browser/tsconfig.host.json"
     }
   ],
