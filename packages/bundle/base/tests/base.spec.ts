@@ -82,4 +82,25 @@ describe('dsh-base bundle', () => {
     // The platform layer folded into these rows: no separate patch file ships.
     expect(existsSync(resolve(root, 'windows.cordis.patch.yml'))).toBe(false)
   })
+
+  it('identifies every Desktop platform with a Platform client identity', () => {
+    const root = fileURLToPath(new URL('..', import.meta.url))
+    const parsed = yaml.load(
+      readFileSync(resolve(root, 'cordis.patch.yml'), 'utf8'),
+      { schema: entryListSchema },
+    )
+    const rows = (parsed as { insert?: { id?: string; config?: Record<string, { __jsExpr?: string }> }[] }[] | null)
+      ?.flatMap(patch => patch.insert ?? []) ?? []
+    const expression = rows.find(row => row.id === 'deepseek-account')?.config?.['desktopPlatform']?.__jsExpr
+    if (expression === undefined) throw new Error('deepseek-account must select its client identity with a !!js expression')
+    const identity = (profile: string, platform: string): unknown => evaluate(
+      { ctx: { get: (name: string) => name === 'profileContext' ? { name: profile } : undefined }, process: { platform } },
+      expression,
+    )
+    expect(identity('desktop', 'win32')).toBe('win32')
+    expect(identity('desktop', 'darwin')).toBe('darwin')
+    expect(identity('desktop', 'linux')).toBe('darwin')
+    expect(identity('web', 'linux')).toBeNull()
+    expect(identity('web', 'win32')).toBeNull()
+  })
 })

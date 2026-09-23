@@ -111,8 +111,10 @@
 
     - id: deepseek-account
       name: '@deepseek-ai/dsh-deepseek-account-platform'
+      # Platform accepts the desktop-mac and desktop-win client identities only, so every
+      # other Desktop platform presents the mac identity, matching update-policy requests.
       config:
-        desktopPlatform: !!js "ctx.get('profileContext')?.name === 'desktop' && ['darwin', 'win32'].includes(process.platform) ? process.platform : null"
+        desktopPlatform: !!js "ctx.get('profileContext')?.name === 'desktop' ? (process.platform === 'win32' ? 'win32' : 'darwin') : null"
 
     - id: credentials
       name: '@deepseek-ai/dsh-credentials-local'
