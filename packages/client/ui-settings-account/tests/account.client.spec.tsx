@@ -5,6 +5,7 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AccountDetails, AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { PlatformBridge } from '../src/client/PlatformOverlay.tsx'
+import type { DesktopApplicationCommands } from '../src/types.ts'
 import { AccountSection, type AccountSectionInjected, type AccountSnapshot } from '../src/client/AccountSection.tsx'
 import type {} from '../src/client/index.ts'
 import { en, zh, type AccountKey } from '../src/client/locales.ts'
@@ -19,9 +20,26 @@ const themeOf = (colorScheme: 'light' | 'dark'): ThemeSnapshot => ({
   active: { id: colorScheme, colorScheme, tokens: {} }, themes: [], revision: 0,
 })
 
-function operationsOf(state: Omit<AccountView, 'links'>, details?: Partial<AccountDetails>, platform?: PlatformBridge): AccountSectionInjected {
+/** Shell application commands with recording stubs; `development` adds the development-only rows. */
+function applicationOf(overrides?: Partial<DesktopApplicationCommands>): DesktopApplicationCommands {
+  return {
+    development: false,
+    about: vi.fn(() => Promise.resolve()),
+    openUpdates: vi.fn(() => Promise.resolve()),
+    reload: vi.fn(() => Promise.resolve()),
+    restart: vi.fn(() => Promise.resolve()),
+    quit: vi.fn(() => Promise.resolve()),
+    ...overrides,
+  }
+}
+
+function operationsOf(
+  state: Omit<AccountView, 'links'>, details?: Partial<AccountDetails>, platform?: PlatformBridge,
+  application?: DesktopApplicationCommands,
+): AccountSectionInjected {
   return {
     ...platform === undefined ? {} : { platform },
+    ...application === undefined ? {} : { application },
     hooks: {
       account: {
         getSnapshot: () => ({ view: { ...state, links: { usageUrl: 'http://localhost:8081/usage', topUpUrl: 'http://localhost:8081/top_up' } }, details, failed: false }),
@@ -35,8 +53,11 @@ function operationsOf(state: Omit<AccountView, 'links'>, details?: Partial<Accou
   }
 }
 
-function mount(state: Omit<AccountView, 'links'>, copy: typeof en | typeof zh = en, details?: Partial<AccountDetails>, platform?: PlatformBridge) {
-  const operations = operationsOf(state, details, platform)
+function mount(
+  state: Omit<AccountView, 'links'>, copy: typeof en | typeof zh = en, details?: Partial<AccountDetails>,
+  platform?: PlatformBridge, application?: DesktopApplicationCommands,
+) {
+  const operations = operationsOf(state, details, platform, application)
   // AccountSection consumes no global hooks; the slot supplies them in the application.
   const globals = {} as GlobalStandardProps
   render(<AccountSection {...globals} {...operations}
@@ -89,6 +110,54 @@ it.each([en, zh])('opens settings and signs out from the sidebar account menu', 
   fireEvent.click(screen.getByRole('button', { name: copy.menu }))
   await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: copy.signOut })) })
   expect(signOut).toHaveBeenCalledOnce()
+  expect(screen.queryByRole('menu')).toBeNull()
+})
+
+it.each([en, zh])('carries the shell application commands in the sidebar account menu', async (copy) => {
+  const application = applicationOf({ development: true })
+  const operations = mount({ status: 'credential-stored', attempt: null }, copy, undefined, undefined, application)
+  cleanup()
+  const { AccountMenu } = await import('../src/client/AccountMenu.tsx')
+  render(<AccountMenu {...({} as GlobalStandardProps)} {...operations}
+    useAccount={selector => selector(operations.hooks.account.getSnapshot())}
+    useTheme={selector => selector(operations.hooks.theme.getSnapshot())} wide openOnboarding={() => {}} openSettings={() => {}}
+    t={key => key in copy ? copy[key as AccountKey] : key} />)
+  fireEvent.click(screen.getByRole('button', { name: copy.menu }))
+  expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+    copy.about, copy.checkUpdates, copy.reloadPage, copy.restartApplication,
+    copy.settings, copy.contactUs, copy.signOut, copy.quitApplication,
+  ])
+  await expect(`${screen.getByRole('menu').textContent}\n`).toMatchFileSnapshot(`./expected/menu-application-${copy === en ? 'en' : 'zh'}.txt`)
+  for (const [index, row] of [copy.about, copy.checkUpdates, copy.reloadPage, copy.restartApplication, copy.quitApplication].entries()) {
+    // Each command closes the menu; reopen it for the next row.
+    if (index > 0) fireEvent.click(screen.getByRole('button', { name: copy.menu }))
+    fireEvent.click(screen.getByRole('menuitem', { name: row }))
+  }
+  expect(application.about).toHaveBeenCalledOnce()
+  expect(application.openUpdates).toHaveBeenCalledOnce()
+  expect(application.reload).toHaveBeenCalledOnce()
+  expect(application.restart).toHaveBeenCalledOnce()
+  expect(application.quit).toHaveBeenCalledOnce()
+})
+
+it('omits development commands and reports a rejected shell command', async () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  onTestFinished(() => { consoleError.mockRestore() })
+  const application = applicationOf({ about: vi.fn(() => Promise.reject(new Error('about failed'))) })
+  const operations = mount({ status: 'signed-out', attempt: null }, en, undefined, undefined, application)
+  cleanup()
+  const { AccountMenu } = await import('../src/client/AccountMenu.tsx')
+  render(<AccountMenu {...({} as GlobalStandardProps)} {...operations}
+    useAccount={selector => selector(operations.hooks.account.getSnapshot())}
+    useTheme={selector => selector(operations.hooks.theme.getSnapshot())} wide openOnboarding={() => {}} openSettings={() => {}}
+    t={key => key in en ? en[key as AccountKey] : key} />)
+  fireEvent.click(screen.getByRole('button', { name: en.menu }))
+  expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+    en.about, en.checkUpdates, en.settings, en.contactUs, en.signIn, en.quitApplication,
+  ])
+  await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: en.about })) })
+  expect(application.about).toHaveBeenCalledOnce()
+  expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ message: 'about failed' }))
   expect(screen.queryByRole('menu')).toBeNull()
 })
 

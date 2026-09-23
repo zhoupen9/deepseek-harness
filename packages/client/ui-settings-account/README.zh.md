@@ -34,6 +34,8 @@ Desktop 的用量和充值操作在 48px 返回栏下方打开隔离的原生 Pl
 
 侧边栏账号菜单使用公共 Menu 的表面、背景模糊、间距和菜单项排版；功能样式仅设置入口布局。
 
+菜单顶部为外壳应用命令——关于 DeepSeek Harness、检查更新…，开发构建中还有刷新页面和重启应用与 Host，末尾为退出 DeepSeek Harness——且不包含仅 macOS 的窗口可见性命令。各命令均向 Electron 主进程请求执行，发送方校验和有序退出由主进程负责；缺少该 preload 契约时菜单只显示账号相关行。
+
 账号卡片的“更多账号信息”链接通过系统浏览器打开 `https://platform.deepseek.com`。
 
 <a id="understand-the-implementation"></a>

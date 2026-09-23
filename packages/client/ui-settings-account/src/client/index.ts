@@ -9,6 +9,7 @@ import type { AccountView, AccountDetails } from '@deepseek-ai/dsh-deepseek-acco
 import type { PlatformBridge } from './PlatformOverlay.tsx'
 import { Config, CONTACT_CONFIG_GLOBAL } from '../contact-config.ts'
 import { contactUrl } from './contact-url.ts'
+import { desktopApplicationCommands, type DesktopCarrier } from './desktop-application.ts'
 import { AccountOnboarding } from './AccountOnboarding.tsx'
 import { AccountMenu } from './AccountMenu.tsx'
 import { AccountSection, type AccountSnapshot, type AccountSectionInjected } from './AccountSection.tsx'
@@ -78,8 +79,10 @@ export function apply(ctx: Context): void {
     }
   })().catch(() => { if (!disposed) publish({ ...snapshot, failed: true }) })
   const nativePlatform = (globalThis as typeof globalThis & { dshPlatform?: PlatformBridge }).dshPlatform
+  const application = desktopApplicationCommands((globalThis as typeof globalThis & { dshDesktop?: DesktopCarrier }).dshDesktop)
   const operations: AccountSectionInjected = {
     ...nativePlatform === undefined ? {} : { platform: nativePlatform },
+    ...application === undefined ? {} : { application },
     refresh,
     contactUs() {
       const url = contactUrl(config, {

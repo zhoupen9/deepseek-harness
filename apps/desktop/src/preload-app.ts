@@ -1,7 +1,10 @@
-/** Origin-scoped boot, native directory selection, host paths of picked files, and update presentation with native confirmation actions. */
+/** Origin-scoped boot, application commands, directory selection, composer file paths, and update presentation with native confirmation. */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { DESKTOP_IPC, SCHEME, type DshDesktopProductApi, type DesktopUpdatePresentation } from './ipc.ts'
+import {
+  DESKTOP_IPC, DESKTOP_DEVELOPMENT_ARGUMENT, SCHEME,
+  type DshDesktopProductApi, type DesktopUpdatePresentation,
+} from './ipc.ts'
 import { PLATFORM_IPC } from './platform-ipc.ts'
 import { markDocumentPlatform, syncWindowFullscreen } from './preload-platform.ts'
 import { syncNativeTheme } from './preload-theme.ts'
@@ -14,6 +17,13 @@ function createProductApi(): DshDesktopProductApi {
   return {
     protocolVersion: 1,
     browser: createDesktopBrowserBridge(),
+    application: {
+      development: process.argv.includes(DESKTOP_DEVELOPMENT_ARGUMENT),
+      about: () => ipcRenderer.invoke(DESKTOP_IPC.applicationAbout) as Promise<void>,
+      quit: () => ipcRenderer.invoke(DESKTOP_IPC.applicationQuit) as Promise<void>,
+      reload: () => ipcRenderer.invoke(DESKTOP_IPC.applicationReload) as Promise<void>,
+      restart: () => ipcRenderer.invoke(DESKTOP_IPC.applicationRestart) as Promise<void>,
+    },
     updates: {
       status: () => ipcRenderer.invoke(DESKTOP_IPC.updatesStatus) as Promise<DesktopUpdatePresentation>,
       open: () => ipcRenderer.invoke(DESKTOP_IPC.updatesOpen) as Promise<void>,

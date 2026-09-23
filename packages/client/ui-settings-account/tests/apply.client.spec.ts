@@ -147,6 +147,34 @@ it('uses the Desktop stream origin and exposes the native platform bridge', asyn
 }, 60_000)
 
 
+it('projects the Desktop application carrier onto the sidebar launcher commands', async ({ start }) => {
+  const application = {
+    development: true,
+    about: vi.fn(() => Promise.resolve()),
+    quit: vi.fn(() => Promise.resolve()),
+    reload: vi.fn(() => Promise.resolve()),
+    restart: vi.fn(() => Promise.resolve()),
+  }
+  const open = vi.fn(() => Promise.resolve())
+  vi.stubGlobal('dshDesktop', {
+    protocolVersion: 1, application,
+    updates: { status: () => Promise.resolve({ phase: 'idle' as const }), open, subscribe: () => () => {} },
+  })
+  const c = await start()
+  const actions = operations(c)
+  expect(actions.application?.development).toBe(true)
+  await actions.application!.about()
+  await actions.application!.openUpdates()
+  await actions.application!.reload()
+  await actions.application!.restart()
+  await actions.application!.quit()
+  expect(application.about).toHaveBeenCalledOnce()
+  expect(open).toHaveBeenCalledOnce()
+  expect(application.quit).toHaveBeenCalledOnce()
+  expect(application.reload).toHaveBeenCalledOnce()
+  expect(application.restart).toHaveBeenCalledOnce()
+}, 60_000)
+
 it('publishes a terminal state-stream failure without mistaking it for plugin disposal', async ({ start }) => {
   vi.stubGlobal('dshDesktop', {})
   const c = await start()

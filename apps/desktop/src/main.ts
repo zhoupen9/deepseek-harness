@@ -30,7 +30,7 @@ import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-vi
 import { installDesktopDirectoryPicker } from './directory-picker.ts'
 import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { DesktopBackendController } from './backend-controller.ts'
-import { DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
+import { DESKTOP_DEVELOPMENT_ARGUMENT, DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
 import { formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
 import { claimDesktopSingleInstance } from './single-instance.ts'
 import { DesktopUpdateCoordinator } from './update-coordinator.ts'
@@ -232,6 +232,9 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     } : {}),
     webPreferences: {
       preload,
+      // Only the primary document requests application commands; a packaged
+      // build omits the marker so its preload hides the development-only ones.
+      ...(primary && !app.isPackaged ? { additionalArguments: [DESKTOP_DEVELOPMENT_ARGUMENT] } : {}),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -717,6 +720,33 @@ async function main(): Promise<void> {
   ipcMain.handle(DESKTOP_IPC.updatesOpen, async (event) => {
     assertProductSender(event)
     await openUpdatePrompt()
+  })
+  const assertApplicationDevelopment = (): void => {
+    if (!development) throw new Error('dsh desktop: application command requires a development build')
+  }
+  ipcMain.handle(DESKTOP_IPC.applicationAbout, async (event) => {
+    assertProductSender(event)
+    // Windows has no system About panel; Electron's fallback is a plain
+    // message box, so the shell shows its own dimmed dialog instead.
+    if (process.platform === 'win32') await showAbout()
+    else app.showAboutPanel()
+  })
+  ipcMain.handle(DESKTOP_IPC.applicationQuit, (event) => {
+    assertProductSender(event)
+    app.quit()
+  })
+  ipcMain.handle(DESKTOP_IPC.applicationReload, (event) => {
+    assertProductSender(event)
+    assertApplicationDevelopment()
+    const window = mainWindow
+    if (window !== undefined && !window.isDestroyed()) window.webContents.reload()
+  })
+  ipcMain.handle(DESKTOP_IPC.applicationRestart, (event) => {
+    assertProductSender(event)
+    assertApplicationDevelopment()
+    if (quitting) return
+    app.relaunch()
+    app.quit()
   })
 
   let promptOperation: Promise<void> | undefined

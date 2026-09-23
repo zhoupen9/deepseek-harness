@@ -5,6 +5,7 @@ import { Button, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-pr
 import type { AccountDetails, AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { PropsRuntime, PropsLocale, InjectFace, HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
+import type { DesktopApplicationCommands } from '../types.ts'
 import { PlatformOverlay, type PlatformBridge } from './PlatformOverlay.tsx'
 import { formatBalance } from './formatBalance.ts'
 import { AccountAvatar } from './AccountAvatar.tsx'
@@ -31,6 +32,8 @@ export interface AccountSnapshot {
 export interface AccountSectionInjected {
   /** Desktop-only commands; absent in ordinary browsers. */
   platform?: PlatformBridge
+  /** Desktop-only application commands for the sidebar launcher; absent in ordinary browsers. */
+  application?: DesktopApplicationCommands
 
   /** Account stream owned by the Host and theme snapshots published by the renderer, observed through framework hooks. */
   hooks: {

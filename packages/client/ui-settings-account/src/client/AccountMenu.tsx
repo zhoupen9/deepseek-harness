@@ -1,6 +1,10 @@
-/** Sidebar account launcher and locally authoritative sign-out action. */
+/** Sidebar account launcher, its shell-owned application commands, and the locally authoritative sign-out action. */
 import { useState } from 'react'
-import { Menu, IconPaperPlaneOutlineMedium, IconSettingsOutlineMedium, IconUserOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Menu, IconCloseOutlineMedium, IconDownloadOutlineMedium, IconInfoOutlineMedium, IconPaperPlaneOutlineMedium,
+  IconPlayOutlineMedium, IconRefreshOutlineMedium, IconSettingsOutlineMedium, IconUserOutlineMedium,
+} from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AccountSectionInjected } from './AccountSection.tsx'
 import { SignInDialog } from './SignInDialog.tsx'
@@ -16,7 +20,7 @@ export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsLocale<'
  * @returns account menu launcher.
  */
 export function AccountMenu({
-  wide, openSettings, openOnboarding, useAccount, useTheme, signOut, contactUs, showLogin, start, cancel, t,
+  wide, openSettings, openOnboarding, useAccount, useTheme, signOut, contactUs, showLogin, start, cancel, application, t,
 }: AccountMenuProps) {
   const account = useAccount(state => state)
   const colorScheme = useTheme(snapshot => snapshot.active.colorScheme)
@@ -36,6 +40,39 @@ export function AccountMenu({
   }
   // The plugin's start publishes `loginFailed` before it rejects, so the dialog owns the report.
   const beginSignIn = (): void => { setOpen(false); void start().catch(() => undefined) }
+  // The shell's application menu, without the macOS-only window visibility
+  // commands. Each registered row carries the command its id resolves to.
+  const applicationItems: MenuEntry[] = []
+  const applicationCommands = new Map<string, () => Promise<void>>()
+  if (application !== undefined) {
+    applicationItems.push(
+      { id: 'about', label: t('about'), icon: <IconInfoOutlineMedium size={16} /> },
+      { id: 'updates', label: t('checkUpdates'), icon: <IconDownloadOutlineMedium size={16} /> },
+    )
+    applicationCommands.set('about', application.about)
+    applicationCommands.set('updates', application.openUpdates)
+    if (application.development) {
+      applicationItems.push(
+        { id: 'reload', label: t('reloadPage'), icon: <IconRefreshOutlineMedium size={16} /> },
+        { id: 'restart', label: t('restartApplication'), icon: <IconPlayOutlineMedium size={16} /> },
+      )
+      applicationCommands.set('reload', application.reload)
+      applicationCommands.set('restart', application.restart)
+    }
+    applicationCommands.set('quit', application.quit)
+  }
+  const items: MenuEntry[] = [
+    ...applicationItems,
+    ...applicationItems.length === 0 ? [] : [{ type: 'separator' as const, id: 'account' }],
+    { id: 'settings', label: t('settings'), icon: <IconSettingsOutlineMedium size={16} /> },
+    { id: 'contact', label: t('contactUs'), icon: <IconPaperPlaneOutlineMedium size={16} /> },
+    ...(signedIn ? [{ id: 'signout', label: t('signOut'), icon: <LogoutIcon />, disabled: busy }]
+      : [{ id: 'signin', label: t('signIn'), icon: <IconUserOutlineMedium size={16} /> }]),
+    ...application === undefined ? [] : [
+      { type: 'separator' as const, id: 'quit-command' },
+      { id: 'quit', label: t('quitApplication'), icon: <IconCloseOutlineMedium size={16} /> },
+    ],
+  ]
   return <div className={css.root}>
     <Menu open={open} side="top" portal autoFocus className={css.anchor}
       anchor={<button type="button" className={css.trigger} data-collapsed={!wide} aria-label={t('menu')}
@@ -43,18 +80,22 @@ export function AccountMenu({
         <span className={css.avatar}><AccountAvatar url={signedIn && profile?.status === 'ready' ? profile.value.avatarUrl : null} /></span>
         {wide && <span className={css.label}>{signedIn ? label : t('signedOut')}</span>}
       </button>}
-      items={[
-        { id: 'settings', label: t('settings'), icon: <IconSettingsOutlineMedium size={16} /> },
-        { id: 'contact', label: t('contactUs'), icon: <IconPaperPlaneOutlineMedium size={16} /> },
-        ...(signedIn ? [{ id: 'signout', label: t('signOut'), icon: <LogoutIcon />, disabled: busy }]
-          : [{ id: 'signin', label: t('signIn'), icon: <IconUserOutlineMedium size={16} /> }]),
-      ]}
+      items={items}
       onClose={() => { setOpen(false) }}
       onSelect={(id) => {
         if (id === 'settings') { setOpen(false); openSettings() }
         else if (id === 'contact') { setOpen(false); contactUs() }
         else if (id === 'signin') beginSignIn()
-        else void logout()
+        else if (id === 'signout') void logout()
+        else {
+          setOpen(false)
+          const command = applicationCommands.get(id)
+          /* v8 ignore next -- the Menu reports only rendered rows, and every application row registers its command above. */
+          if (command === undefined) return
+          // The native application menu has no failure surface for these shell
+          // commands either, so a rejection reports to the console.
+          void command().catch((error: unknown) => { console.error(error) })
+        }
       }} />
     {account.loginVisible && !account.onboarding && <SignInDialog account={account} colorScheme={colorScheme}
       start={start} cancel={cancel} t={t}

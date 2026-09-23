@@ -5,6 +5,10 @@ import type { DesktopBrowserBridge } from '@deepseek-ai/dsh-client-ui-sidebar-br
 
 /** IPC channel names kept private to the desktop application bundle. */
 export const DESKTOP_IPC = {
+  applicationAbout: 'dsh-desktop:application-about',
+  applicationQuit: 'dsh-desktop:application-quit',
+  applicationReload: 'dsh-desktop:application-reload',
+  applicationRestart: 'dsh-desktop:application-restart',
   boot: 'dsh-desktop:boot',
   enterWorkspace: 'dsh-desktop:enter-workspace',
   bootFailed: 'dsh-desktop:boot-failed',
@@ -23,6 +27,13 @@ export const DESKTOP_IPC = {
   windowsMenu: 'dsh-desktop:windows-menu',
   notify: 'dsh-desktop:notify',
 } as const
+
+/**
+ * Renderer argument marking a development shell. Reload and restart stay
+ * development-only, so the preload exposes them from this marker and the main
+ * process still rejects them in a packaged build.
+ */
+export const DESKTOP_DEVELOPMENT_ARGUMENT = '--dsh-desktop-development'
 
 /**
  * Web UI attention discriminators the shell raises a native notification for.
@@ -65,10 +76,25 @@ export interface DesktopUpdatePresentation {
   readonly failure?: DesktopUpdateFailureKind
 }
 
+/** Application commands the Web UI requests; the shell performs every effect. */
+export interface DshDesktopApplicationApi {
+  /** Whether the shell exposes the development-only reload and restart commands. */
+  readonly development: boolean
+  /** Show the shell's About panel. */
+  about(): Promise<void>
+  /** Request the shell's ordered shutdown. */
+  quit(): Promise<void>
+  /** Reload the primary document. */
+  reload(): Promise<void>
+  /** Relaunch the application. */
+  restart(): Promise<void>
+}
+
 /** Product documents cannot supply update versions, package URLs, or installation authorization. */
 export interface DshDesktopProductApi {
   readonly protocolVersion: 1
   readonly browser: DesktopBrowserBridge
+  readonly application: DshDesktopApplicationApi
   readonly updates: {
     status(): Promise<DesktopUpdatePresentation>
     open(): Promise<void>

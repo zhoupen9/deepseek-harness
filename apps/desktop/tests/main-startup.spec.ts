@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type { MenuItemConstructorOptions, MessageBoxOptions } from 'electron'
-import { DESKTOP_IPC, type DesktopUpdateState } from '../src/ipc.ts'
+import { DESKTOP_DEVELOPMENT_ARGUMENT, DESKTOP_IPC, type DesktopUpdateState } from '../src/ipc.ts'
 import { MANDATORY_IPC } from '../src/mandatory-update-ipc.ts'
 import { DesktopHostFatalError, DesktopHostUncleanExitError } from '../src/host-process.ts'
 import { en } from '../src/locale.ts'
@@ -83,6 +83,7 @@ const harness = await vi.hoisted(async () => {
       getURL: () => this.urls.at(-1) ?? '',
       mainFrame: { url: '' },
       getZoomFactor: () => 1,
+      reload: vi.fn(),
       focus: vi.fn(),
       sendInputEvent: vi.fn(),
       send: vi.fn((channel: string, state: { policy?: { blocking: boolean } }) => {
@@ -97,7 +98,7 @@ const harness = await vi.hoisted(async () => {
     readonly setTitleBarOverlay = vi.fn()
     readonly setVibrancy = vi.fn()
     readonly setBackgroundColor = vi.fn()
-    constructor(readonly options: { show: boolean; modal?: boolean }) {
+    constructor(readonly options: Electron.BrowserWindowConstructorOptions) {
       super(); if (windowFailure !== undefined) throw windowFailure; windows.push(this)
     }
     isDestroyed() { return this.destroyed }
@@ -159,6 +160,7 @@ const harness = await vi.hoisted(async () => {
     setAppLogsPath: vi.fn(),
     getPath: (name: string): string => `desktop-test-${name}`,
     setAboutPanelOptions: vi.fn<(options: Electron.AboutPanelOptionsOptions) => void>(),
+    showAboutPanel: vi.fn(),
     requestSingleInstanceLock: () => true,
     setAsDefaultProtocolClient: vi.fn(),
     exit: vi.fn(),
@@ -475,6 +477,52 @@ describe('desktop main startup', () => {
     ;(about!.click as () => void)()
     await vi.advanceTimersByTimeAsync(0)
     expect(console.error).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'overlay unavailable' }))
+  })
+
+  it.each(['win32', 'darwin', 'linux'] as const)('shows the shell About panel for the Web application command on %s', async (platform) => {
+    vi.stubGlobal('process', { ...process, platform })
+    await readyForUpdate()
+    harness.dialog.showMessageBox.mockClear()
+    harness.dialog.showMessageBox.mockResolvedValue({ response: 0 })
+    await invoke(DESKTOP_IPC.applicationAbout, 'app')
+    if (platform !== 'win32') {
+      expect(harness.app.showAboutPanel).toHaveBeenCalledOnce()
+      expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+      return
+    }
+    // Windows reuses the dimmed update dialog because Electron's fallback is a bare message box.
+    expect(harness.app.showAboutPanel).not.toHaveBeenCalled()
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'info', message: 'DeepSeek Harness',
+    }))
+  })
+
+  it('runs the Web reload and restart commands in a development shell', async () => {
+    harness.app.isPackaged = false
+    await readyForUpdate()
+    const window = harness.windows[0]!
+    expect(window.options.webPreferences?.additionalArguments).toEqual([DESKTOP_DEVELOPMENT_ARGUMENT])
+    await invoke(DESKTOP_IPC.applicationReload, 'app')
+    expect(window.webContents.reload).toHaveBeenCalledOnce()
+    await invoke(DESKTOP_IPC.applicationRestart, 'app')
+    expect(harness.app.relaunch).toHaveBeenCalledOnce()
+    expect(harness.app.quit).toHaveBeenCalled()
+  })
+
+  it('rejects the development-only Web commands in a packaged shell', async () => {
+    await readyForUpdate()
+    expect(harness.windows[0]!.options.webPreferences?.additionalArguments).toBeUndefined()
+    expect(() => invoke(DESKTOP_IPC.applicationReload, 'app')).toThrow('development build')
+    expect(() => invoke(DESKTOP_IPC.applicationRestart, 'app')).toThrow('development build')
+    expect(harness.windows[0]!.webContents.reload).not.toHaveBeenCalled()
+    expect(harness.app.relaunch).not.toHaveBeenCalled()
+  })
+
+  it('requests the ordered shutdown from the Web quit command', async () => {
+    await readyForUpdate()
+    await invoke(DESKTOP_IPC.applicationQuit, 'app')
+    expect(harness.app.quit).toHaveBeenCalled()
+    expect(() => invoke(DESKTOP_IPC.applicationQuit, 'shell')).toThrow('unowned renderer')
   })
 
   it('shows one explained startup login before Host readiness and joins concurrent checks without reopening it', async () => {

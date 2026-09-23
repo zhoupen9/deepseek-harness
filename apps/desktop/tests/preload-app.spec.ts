@@ -2,7 +2,7 @@ import { JSDOM } from 'jsdom'
 import { afterEach, expect, it, vi } from 'vitest'
 import { installMandatoryUpdateOverlay } from '../src/preload-mandatory-overlay.ts'
 import { syncWindowsAppearance } from '../src/preload-windows.ts'
-import { DESKTOP_IPC, type DshDesktopProductApi } from '../src/ipc.ts'
+import { DESKTOP_DEVELOPMENT_ARGUMENT, DESKTOP_IPC, type DshDesktopProductApi } from '../src/ipc.ts'
 
 const electron = vi.hoisted(() => ({
   contextBridge: { exposeInMainWorld: vi.fn() },
@@ -36,6 +36,30 @@ it('limits product documents to update status and a native confirmation action',
   expect(listener).toHaveBeenCalledWith({ visible: false })
   dispose()
   expect(electron.ipcRenderer.off).toHaveBeenCalledWith(DESKTOP_IPC.updatesPresentation, handler)
+})
+
+it('exposes application commands with the renderer development marker', async () => {
+  vi.stubGlobal('location', new URL('dsh-app://app/index.html'))
+  vi.stubGlobal('process', { ...process, argv: ['electron', DESKTOP_DEVELOPMENT_ARGUMENT] })
+  await import('../src/preload-app.ts')
+  const api = electron.contextBridge.exposeInMainWorld.mock.calls.find(([name]) => name === 'dshDesktop')?.[1] as DshDesktopProductApi
+  expect(api.application.development).toBe(true)
+  await api.application.about()
+  await api.application.quit()
+  await api.application.reload()
+  await api.application.restart()
+  expect(electron.ipcRenderer.invoke.mock.calls).toEqual([
+    [DESKTOP_IPC.applicationAbout], [DESKTOP_IPC.applicationQuit],
+    [DESKTOP_IPC.applicationReload], [DESKTOP_IPC.applicationRestart],
+  ])
+})
+
+it('reports a packaged renderer to the Web application commands', async () => {
+  vi.stubGlobal('location', new URL('dsh-app://app/index.html'))
+  vi.stubGlobal('process', { ...process, argv: ['electron'] })
+  await import('../src/preload-app.ts')
+  const api = electron.contextBridge.exposeInMainWorld.mock.calls.find(([name]) => name === 'dshDesktop')?.[1] as DshDesktopProductApi
+  expect(api.application.development).toBe(false)
 })
 
 it.each(['dsh-app://shell/plugin-manager.html', 'dsh-app://other/index.html', 'https://shell/startup.html', 'http://example.com/'])('exposes only the carrier marker to %s', async (url) => {
