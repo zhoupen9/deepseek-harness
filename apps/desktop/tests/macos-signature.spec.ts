@@ -48,9 +48,7 @@ describe('desktop macOS release signature', () => {
     expect(config.extraResources[0]?.to).toBe('runtime')
     expect(portablePath(config.extraResources[0]?.from ?? '')).toContain('/.desktop-build/targets/mac-arm64/runtime')
     const [dsh, dshNodeModules] = config.extraResources.slice(1, 3)
-    if (!dsh || !dshNodeModules || typeof dsh === 'string' || typeof dshNodeModules === 'string') {
-      throw new Error('the Desktop payload must be an unpacked resource mapping')
-    }
+    if (!dsh || !dshNodeModules) throw new Error('the Desktop payload must be an unpacked resource mapping')
     expect(portablePath(dsh.from)).toContain('/.desktop-build/targets/mac-arm64/dsh')
     expect(dsh.to).toBe('dsh')
     expect(portablePath(dshNodeModules.from)).toContain('/.desktop-build/targets/mac-arm64/dsh/node_modules')
