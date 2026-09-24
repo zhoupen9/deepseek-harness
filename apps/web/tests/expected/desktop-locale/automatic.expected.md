@@ -27,8 +27,8 @@
   - text: 字体 界面正文使用的字体
   - combobox "字体":
     - option "默认" [selected]
-  - text: 工作过程展示 控制轮次和步骤的默认展开方式
-  - button "简洁"
+  - text: 工作步骤展示 选择希望看到多少工具调用细节
+  - button "标准"
   - text: 等宽字体 代码块与终端使用的字体
   - combobox "等宽字体":
     - option "默认" [selected]

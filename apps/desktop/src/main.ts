@@ -143,8 +143,9 @@ function runtimeResources(): RuntimeResources {
   if (layout.assembled && development) {
     throw new Error('dsh desktop: launching an assembled payload requires ELECTRON_FORCE_IS_PACKAGED')
   }
+  // The launcher names this directory because process.arch cannot reproduce a fixed build target.
   const primaryRuntime = development
-    ? join(app.getAppPath(), '.desktop-build', 'targets', `${process.platform === 'darwin' ? 'mac' : process.platform === 'linux' ? 'linux' : 'win'}-${process.arch}`, 'runtime', 'primary-runtime')
+    ? developmentPrimaryRuntime()
     : join(layout.root, 'runtime', 'primary-runtime')
   const node = runtimeNode(primaryRuntime) ?? process.execPath
   const nodeBin = development ? join(app.getAppPath(), 'scripts', 'node-bin') : join(layout.root, 'runtime', 'bin')
@@ -154,6 +155,14 @@ function runtimeResources(): RuntimeResources {
   const dsh = (development ? process.env.DSH_DESKTOP_DSH_DIR : undefined)
     ?? (development ? join(app.getAppPath(), '.desktop-build', 'development', 'project') : join(layout.root, 'dsh'))
   return { node, nodeBin, pnpm, dsh, primaryRuntime, root: layout.root }
+}
+
+function developmentPrimaryRuntime(): string {
+  const directory = process.env.DSH_DESKTOP_PRIMARY_RUNTIME_DIR
+  if (directory === undefined || directory === '') {
+    throw new Error('dsh desktop: DSH_DESKTOP_PRIMARY_RUNTIME_DIR is required for an unpackaged launch')
+  }
+  return directory
 }
 
 function developmentHostInspectPort(enabled: boolean): number | undefined {

@@ -1,6 +1,7 @@
 /** Desktop Office skills and bundled authoring dependencies. */
 
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import * as officeSkills from '@deepseek-ai/dsh-skill-office'
 import * as workspaceDependencies from '@deepseek-ai/dsh-tool-workspace-dependencies'
@@ -22,5 +23,11 @@ export interface Config {
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   await ctx.plugin(workspaceDependencies, config)
-  await ctx.plugin(officeSkills, { assetRoot: join(dirname(config.source), 'office-skills') })
+  // The payload sits beside the application archive, so the resolved manifest is already physical.
+  const packageRoot = dirname(fileURLToPath(import.meta.resolve('@deepseek-ai/libreoffice-kit/package.json')))
+  await ctx.plugin(officeSkills, {
+    assetRoot: join(dirname(config.source), 'office-skills'),
+    node: join(config.source, 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
+    cli: join(packageRoot, 'lib', 'cli.js'),
+  })
 }

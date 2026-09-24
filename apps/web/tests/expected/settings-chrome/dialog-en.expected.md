@@ -27,8 +27,8 @@
   - text: Font Font used for interface text
   - combobox "Font":
     - option "Default" [selected]
-  - text: Work details Controls how turns and steps expand by default
-  - button "Compact"
+  - text: Work details Choose how much detail to show for tool calls
+  - button "Standard"
   - text: Monospace font Font used for code blocks and terminals
   - combobox "Monospace font":
     - option "Default" [selected]
