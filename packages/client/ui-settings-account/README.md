@@ -34,7 +34,7 @@ The account menu's Feedback entry opens the Feishu questionnaire in the system b
 
 The sidebar account menu uses the shared Menu surface, backdrop blur, spacing, and row typography; feature styles only size its launcher.
 
-The menu leads with the shell's application commands — About DeepSeek Harness, Check for Updates…, Reload Page and Restart App and Host in a development build, and Quit DeepSeek Harness last — and keeps the macOS-only window visibility commands out. Every command requests its effect from the Electron main process, which owns sender validation and the ordered shutdown; without that preload contract the menu shows the account rows alone.
+The menu leads with the shell's application commands — About DeepSeek Harness, Check for Updates…, Reload Page and Restart App and Host in a development build, and Quit DeepSeek Harness last — and keeps the macOS-only window visibility commands out. A build that opts into revision display with `DSH_CLIENT_REVISION_BADGE=true` prints its `version[-commit]` as a smaller second line on the About row, so a local build reports which build it runs; release builds leave the flag unset and show the label alone. Every command requests its effect from the Electron main process, which owns sender validation and the ordered shutdown; without that preload contract the menu shows the account rows alone.
 
 The account card’s More account information link opens `https://platform.deepseek.com` in the system browser.
 

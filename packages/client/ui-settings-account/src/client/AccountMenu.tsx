@@ -12,6 +12,20 @@ import { LogoutIcon } from './LogoutIcon.tsx'
 import { AccountAvatar } from './AccountAvatar.tsx'
 import css from './AccountMenu.module.css'
 
+/**
+ * Format the local build revision shown under the About row. Release builds
+ * leave `DSH_CLIENT_REVISION_BADGE` unset, so their About row carries the label
+ * alone; a local build that opts in reports the revision it was built from.
+ * @returns `version[-commit]`, or undefined when revision display is off or the build carries no version.
+ */
+function buildRevision(): string | undefined {
+  if (process.env.DSH_CLIENT_REVISION_BADGE !== 'true') return undefined
+  const version = process.env.DSH_CLIENT_VERSION
+  if (version === undefined) return undefined
+  const commit = process.env.DSH_CLIENT_COMMIT_HASH
+  return version + (commit === undefined ? '' : `-${commit}`)
+}
+
 /** Account launcher composed by the settings shell. */
 export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsLocale<'settings.account'> & InjectFace<AccountSectionInjected>
 
@@ -45,8 +59,20 @@ export function AccountMenu({
   const applicationItems: MenuEntry[] = []
   const applicationCommands = new Map<string, () => Promise<void>>()
   if (application !== undefined) {
+    // The build revision rides the About row as a second line, so the row is
+    // the one place a user can read which build they are running.
+    const revision = buildRevision()
     applicationItems.push(
-      { id: 'about', label: t('about'), icon: <IconInfoOutlineMedium size={16} /> },
+      {
+        id: 'about',
+        label: revision === undefined ? t('about') : (
+          <span className={css.aboutItem}>
+            <span>{t('about')}</span>
+            <span className={css.aboutRevision}>{revision}</span>
+          </span>
+        ),
+        icon: <IconInfoOutlineMedium size={16} />,
+      },
       { id: 'updates', label: t('checkUpdates'), icon: <IconDownloadOutlineMedium size={16} /> },
     )
     applicationCommands.set('about', application.about)

@@ -6,3 +6,5 @@
 .avatar { display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; border-radius: 16px; background: var(--dsw-alias-bg-skeleton); color: var(--dsw-alias-label-tertiary); }
 .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .error { color: var(--dsw-alias-state-error-primary); font-size: 12px; }
+.aboutItem { display: flex; flex-direction: column; min-width: 0; }
+.aboutRevision { color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 15px; }

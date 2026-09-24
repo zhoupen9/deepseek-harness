@@ -34,7 +34,7 @@ Desktop 的用量和充值操作在 48px 返回栏下方打开隔离的原生 Pl
 
 侧边栏账号菜单使用公共 Menu 的表面、背景模糊、间距和菜单项排版；功能样式仅设置入口布局。
 
-菜单顶部为外壳应用命令——关于 DeepSeek Harness、检查更新…，开发构建中还有刷新页面和重启应用与 Host，末尾为退出 DeepSeek Harness——且不包含仅 macOS 的窗口可见性命令。各命令均向 Electron 主进程请求执行，发送方校验和有序退出由主进程负责；缺少该 preload 契约时菜单只显示账号相关行。
+菜单顶部为外壳应用命令——关于 DeepSeek Harness、检查更新…，开发构建中还有刷新页面和重启应用与 Host，末尾为退出 DeepSeek Harness——且不包含仅 macOS 的窗口可见性命令。设置 `DSH_CLIENT_REVISION_BADGE=true` 选择显示版本信息的构建会在“关于”一行以更小的第二行文本显示 `version[-commit]`，让本地构建标明自己所运行的构建；发布构建不设置该标志，只显示标签本身。各命令均向 Electron 主进程请求执行，发送方校验和有序退出由主进程负责；缺少该 preload 契约时菜单只显示账号相关行。
 
 账号卡片的“更多账号信息”链接通过系统浏览器打开 `https://platform.deepseek.com`。
 

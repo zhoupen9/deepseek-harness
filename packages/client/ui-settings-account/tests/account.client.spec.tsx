@@ -10,7 +10,7 @@ import { AccountSection, type AccountSectionInjected, type AccountSnapshot } fro
 import type {} from '../src/client/index.ts'
 import { en, zh, type AccountKey } from '../src/client/locales.ts'
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 
 /** One resolved theme snapshot per scheme; the slot's theme hook serves these in the application. */
 const themeOf = (colorScheme: 'light' | 'dark'): ThemeSnapshot => ({
@@ -111,6 +111,47 @@ it.each([en, zh])('opens settings and signs out from the sidebar account menu', 
   await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: copy.signOut })) })
   expect(signOut).toHaveBeenCalledOnce()
   expect(screen.queryByRole('menu')).toBeNull()
+})
+
+/**
+ * Mount the launcher over shell application commands and open its menu.
+ * @param application - Commands the Desktop preload supplies.
+ * @returns the injected operations the caller's assertions inspect.
+ */
+async function openApplicationMenu(application: DesktopApplicationCommands): Promise<AccountSectionInjected> {
+  const operations = mount({ status: 'credential-stored', attempt: null }, en, undefined, undefined, application)
+  cleanup()
+  const { AccountMenu } = await import('../src/client/AccountMenu.tsx')
+  render(<AccountMenu {...({} as GlobalStandardProps)} {...operations}
+    useAccount={selector => selector(operations.hooks.account.getSnapshot())}
+    useTheme={selector => selector(operations.hooks.theme.getSnapshot())} wide openOnboarding={() => {}} openSettings={() => {}}
+    t={key => key in en ? en[key as AccountKey] : key} />)
+  fireEvent.click(screen.getByRole('button', { name: en.menu }))
+  return operations
+}
+
+it('shows the local build revision under the About row when the build opts in', async () => {
+  vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+  vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
+  vi.stubEnv('DSH_CLIENT_COMMIT_HASH', 'abc1234')
+
+  await openApplicationMenu(applicationOf())
+  expect(screen.getByText('1.2.3-rc.4-abc1234')).toBeTruthy()
+})
+
+it('keeps the About row on the release when an opted-in build records no commit', async () => {
+  vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+  vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
+
+  await openApplicationMenu(applicationOf())
+  expect(screen.getByText('1.2.3-rc.4')).toBeTruthy()
+})
+
+it('leaves the About row without build metadata when the build carries no version', async () => {
+  vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+
+  await openApplicationMenu(applicationOf())
+  expect(screen.getByRole('menuitem', { name: en.about }).textContent).toBe(en.about)
 })
 
 it.each([en, zh])('carries the shell application commands in the sidebar account menu', async (copy) => {
