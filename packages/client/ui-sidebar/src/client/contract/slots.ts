@@ -50,12 +50,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * package's 'sidebar' entry; each action receives only the column state.
      */
     'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps }
-    /**
-     * Build revision text below the brand row, above New Session. Declared by
-     * this package's 'sidebar' entry; ui-brand-official renders its opt-in
-     * revision label here so the brand-row wordmark stays clean.
-     */
-    'sidebar.footer.version': { kind: 'single'; scope: 'root'; owner: SidebarFooterVersionOwnerProps }
   }
 }
 
@@ -115,12 +109,6 @@ export interface SidebarFooterActionOwnerProps {
   wide: boolean
 }
 
-/** Owner share of the build revision text below the brand row. */
-export interface SidebarFooterVersionOwnerProps {
-  /** Whether the sidebar renders wide content (false = 56px rail). */
-  wide: boolean
-}
-
 /**
  * Registrant-private injected share (arrives via the register inject
  * factory). The renderer binds the panel metadata source to usePanels.
@@ -155,6 +143,5 @@ export type SidebarRootComponentProps =
     | 'sidebar.workspaces'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
-    | 'sidebar.footer.version'
   >
   & InjectFace<SidebarRootInjected> & PropsLocale<'sidebar'>

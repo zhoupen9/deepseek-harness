@@ -83,9 +83,4 @@ describe('SidebarRoot.module.css', () => {
     )
     expect(declarations('.collapsed .newSession')?.get('justify-content')).toBe('center')
   })
-
-  it('left-aligns the build version seat and centers it on the rail', () => {
-    expect(declarations('.versionArea')?.get('justify-content')).toBe('flex-start')
-    expect(declarations('.collapsed .versionArea')?.get('justify-content')).toBe('center')
-  })
 })

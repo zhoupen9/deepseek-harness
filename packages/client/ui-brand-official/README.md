@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package fills the sidebar brand slots — `sidebar.brand.mark` and `sidebar.brand.name` — with the official DeepSeek Harness mark and name, and renders its opt-in build revision into the `sidebar.footer.version` seat. It registers these occupants only in an `official` client build; other builds register nothing, so shell fallbacks stay visible. The conversation hero slot stays unoccupied in every build: the hero is the animated fish. Choose this package for DeepSeek-branded deployments; deployments with another brand compose a different package into the same slots. It retains no runtime state and contributes nothing to model requests.
+This package gives an `official` client build the DeepSeek Harness mark and name in the sidebar. Other build profiles keep the shell's fish mark and local-build label, while the conversation hero always uses the animated fish. Choose it for deployments branded as DeepSeek Harness; deployments with another identity should provide a replacement brand package. It has no runtime state and does not affect model requests.
 
 ## Table of Contents
 
@@ -31,10 +31,6 @@ Mount this plugin in the browser roster of a deployment whose identity is DeepSe
 
 `DSH_CLIENT_BUILD_PROFILE` selects which brand renders. An `official` build shows the official mark and name in the sidebar; any other value leaves the shell fallbacks — the fish mark and the local-build label — in place. The conversation hero shows the animated hero fish from `dsh-client-ui-conversation` regardless of profile, because that fallback is already the official mark. The plugin still loads and validates in both cases; only the registration is profile-gated.
 
-### Revision text
-
-An `official` build shows the name wordmark without build metadata. A local build that opts into revision display — by setting `DSH_CLIENT_REVISION_BADGE=true` alongside `DSH_CLIENT_BUILD_PROFILE=official` — renders the git revision (`version[-commit]`) as subtle gray text in the `sidebar.footer.version` seat, below the brand row and above New Session. The text is compiled from the same `DSH_CLIENT_VERSION` and `DSH_CLIENT_COMMIT_HASH` values the sidebar's local-build fallback reads, and is omitted when the opt-in is off or version metadata is absent. Official release builds do not set the flag, so their wordmark stays clean.
-
 ### Replacing the brand
 
 A deployment with its own identity leaves this package out and composes another package that occupies the sidebar slots — and the hero slot, which this package leaves on its fallback. Occupying a slot is the only composition route; there is no brand configuration surface here.
@@ -47,7 +43,7 @@ A deployment with its own identity leaves this package out and composes another 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The three occupants install as one declaration-aware registration set: nested `ctx.slots.inject()` calls wait on the sidebar declaration, so the set works whether this row activates before or after the declarer, withdraws all three occupants when the declaration collapses, and leaves no partial brand mix during HMR. The browser half is [`src/client/index.ts`](src/client/index.ts); the node half is an empty Loader seat. The browser title is a build-environment concern (`DSH_CLIENT_TITLE`), outside the slot system.
+The two occupants install as one declaration-aware registration set: nested `ctx.slots.inject()` calls wait on the sidebar declaration, so the set works whether this row activates before or after the declarer, withdraws both occupants when the declaration collapses, and leaves no partial brand mix during HMR. The browser half is [`src/client/index.ts`](src/client/index.ts); the node half is an empty Loader seat. The browser title is a build-environment concern (`DSH_CLIENT_TITLE`), outside the slot system.
 
 </details>
 
@@ -58,7 +54,7 @@ The three occupants install as one declaration-aware registration set: nested `c
 
 Read these pages when the brand surface is not enough. They move from the slots this package occupies to the shell that renders them.
 
-- [ui-sidebar](../ui-sidebar/README.md) — declares `sidebar.brand.mark`, `sidebar.brand.name`, and `sidebar.footer.version`, and renders the brand fallbacks.
+- [ui-sidebar](../ui-sidebar/README.md) — declares `sidebar.brand.mark` and `sidebar.brand.name` and renders their fallbacks.
 - [ui-conversation](../ui-conversation/README.md) — declares `conversation.hero.brand.mark` in the hero.
 - [Web client architecture](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.md) — how browser plugin rows load and register slots.
 

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包向侧栏品牌槽位——`sidebar.brand.mark` 与 `sidebar.brand.name`——填充官方 DeepSeek Harness 标志与名称，并将其可选的构建版本渲染到 `sidebar.footer.version` 席位。它只在 `official` 客户端构建中注册这些填充；其他构建不注册任何内容，因此外壳回退保持可见。会话首屏槽位在所有构建中都保持无填充：首屏就是动画鱼。品牌为 DeepSeek Harness 的部署选择本包；使用其他品牌的部署在相同槽位中组合另一个包。本包不保留运行时状态，也不向模型请求贡献任何内容。
+本包让以 `official` profile 构建的客户端在侧栏显示 DeepSeek Harness 标志与名称。其他构建 profile 保留外壳的鱼形标志与本地构建标签，会话首屏则始终使用动画鱼。品牌为 DeepSeek Harness 的部署应选择本包；使用其他品牌的部署应提供替代品牌包。本包不保留运行时状态，也不影响模型请求。
 
 ## 目录
 
@@ -31,10 +31,6 @@ kind: "package-reference"
 
 `DSH_CLIENT_BUILD_PROFILE` 决定渲染哪个品牌。`official` 构建在侧栏显示官方标志与名称；任何其他取值都让外壳回退——鱼形标志与本地构建标签——保持原样。会话首屏无论 profile 如何都显示来自 `dsh-client-ui-conversation` 的动画首屏鱼，因为这个回退本身就是官方标志。两种情况下插件都会照常加载并通过校验；只有注册受 profile 门控。
 
-### 版本文本
-
-`official` 构建显示不带构建元数据的名称字标。选择显示版本信息的本地构建——在 `DSH_CLIENT_BUILD_PROFILE=official` 之外再设置 `DSH_CLIENT_REVISION_BADGE=true`——会在品牌行下方、New Session 上方的 `sidebar.footer.version` 席位以淡灰色文本渲染 git 版本（`version[-commit]`）。该文本由与侧栏本地构建回退所读取相同的 `DSH_CLIENT_VERSION` 与 `DSH_CLIENT_COMMIT_HASH` 值拼装，并在未选择或缺少版本元数据时省略。官方发布构建不设置该标志，因此其字标保持干净。
-
 ### 替换品牌
 
 自有身份的部署不组合本包，而是组合另一个占据侧栏 slot——以及本包留给回退的首屏 slot——的包。占据 slot 是唯一的组合路径；这里不存在任何品牌配置面。
@@ -47,7 +43,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-三个填充作为一组声明感知的注册安装：嵌套的 `ctx.slots.inject()` 调用等待侧栏声明，因此无论本行在声明者之前还是之后激活，这组注册都能工作；声明消失时全部三个填充一并撤回，HMR 期间也不会留下残缺的品牌混合。浏览器半部是 [`src/client/index.ts`](src/client/index.ts)；node 半部是一个空 Loader 座位。浏览器标题是构建环境的事（`DSH_CLIENT_TITLE`），不在 slot 系统之内。
+两个填充作为一组声明感知的注册安装：嵌套的 `ctx.slots.inject()` 调用等待侧栏声明，因此无论本行在声明者之前还是之后激活，这组注册都能工作；声明消失时两个填充一并撤回，HMR 期间也不会留下残缺的品牌混合。浏览器半部是 [`src/client/index.ts`](src/client/index.ts)；node 半部是一个空 Loader 座位。浏览器标题是构建环境的事（`DSH_CLIENT_TITLE`），不在 slot 系统之内。
 
 </details>
 
@@ -58,7 +54,7 @@ kind: "package-reference"
 
 当品牌面不够用时阅读以下页面。它们从本包占据的 slot 进入渲染这些 slot 的外壳。
 
-- [ui-sidebar](../ui-sidebar/README.zh.md)——声明 `sidebar.brand.mark`、`sidebar.brand.name` 与 `sidebar.footer.version` 并渲染品牌回退。
+- [ui-sidebar](../ui-sidebar/README.zh.md)——声明 `sidebar.brand.mark` 与 `sidebar.brand.name` 并渲染其回退。
 - [ui-conversation](../ui-conversation/README.zh.md)——在首屏声明 `conversation.hero.brand.mark`。
 - [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——浏览器插件行如何加载并注册 slot。
 

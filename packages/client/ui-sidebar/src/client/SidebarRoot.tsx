@@ -8,7 +8,7 @@
  * same top-down order) on one fade that ends with the slide. The bottom-pinned
  * settings control only fades. The workspace/session browsing region between
  * global panel rows and the foot is the `sidebar.workspaces` registrant's,
- * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the shell
+ * and the foot holds `sidebar.footer.action` plus `sidebar.settings`; the shell
  * hands them the wide flag (plus an expand request callback for the browser).
  *
  * The column also owns whether the scroll regions nested in it draw a
@@ -248,10 +248,6 @@ export function SidebarRoot({
             )
         })()}
         {!darwinDesktop && toggle}
-      </div>
-
-      <div className={css.versionArea}>
-        {renderSlot('sidebar.footer.version', { wide })}
       </div>
 
       {/* Expanded, the button carries its own label — tooltip only on the rail. */}

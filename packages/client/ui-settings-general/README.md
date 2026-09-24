@@ -35,7 +35,7 @@ In Desktop, the account-row update control shows availability, progress, verific
 
 ### The General section
 
-The current release version appears at the bottom of General Settings in Web and Desktop, using the build’s `DSH_CLIENT_VERSION` metadata and the active language. Partial builds without version metadata omit the row.
+The current release version appears at the bottom of General Settings in Web and Desktop, using the build’s `DSH_CLIENT_VERSION` metadata and the active language. A build that opts into revision display with `DSH_CLIENT_REVISION_BADGE=true` appends its `DSH_CLIENT_COMMIT_HASH`, so a local build reads `version-commit`; release builds leave the flag unset and stay on the version. Partial builds without version metadata omit the row.
 
 The Developer tools switch controls the shared preference described by [ui-settings](../ui-settings/README.md#use-this-package). It is available in both Web and desktop, follows accepted changes immediately, and disables duplicate input while a write settles. A failed write displays localized retry guidance.
 

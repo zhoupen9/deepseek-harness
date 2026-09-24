@@ -32,6 +32,12 @@ afterEach(() => { cleanup(); vi.unstubAllEnvs() })
 // The seat's key domain is settings ∪ common; the stub answers from the
 // package dictionary and falls back to the key like the real chain.
 const t: TriggerContentProps['t'] = key => (en as Record<string, string>)[key] ?? key
+/** The same seat with `{name}` substitution, for rows that render parameters. */
+const tWithParams: TriggerContentProps['t'] = (key, params) => {
+  let text = (en as Record<string, string>)[key] ?? key
+  for (const [name, value] of Object.entries(params ?? {})) text = text.replace(`{${name}}`, String(value))
+  return text
+}
 
 // Global standard kit stubs: none of these components consume the hooks.
 const unusedHook = (() => { throw new Error('unused by settings-general components') }) as never
@@ -238,6 +244,21 @@ describe('current version', () => {
     render(<CurrentVersionRow {...kit} t={translate} />)
     expect(screen.getByText(expected)).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('appends the commit when the build opts into revision display', () => {
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
+    vi.stubEnv('DSH_CLIENT_COMMIT_HASH', 'abc1234')
+    vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+    render(<CurrentVersionRow {...kit} t={tWithParams} />)
+    expect(screen.getByText('Current version: 1.2.3-rc.4-abc1234')).toBeTruthy()
+  })
+
+  it('keeps the release alone when an opted-in build records no commit', () => {
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
+    vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+    render(<CurrentVersionRow {...kit} t={tWithParams} />)
+    expect(screen.getByText('Current version: 1.2.3-rc.4')).toBeTruthy()
   })
 
   it('omits the row when a partial build has no version metadata', () => {

@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ReactNode } from 'react'
 import type {
-  SidebarFooterActionOwnerProps, SidebarFooterVersionOwnerProps, SidebarRootComponentProps,
+  SidebarFooterActionOwnerProps, SidebarRootComponentProps,
   SidebarSectionOwnerProps, SidebarSettingsOwnerProps,
 } from '../src/client/contract/slots.ts'
 import { HeaderLeadingControls, type HeaderLeadingControlsProps } from '../src/client/HeaderLeadingControls.tsx'
@@ -42,7 +42,6 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   let regionOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
-  let versionOwner: SidebarFooterVersionOwnerProps | undefined
   const brandMark = <span data-testid="custom-brand-mark">M</span>
   const brandName = <span data-testid="custom-brand-name">Custom Brand</span>
   let current = { collapsed, width }
@@ -55,7 +54,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
         key: string,
-        owner: SidebarFooterActionOwnerProps | SidebarFooterVersionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
+        owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
       ) => {
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
@@ -67,10 +66,6 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
         if (key === 'sidebar.footer.action') {
           footerActionOwner = owner
           return <div data-testid="footer-action-seat" data-wide={owner.wide} />
-        }
-        if (key === 'sidebar.footer.version') {
-          versionOwner = owner
-          return <div data-testid="version-seat" data-wide={owner.wide} />
         }
         regionOwner = owner as SidebarSectionOwnerProps
         return <div data-testid="region" data-wide={owner.wide} />
@@ -92,10 +87,6 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
     footerActionOwner: () => {
       if (footerActionOwner === undefined) throw new Error('footer action owner not rendered')
       return footerActionOwner
-    },
-    versionOwner: () => {
-      if (versionOwner === undefined) throw new Error('version owner not rendered')
-      return versionOwner
     },
     rerender(next: Partial<typeof current>) {
       current = { ...current, ...next }
@@ -176,7 +167,6 @@ describe('SidebarRoot shell', () => {
     // The settings seat rides the same wide flag (ui-settings renders the row).
     expect(b.settingsOwner().wide).toBe(true)
     expect(b.footerActionOwner().wide).toBe(true)
-    expect(b.versionOwner().wide).toBe(true)
     // Expanded: the request is a no-op (no accidental collapse).
     b.regionOwner().expandSidebar()
     expect(b.toggleSidebar).not.toHaveBeenCalled()
@@ -192,7 +182,6 @@ describe('SidebarRoot shell', () => {
     b.rerender({})
     expect(b.regionOwner().wide).toBe(false)
     expect(b.footerActionOwner().wide).toBe(false)
-    expect(b.versionOwner().wide).toBe(false)
     expect(screen.getByTestId('region')).toBeTruthy()
     b.regionOwner().expandSidebar()
     expect(b.toggleSidebar).toHaveBeenCalledOnce()

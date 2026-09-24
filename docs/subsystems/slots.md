@@ -117,7 +117,6 @@ root
 │  ├─ sidebar.brand.name
 │  ├─ sidebar.panellist
 │  ├─ sidebar.footer.action
-│  ├─ sidebar.footer.version
 │  ├─ sidebar.workspaces
 │  │  ├─ sidebar.workspaces.directoryFlow
 │  │  ├─ sidebar.workspaces.session.menu.item
