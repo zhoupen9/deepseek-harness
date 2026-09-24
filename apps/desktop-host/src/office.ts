@@ -25,9 +25,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   await ctx.plugin(workspaceDependencies, config)
   // The payload sits beside the application archive, so the resolved manifest is already physical.
   const packageRoot = dirname(fileURLToPath(import.meta.resolve('@deepseek-ai/libreoffice-kit/package.json')))
+  // A system-runtime payload declares absolute interpreters in `external` instead of a bundled tree.
+  const manifest = await workspaceDependencies.readPrimaryRuntime(config.source)
+  const node = workspaceDependencies.workspaceDependencyPaths(config.source, manifest).node
+  if (node === undefined) throw new Error('desktop-office: the primary runtime declares no Node.js executable')
   await ctx.plugin(officeSkills, {
     assetRoot: join(dirname(config.source), 'office-skills'),
-    node: join(config.source, 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
+    node,
     cli: join(packageRoot, 'lib', 'cli.js'),
   })
 }
