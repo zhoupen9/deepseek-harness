@@ -45,6 +45,16 @@ _exclude_pi_ai=${_exclude_pi_ai:-0}
 # but add a few minutes to every package build. Only linux-x64 accepts
 # --skip-runtime-smoke.
 _skip_runtime_smoke=${_skip_runtime_smoke:-1}
+# pnpm caches every package it downloads in a content-addressable store, but it
+# revalidates registry metadata on each install unless told otherwise. These
+# knobs keep repeat builds off the network: `_pnpm_offline=1` refuses downloads
+# (a missing package fails the build) once the store is complete, `_pnpm_store`
+# pins the store when the default location would change between builds, and
+# `_npm_mirror` routes pnpm's metadata/tarball fetches and Corepack's pnpm
+# download through a mirror.
+_pnpm_offline=${_pnpm_offline:-0}
+_pnpm_store=${_pnpm_store:-}
+_npm_mirror=${_npm_mirror:-}
 # node-pty and koffi compile native addons; python + base-devel (gcc/make)
 # cover that. corepack activates the pnpm version pinned in package.json. The
 # desktop payload uses the build host's Node.js, pnpm and Python packages
@@ -69,6 +79,17 @@ pkgver() {
 
 prepare() {
   cd "$srcdir/deepseek-harness"
+  # Reuse already-downloaded packages: `--prefer-offline` skips registry
+  # metadata revalidation and only fetches what the store lacks; the knob
+  # exports below carry `_pnpm_offline`, `_pnpm_store` and `_npm_mirror` into
+  # the install (and into later `build()` subprocesses).
+  export pnpm_config_prefer_offline=true
+  if [[ "$_pnpm_offline" == 1 ]]; then export pnpm_config_offline=true; fi
+  if [[ -n "$_pnpm_store" ]]; then export pnpm_config_store_dir="$_pnpm_store"; fi
+  if [[ -n "$_npm_mirror" ]]; then
+    export COREPACK_NPM_REGISTRY="$_npm_mirror"
+    export pnpm_config_registry="$_npm_mirror"
+  fi
   # The node:url browser stub (apps/web/src/node-url-stub.ts) and its vite
   # alias already exist in the electron branch, so no patch is needed here.
   corepack prepare pnpm@11.7.0 --activate
@@ -99,7 +120,9 @@ build() {
   # and assembles the application against the distribution Electron instead of
   # downloading one of its own.
   local smoke_args=()
-  [[ "$_skip_runtime_smoke" == 1 ]] && smoke_args+=(--skip-runtime-smoke)
+  if [[ "$_skip_runtime_smoke" == 1 ]]; then
+    smoke_args+=(--skip-runtime-smoke)
+  fi
   DSH_DESKTOP_SYSTEM_RUNTIME=1 \
     DSH_DESKTOP_SYSTEM_PYTHON=/usr/bin/python3 \
     DSH_DESKTOP_SYSTEM_NODE=/usr/bin/node \
