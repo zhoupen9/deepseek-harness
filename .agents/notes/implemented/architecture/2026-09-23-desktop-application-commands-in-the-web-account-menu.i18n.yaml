@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-23-desktop-application-commands-in-the-web-account-menu.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-23-desktop-application-commands-in-the-web-account-menu.md
-2026-09-23-desktop-application-commands-in-the-web-account-menu.md: cadd32122c3b49f6b575c0500bf4e02fd3c7b23a
-2026-09-23-desktop-application-commands-in-the-web-account-menu.zh.md: afec3844a8b4de4759a98ecc2de02e69ab0801db
+/agent-note-desktop-application-commands-in-the-web-account-menu:
+  en: 1df835b63e16aad5
+  zh: f19f4d1e24b9a78f
+/agent-note-desktop-application-commands-in-the-web-account-menu/problem:
+  en: 26e75114fb21f205
+  zh: e7427dc870320f06
+/agent-note-desktop-application-commands-in-the-web-account-menu/decision:
+  en: 7d83b2ee78ae06e9
+  zh: 551cf77e54ac5425
+/agent-note-desktop-application-commands-in-the-web-account-menu/alternatives-considered:
+  en: e132e8e037b6299d
+  zh: 19ec2e9c7e77e9c7
+/agent-note-desktop-application-commands-in-the-web-account-menu/consequences:
+  en: a7943533678983d6
+  zh: d3a38cd03998f262
+/agent-note-desktop-application-commands-in-the-web-account-menu/testing:
+  en: 7ac77b5023a03d12
+  zh: 0d33451e1712c52c
+/agent-note-desktop-application-commands-in-the-web-account-menu/related:
+  en: 4c2cecb8d9d19589
+  zh: c0d3fc256ac0949d

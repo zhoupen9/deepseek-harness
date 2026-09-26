@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-31-chat-file-open-view-routing.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-31-chat-file-open-view-routing.md
-2026-08-31-chat-file-open-view-routing.md: 6c31d944f6a5c39e746eac3539855590bfdbd3f1
-2026-08-31-chat-file-open-view-routing.zh.md: 74dfdac25e8068ede66b9534fa708adbdadabfc0
+/agent-note-chat-file-opens-route-to-the-files-view-when-one-is-registered:
+  en: 506ca909227d161b
+  zh: 1eaf440b8c7177ba
+/agent-note-chat-file-opens-route-to-the-files-view-when-one-is-registered/problem:
+  en: 0b929b62408c0dbf
+  zh: 2c0c673895c2ceb7
+/agent-note-chat-file-opens-route-to-the-files-view-when-one-is-registered/decision:
+  en: 6117a89df8eb56f4
+  zh: aa28db7ed7e8909c
+/agent-note-chat-file-opens-route-to-the-files-view-when-one-is-registered/alternatives-considered:
+  en: 8cd0fb3c55fcb231
+  zh: e92a12bd9d549c19
+/agent-note-chat-file-opens-route-to-the-files-view-when-one-is-registered/consequences:
+  en: cd4c0040f4c5e09c
+  zh: 005eba44fb4f5937

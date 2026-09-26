@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/api/git-controller/README.md
-README.md: e3e89b99042b8a5e57bd5d1c5d70cb907c76df09
-README.zh.md: 504e23341d7d0ee15bead90b97ff5ba3cedd04f6
+/:
+  en: fb95bef7c029f44f
+  zh: f6222c0662862e8e
+/git-controller:
+  en: 4508d4c147fa6e36
+  zh: 8193da61a210352e
+/git-controller/summary:
+  en: b34413e28181ece2
+  zh: 56cd318fdb97cc9a
+/git-controller/table-of-contents:
+  en: 4e53164159b5ce41
+  zh: 89582dc0294d0776
+/git-controller/use-this-package:
+  en: f7d0377f34bee8cd
+  zh: a960aee03f0c5aeb
+/git-controller/model-experience:
+  en: 24182906b982bca5
+  zh: 7174e72caf983bea
+/git-controller/model-experience/kv-cache-effect:
+  en: 703bb85136ba0a5b
+  zh: 9cdf552628e4b32c
+/git-controller/known-limitations-and-deferred-work:
+  en: 2c4b23c08f89487f
+  zh: a2f28e8cb406f52e
+/git-controller/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 05da830ec7d6571e

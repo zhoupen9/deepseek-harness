@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-30-official-brand-revision-badge.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-30-official-brand-revision-badge.md
-2026-08-30-official-brand-revision-badge.md: 53929c2c8828128a26fb135e31de0895b34e9c1d
-2026-08-30-official-brand-revision-badge.zh.md: 931a0f29d4208520204633a49b53c2a22116bb91
+/agent-note-official-brand-with-a-footer-revision-label:
+  en: e9524e32a654ba2e
+  zh: 2d325a27806dfbd5
+/agent-note-official-brand-with-a-footer-revision-label/problem:
+  en: 7c4a168ff9acea7b
+  zh: 4225e2e04f299002
+/agent-note-official-brand-with-a-footer-revision-label/decision:
+  en: a2fe7a80b6c3bf09
+  zh: 5f0d34e31556466c
+/agent-note-official-brand-with-a-footer-revision-label/alternatives-considered:
+  en: b756e4fe9e8d5737
+  zh: 03d13c2fd0134e7e
+/agent-note-official-brand-with-a-footer-revision-label/consequences:
+  en: 67fbcdffa916e10c
+  zh: 5c5e5ce0d349d43f
+/agent-note-official-brand-with-a-footer-revision-label/verification:
+  en: 664f638d97d82680
+  zh: 7666c80107c26a19

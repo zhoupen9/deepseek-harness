@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-30-workspace-files-host-primitives.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-30-workspace-files-host-primitives.md
-2026-08-30-workspace-files-host-primitives.md: 6e0b600532038a233fb333c19c1b6ea9c05bebb6
-2026-08-30-workspace-files-host-primitives.zh.md: cdcaf5a5ea2c257a26b6f4f80c7aedc7fda4144a
+/agent-note-workspace-files-host-primitives:
+  en: e11ec48d2c251a89
+  zh: b77b8eebe1d951e1
+/agent-note-workspace-files-host-primitives/problem:
+  en: 451d253a9de2bc3b
+  zh: a0eb79ee7289ec91
+/agent-note-workspace-files-host-primitives/decision:
+  en: 3adf226c02f2ab08
+  zh: eaeda7fc1703f13b
+/agent-note-workspace-files-host-primitives/alternatives-considered:
+  en: 36c0d8e056810459
+  zh: 49ba240fdb0070a3
+/agent-note-workspace-files-host-primitives/consequences:
+  en: de63e47c00df48a8
+  zh: b87d2cd091bd721b
+/agent-note-workspace-files-host-primitives/testing:
+  en: d5bf5a2876807467
+  zh: 4d2573297c95da96

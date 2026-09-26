@@ -1,5 +1,6 @@
 /** Typed preload operations exposed only by the Electron shell. */
 
+import type { DesktopKeyboardApi, DesktopShortcutsApi } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type { IpcMainInvokeEvent } from 'electron'
 import type { DesktopBrowserBridge } from '@deepseek-ai/dsh-client-ui-sidebar-browser/types'
 
@@ -9,8 +10,16 @@ export const DESKTOP_IPC = {
   applicationQuit: 'dsh-desktop:application-quit',
   applicationReload: 'dsh-desktop:application-reload',
   applicationRestart: 'dsh-desktop:application-restart',
+  shortcutsInput: 'dsh-desktop:shortcuts-input',
+  shortcutsCloseWindow: 'dsh-desktop:shortcuts-close-window',
+  shortcutsGet: 'dsh-desktop:shortcuts-get',
+  shortcutsEdit: 'dsh-desktop:shortcuts-edit',
+  shortcutsChanged: 'dsh-desktop:shortcuts-changed',
+  shortcutsRecording: 'dsh-desktop:shortcuts-recording',
   boot: 'dsh-desktop:boot',
   enterWorkspace: 'dsh-desktop:enter-workspace',
+  onboardingActive: 'dsh-desktop:onboarding-active',
+  onboardingApiKey: 'dsh-desktop:onboarding-api-key',
   bootFailed: 'dsh-desktop:boot-failed',
   browserAcquire: 'dsh-desktop:browser-acquire',
   browserRelease: 'dsh-desktop:browser-release',
@@ -95,6 +104,8 @@ export interface DshDesktopProductApi {
   readonly protocolVersion: 1
   readonly browser: DesktopBrowserBridge
   readonly application: DshDesktopApplicationApi
+  readonly keyboard: DesktopKeyboardApi
+  readonly shortcuts: DesktopShortcutsApi
   readonly updates: {
     status(): Promise<DesktopUpdatePresentation>
     open(): Promise<void>

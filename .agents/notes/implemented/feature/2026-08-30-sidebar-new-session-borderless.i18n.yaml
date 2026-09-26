@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-30-sidebar-new-session-borderless.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-30-sidebar-new-session-borderless.md
-2026-08-30-sidebar-new-session-borderless.md: 1c16c4938fe1b0cc57bb03d8d3716566f149cf3e
-2026-08-30-sidebar-new-session-borderless.zh.md: 85e9bf2ecb0907e9197440a242abbe3b9d6b08e6
+/agent-note-sidebar-new-session-borderless-left-aligned-control:
+  en: f2ecbeb824db895b
+  zh: ad114dcd524fc083
+/agent-note-sidebar-new-session-borderless-left-aligned-control/problem:
+  en: c10f54514f54463c
+  zh: 434d53752d600c36
+/agent-note-sidebar-new-session-borderless-left-aligned-control/decision:
+  en: e1f418ed25b851a4
+  zh: 14a8dbf702699cad
+/agent-note-sidebar-new-session-borderless-left-aligned-control/alternatives-considered:
+  en: 8195c675eb6213ac
+  zh: 3df0858aba932207
+/agent-note-sidebar-new-session-borderless-left-aligned-control/consequences:
+  en: aa5bb2ba7e6d70c6
+  zh: b531f2737af5c4d2
+/agent-note-sidebar-new-session-borderless-left-aligned-control/verification:
+  en: 01fe107266ef5d2d
+  zh: a2eca6648f76b324

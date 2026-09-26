@@ -4,7 +4,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { collectConfigCatalog } from './gen-config-catalog.ts'
+import { collectConfigCatalog, render, type CatalogEntry } from './gen-config-catalog.ts'
+import { computeTranslationPairingRecord, translationPairPaths } from './translation-pairing-record.ts'
+import { generatedRegions } from './translation-pairing.ts'
 
 const roots: string[] = []
 const sharedSchema = `
@@ -26,6 +28,19 @@ export const Shared = Schema.union([
   Schema.object({ mode: Schema.const('launch'), headless: Schema.boolean() }),
   Schema.object({ mode: Schema.const('attach'), endpoint: Schema.string() }),
 ])
+`
+
+/** Runtime schema whose object keys come from string-literal const identities. */
+const computedSchema = (): string => `
+import Schema from '@deepseek-ai/schemastery'
+export interface BrowserConfig {
+  /** Browser ownership mode. */
+  mode: 'launch'
+  /** Hide the launched browser. */
+  headless: boolean
+}
+const HEADLESS_FIELD = 'headless'
+export const Shared = Schema.object({ mode: Schema.const('launch'), [HEADLESS_FIELD]: Schema.boolean() })
 `
 
 function fixture(schema = sharedSchema) {
@@ -77,6 +92,17 @@ describe('shared config schema catalog', () => {
     const { root } = fixture(sharedSchema.replace('export const Shared = Schema.union', 'export const Shared = Base\nconst Base = Schema.union'))
     const provider = collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')
     expect(new Set(provider?.schemaKeys)).toEqual(new Set(['mode', 'headless', 'endpoint']))
+  })
+
+  it('resolves a computed key that names a string-literal const', () => {
+    const { root } = fixture(computedSchema())
+    const provider = collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')
+    expect(new Set(provider?.schemaKeys)).toEqual(new Set(['mode', 'headless']))
+  })
+
+  it('rejects a computed key that does not name a string-literal const', () => {
+    const { root } = fixture(computedSchema().replace("const HEADLESS_FIELD = 'headless'", 'const HEADLESS_FIELD = String(1)'))
+    expect(() => collectConfigCatalog(root)).toThrow("schema object key 'HEADLESS_FIELD' does not resolve to a string-literal const")
   })
 
   it('rejects type-only imports used as runtime schemas', () => {
@@ -135,5 +161,43 @@ export const Shared = makeSchema()
 export const Shared = Schema.union([MissingSchema])
 `)
     expect(() => collectConfigCatalog(root)).toThrow("schema alias 'MissingSchema' must name a const or named value import")
+  })
+})
+
+describe('config catalog rendering', () => {
+  const entries = (inject: string[]): CatalogEntry[] => [
+    {
+      pkg: '@deepseek-ai/dsh-demo',
+      dir: 'packages/demo/demo',
+      entry: 'packages/demo/demo/src/index.ts',
+      kind: 'config',
+      inject,
+      pastes: [{ text: 'export interface DemoConfig {}', source: 'packages/demo/demo/src/index.ts:3' }],
+    },
+    { pkg: '@deepseek-ai/dsh-plain', dir: 'packages/demo/plain', entry: 'packages/demo/plain/src/index.ts', kind: 'no-config', inject },
+  ]
+  const paths = translationPairPaths('docs/config-catalog.md')
+  const record = (inject: string[]) => computeTranslationPairingRecord(
+    paths,
+    render(entries(inject), 'en'),
+    render(entries(inject), 'zh'),
+    { repoRoot: process.cwd(), isTranslationPairSource: () => false },
+  )
+
+  it('keeps package data in generated regions shared by both languages', () => {
+    const en = generatedRegions(render(entries(['jobs']), 'en')).map(region => region.text)
+    expect(en.map(region => region.split('\n')[0])).toEqual([
+      '<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-demo -->',
+      '<!-- BEGIN GENERATED config-catalog:no-config -->',
+      '<!-- BEGIN GENERATED config-catalog:seam -->',
+      '<!-- BEGIN GENERATED config-catalog:library -->',
+    ])
+    expect(generatedRegions(render(entries(['jobs']), 'zh')).map(region => region.text)).toEqual(en)
+    expect(en[0]).toContain('- `inject`: `jobs`')
+  })
+
+  it('leaves the consistency record unchanged when only package data changes', () => {
+    expect(record(['jobs', 'typert'])).toEqual(record(['jobs']))
+    expect([...record(['jobs']).keys()].some(key => key.includes('dsh-demo'))).toBe(false)
   })
 })

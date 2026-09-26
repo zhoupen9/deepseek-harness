@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-31-git-history-host-primitives.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-31-git-history-host-primitives.md
-2026-08-31-git-history-host-primitives.md: 3775973f8f4e0252f9d4d03280d9635e061fde8b
-2026-08-31-git-history-host-primitives.zh.md: 8634b3ed39baad8d4debde367fb7f479e4d9d864
+/agent-note-git-history-host-primitives:
+  en: dce2129ece3e8581
+  zh: c6ce6cbcdb58e202
+/agent-note-git-history-host-primitives/problem:
+  en: d6965c41c6c8f8e8
+  zh: ce92d178b6c21fa8
+/agent-note-git-history-host-primitives/decision:
+  en: 2bbbcf3ad88108dd
+  zh: 0f9fb1fcba8aa079
+/agent-note-git-history-host-primitives/alternatives-considered:
+  en: 93c57bbfb013622f
+  zh: 3cc14378452b280f
+/agent-note-git-history-host-primitives/consequences:
+  en: bb86fdba1dfa3dda
+  zh: 1a0acbe2b877a404
+/agent-note-git-history-host-primitives/testing:
+  en: 0b0ae0def0775363
+  zh: e2856bb7efb9cf61
