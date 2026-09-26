@@ -68,6 +68,22 @@ describe('RepositoryCleaner', () => {
     expect(existsSync(join(root, 'products/shell/lib'))).toBe(true)
   })
 
+  it('removes a dedicated output directory directly under a lib directory', async () => {
+    const root = fixture()
+    write(join(root, 'tsconfig.json'), JSON.stringify({ files: [], references: [{ path: './tsconfig.desktop-keyboard-tests.json' }] }))
+    write(join(root, 'tsconfig.desktop-keyboard-tests.json'), JSON.stringify({
+      compilerOptions: { composite: true, outDir: 'lib/desktop-keyboard-test-types' },
+      include: ['src'],
+    }))
+    write(join(root, 'src/index.ts'), 'export {}\n')
+    write(join(root, 'lib/desktop-keyboard-test-types/tsconfig.desktop-keyboard-tests.tsbuildinfo'))
+
+    await new RepositoryCleaner(root).clean()
+
+    expect(existsSync(join(root, 'lib/desktop-keyboard-test-types'))).toBe(false)
+    expect(existsSync(join(root, 'src/index.ts'))).toBe(true)
+  })
+
   it('removes the native Landlock entry output and solution build info', async () => {
     const root = fixture()
     const entry = 'native/system/packages/entry'
