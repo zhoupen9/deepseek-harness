@@ -45,15 +45,16 @@ _exclude_pi_ai=${_exclude_pi_ai:-0}
 # but add a few minutes to every package build. Only linux-x64 accepts
 # --skip-runtime-smoke.
 _skip_runtime_smoke=${_skip_runtime_smoke:-1}
-# pnpm caches every package it downloads in a content-addressable store, but it
-# revalidates registry metadata on each install unless told otherwise. These
-# knobs keep repeat builds off the network: `_pnpm_offline=1` refuses downloads
-# (a missing package fails the build) once the store is complete, `_pnpm_store`
-# pins the store when the default location would change between builds, and
-# `_npm_mirror` routes pnpm's metadata/tarball fetches and Corepack's pnpm
-# download through a mirror.
+# pnpm caches every package it downloads in a content-addressable store and
+# every registry response in a metadata cache, but it revalidates metadata on
+# each install unless told otherwise. These knobs keep repeat builds off the
+# network: `_pnpm_offline=1` refuses downloads (a missing package fails the
+# build) once the store is complete, `_pnpm_store`/`_pnpm_cache_home` pin the
+# cache when the defaults would change between builds, and `_npm_mirror` routes
+# pnpm's metadata/tarball fetches and Corepack's pnpm download through a mirror.
 _pnpm_offline=${_pnpm_offline:-0}
 _pnpm_store=${_pnpm_store:-}
+_pnpm_cache_home=${_pnpm_cache_home:-}
 _npm_mirror=${_npm_mirror:-}
 # node-pty and koffi compile native addons; python + base-devel (gcc/make)
 # cover that. corepack activates the pnpm version pinned in package.json. The
@@ -77,15 +78,22 @@ pkgver() {
   node -p "require('./package.json').version.replace('-rc.', '_rc.').replace('-', '_')"
 }
 
+# Resolve the pnpm store root and cache home the build shares. Both default to
+# what pnpm itself resolves in this checkout, so the workspace install, the
+# Desktop runtime preparation and repeat builds reuse one warm set. Called from
+# prepare and build because `makepkg --log` runs each function in a subshell.
+resolve_pnpm_cache_paths() {
+  if [[ -z "$_pnpm_store" ]]; then _pnpm_store="$(dirname "$(pnpm store path)")"; fi
+  if [[ -z "$_pnpm_cache_home" ]]; then _pnpm_cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"; fi
+}
+
 prepare() {
   cd "$srcdir/deepseek-harness"
-  # Reuse already-downloaded packages: `--prefer-offline` skips registry
-  # metadata revalidation and only fetches what the store lacks; the knob
-  # exports below carry `_pnpm_offline`, `_pnpm_store` and `_npm_mirror` into
-  # the install (and into later `build()` subprocesses).
+  # Reuse already-downloaded packages: pinning pnpm's store and metadata cache
+  # keeps the workspace install, the Desktop runtime preparation and repeat
+  # builds on one warm set, and `--prefer-offline` stops metadata revalidation.
   export pnpm_config_prefer_offline=true
   if [[ "$_pnpm_offline" == 1 ]]; then export pnpm_config_offline=true; fi
-  if [[ -n "$_pnpm_store" ]]; then export pnpm_config_store_dir="$_pnpm_store"; fi
   if [[ -n "$_npm_mirror" ]]; then
     export COREPACK_NPM_REGISTRY="$_npm_mirror"
     export pnpm_config_registry="$_npm_mirror"
@@ -93,10 +101,12 @@ prepare() {
   # The node:url browser stub (apps/web/src/node-url-stub.ts) and its vite
   # alias already exist in the electron branch, so no patch is needed here.
   corepack prepare pnpm@11.7.0 --activate
+  resolve_pnpm_cache_paths
+  export pnpm_config_store_dir="$_pnpm_store"
   # Packaging assembles the application against the distribution Electron
   # (DSH_DESKTOP_SYSTEM_ELECTRON below), so Electron's own install script must
   # not download the ~100 MB copy this build never uses.
-  ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile
+  XDG_CACHE_HOME="$_pnpm_cache_home" ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile
   # The Linux packaging reads apps/desktop/.env.linux (see
   # scripts/desktop-package-environment.mjs). The file is git-ignored, so the
   # clone lacks it; copy the local copy from the checkout instead of committing
@@ -123,11 +133,19 @@ build() {
   if [[ "$_skip_runtime_smoke" == 1 ]]; then
     smoke_args+=(--skip-runtime-smoke)
   fi
+  # The Desktop runtime preparation installs its own production closure through
+  # a bundled pnpm; hand it the same store and cache so it reuses what the
+  # workspace install already downloaded instead of fetching the closure again.
+  resolve_pnpm_cache_paths
   DSH_DESKTOP_SYSTEM_RUNTIME=1 \
     DSH_DESKTOP_SYSTEM_PYTHON=/usr/bin/python3 \
     DSH_DESKTOP_SYSTEM_NODE=/usr/bin/node \
     DSH_DESKTOP_SYSTEM_PNPM=/usr/bin/pnpm \
     DSH_DESKTOP_SYSTEM_ELECTRON=/usr/lib/electron \
+    DSH_DESKTOP_NPM_STORE_DIR="$_pnpm_store" \
+    DSH_DESKTOP_NPM_CACHE_HOME="$_pnpm_cache_home" \
+    DSH_DESKTOP_NPM_PREFER_OFFLINE=1 \
+    DSH_DESKTOP_NPM_OFFLINE="$_pnpm_offline" \
     pnpm run package:desktop:linux:x64:dir "${smoke_args[@]}"
   # Stage the payload outside the workspace tree: the runtime prune below
   # deletes non-runtime workspace members, apps/desktop among them. Only

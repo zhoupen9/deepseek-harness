@@ -37,9 +37,12 @@ const APP_ROOT = resolve(import.meta.dirname, '..')
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
 const DSH_OUTPUT_ROOT = BUILD_PATHS.dsh
 const BUILD_ROOT = mkdtempSync(join(tmpdir(), 'dsh-desktop-runtime-'))
-const STORE_ROOT = join(BUILD_ROOT, 'store')
+/** pnpm store the runtime install reads; `DSH_DESKTOP_NPM_STORE_DIR` reuses a warm store so repeat builds skip downloads. */
+const STORE_ROOT = process.env.DSH_DESKTOP_NPM_STORE_DIR?.trim() || join(BUILD_ROOT, 'store')
 const RUNTIME_ROOT = BUILD_PATHS.runtime
 const PNPM_BUILD_STATE = BUILD_PATHS.dshPnpm
+/** pnpm's XDG cache home; `DSH_DESKTOP_NPM_CACHE_HOME` reuses warm registry metadata. */
+const CACHE_HOME = process.env.DSH_DESKTOP_NPM_CACHE_HOME?.trim() || join(PNPM_BUILD_STATE, 'cache')
 const PACKAGE_SET_ROOT = BUILD_PATHS.packageSet
 const NODE = desktopElectronExecutable(resolveDesktopBuildTarget())
 const PNPM = join(RUNTIME_ROOT, 'pnpm', 'bin', 'pnpm.mjs')
@@ -66,6 +69,17 @@ function desktopRelease(): DesktopRelease {
   })
 }
 
+/**
+ * Registry policy for the runtime install, read from the packaging environment
+ * because `runPnpm` scrubs `pnpm_config_*` before spawning pnpm.
+ * @returns pnpm arguments that reuse cached metadata, or refuse the network.
+ */
+function npmCacheArguments(): readonly string[] {
+  if (process.env.DSH_DESKTOP_NPM_OFFLINE === '1') return ['--config.offline=true']
+  if (process.env.DSH_DESKTOP_NPM_PREFER_OFFLINE === '1') return ['--config.prefer-offline=true']
+  return []
+}
+
 function runPnpm(args: readonly string[]): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     const [command, ...commandArgs] = args
@@ -82,6 +96,7 @@ function runPnpm(args: readonly string[]): Promise<void> {
       `--config.store-dir=${STORE_ROOT}`,
       '--config.enable-global-virtual-store=false',
       `--config.userconfig=${userConfig}`,
+      ...npmCacheArguments(),
       command,
       ...commandArgs,
     ], {
@@ -95,7 +110,7 @@ function runPnpm(args: readonly string[]): Promise<void> {
         NPM_CONFIG_USERCONFIG: userConfig,
         ...desktopNodeEnvironment(NODE, join(RUNTIME_ROOT, 'bin'), {}),
         PATH: `${join(RUNTIME_ROOT, 'bin')}${delimiter}${process.env.PATH ?? ''}`,
-        XDG_CACHE_HOME: join(PNPM_BUILD_STATE, 'cache'),
+        XDG_CACHE_HOME: CACHE_HOME,
         XDG_CONFIG_HOME: config,
         XDG_STATE_HOME: join(PNPM_BUILD_STATE, 'state'),
       },
