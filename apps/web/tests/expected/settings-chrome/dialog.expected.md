@@ -31,7 +31,7 @@
     - option "DejaVu Sans"
     - option "DejaVu Sans Mono"
   - text: 工作步骤展示 选择希望看到多少工具调用细节
-  - button "标准"
+  - button "详细"
   - text: 等宽字体 代码块与终端使用的字体
   - combobox "等宽字体":
     - option "默认" [selected]
@@ -47,4 +47,6 @@
   - button "编辑快捷键"
   - text: 繁忙时的发送行为 智能体运行时 Enter 键和发送按钮的行为；Cmd/Ctrl+Enter 使用另一行为
   - button "排队发送"
+  - text: 在使用官方模型 API 时上传 Session Log 帮助改进 DeepSeek 模型与产品
+  - switch "在使用官方模型 API 时上传 Session Log"
   - text: 当前版本：{{version}}

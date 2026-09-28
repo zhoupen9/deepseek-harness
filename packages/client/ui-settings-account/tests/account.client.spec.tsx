@@ -196,12 +196,12 @@ it.each([en, zh])('offers settings, contact and sign-in from the signed-out acco
   expect(trigger.textContent).toBe(copy.more)
   expect(trigger.querySelector('svg')).not.toBeNull()
   fireEvent.click(trigger)
-  expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([copy.settings, copy.contactUsSignedOut, copy.signIn])
+  expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([copy.settings, copy.contactUs, copy.signIn])
   await expect(`${screen.getByRole('menu').textContent}\n`).toMatchFileSnapshot(`./expected/menu-signed-out-${copy === en ? 'en' : 'zh'}.txt`)
   fireEvent.click(screen.getByRole('menuitem', { name: copy.settings }))
   expect(openSettings).toHaveBeenCalledOnce()
   fireEvent.click(screen.getByRole('button', { name: copy.menu }))
-  fireEvent.click(screen.getByRole('menuitem', { name: copy.contactUsSignedOut }))
+  fireEvent.click(screen.getByRole('menuitem', { name: copy.contactUs }))
   expect(operations.contactUs).toHaveBeenCalledOnce()
 })
 
@@ -285,7 +285,7 @@ it('omits development commands and reports a rejected shell command', async () =
   render(await accountMenu(operations, () => operations.hooks.account.getSnapshot(), false))
   fireEvent.click(screen.getByRole('button', { name: en.menu }))
   expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-    en.about, en.checkUpdates, en.settings, en.contactUsSignedOut, en.signIn, en.quitApplication,
+    en.about, en.checkUpdates, en.settings, en.contactUs, en.signIn, en.quitApplication,
   ])
   await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: en.about })) })
   expect(application.about).toHaveBeenCalledOnce()

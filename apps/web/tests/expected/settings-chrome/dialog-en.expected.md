@@ -28,7 +28,7 @@
   - combobox "Font":
     - option "Default" [selected]
   - text: Work details Choose how much detail to show for tool calls
-  - button "Standard"
+  - button "Detailed"
   - text: Monospace font Font used for code blocks and terminals
   - combobox "Monospace font":
     - option "Default" [selected]
@@ -41,4 +41,6 @@
   - button "Edit shortcuts"
   - text: Send behavior while busy What Enter and the Send button do while the agent is running; Cmd/Ctrl+Enter uses the other behavior
   - button "Queue"
+  - text: Upload Session Log when using the official model API Help improve DeepSeek models and products.
+  - switch "Upload Session Log when using the official model API"
   - text: "Current version: {{version}}"
