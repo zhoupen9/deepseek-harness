@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { packIco, TRAY_ICON_PATHS, TRAY_ICON_SIZES, unpackIco, type IcoEntry } from '../scripts/render-tray-icon.ts'
+import { packIco, TRAY_ICON_PATHS, TRAY_ICON_SIZES, TRAY_LINUX_PNG_SIZE, unpackIco, type IcoEntry } from '../scripts/render-tray-icon.ts'
 
 /** Smallest valid-looking PNG stream: signature plus an IHDR chunk declaring the given edge. */
 function pngStub(width: number, height = width): Buffer {
@@ -36,8 +36,15 @@ describe('tray icon packaging', () => {
   })
 
   it('ships one crisp bitmap per supported display scale in the committed tray icon', () => {
-    const entries = unpackIco(readFileSync(TRAY_ICON_PATHS.output))
+    const entries = unpackIco(readFileSync(TRAY_ICON_PATHS.windows))
     expect(entries.map(entry => entry.size)).toEqual([...TRAY_ICON_SIZES])
     for (const entry of entries) expect(entry.png.length).toBeGreaterThan(100)
+  })
+
+  it('ships the single square Linux bitmap the desktop environment scales to its panel', () => {
+    const png = readFileSync(TRAY_ICON_PATHS.linux)
+    expect(png.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([TRAY_LINUX_PNG_SIZE, TRAY_LINUX_PNG_SIZE])
+    expect(png.length).toBeGreaterThan(100)
   })
 })
