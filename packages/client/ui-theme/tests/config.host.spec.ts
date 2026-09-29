@@ -32,24 +32,30 @@ describe('ui-theme host', () => {
       variantFont: DEFAULT_VARIANT_FONT, monoFont: DEFAULT_MONO_FONT,
       fontColorLight: '', fontColorDark: '',
     })
-    await configuration.update({ preference: 'dark', fontSize: 16 })
+    await configuration.update({ preference: 'dark', fontSize: 10 })
     expect(plainConfig(configuration.fiber.config)).toEqual({
-      preference: 'dark', fontSize: 16,
+      preference: 'dark', fontSize: 10,
+      variantFont: DEFAULT_VARIANT_FONT, monoFont: DEFAULT_MONO_FONT,
+      fontColorLight: '', fontColorDark: '',
+    })
+    await configuration.update({ fontSize: 22 })
+    expect(plainConfig(configuration.fiber.config)).toEqual({
+      preference: 'dark', fontSize: 22,
       variantFont: DEFAULT_VARIANT_FONT, monoFont: DEFAULT_MONO_FONT,
       fontColorLight: '', fontColorDark: '',
     })
     // Solid colors persist per mode; invalid or alpha-bearing values reject.
     await configuration.update({ [FONT_COLOR_LIGHT_FIELD]: '#0f1115', [FONT_COLOR_DARK_FIELD]: 'hsl(210, 50%, 40%)' })
     expect(plainConfig(configuration.fiber.config)).toEqual({
-      preference: 'dark', fontSize: 16,
+      preference: 'dark', fontSize: 22,
       variantFont: DEFAULT_VARIANT_FONT, monoFont: DEFAULT_MONO_FONT,
       fontColorLight: '#0f1115', fontColorDark: 'hsl(210, 50%, 40%)',
     })
     await expect(configuration.update({ [FONT_COLOR_LIGHT_FIELD]: 'red' })).rejects.toThrow()
     await expect(configuration.update({ [FONT_COLOR_DARK_FIELD]: 'rgba(0, 0, 0, 0.5)' })).rejects.toThrow()
     await expect(configuration.update({ preference: 'sepia' })).rejects.toThrow()
-    await expect(configuration.update({ fontSize: 11 })).rejects.toThrow()
-    await expect(configuration.update({ fontSize: 18 })).rejects.toThrow()
+    await expect(configuration.update({ fontSize: 9 })).rejects.toThrow()
+    await expect(configuration.update({ fontSize: 23 })).rejects.toThrow()
     await fiber.dispose()
   })
 
@@ -71,11 +77,11 @@ describe('ui-theme host', () => {
     expect(rowText(rows[1])).toContain('--dsh-ui-font-family')
     expect(rowText(rows[1])).toContain('--dsh-mono-font-family')
     await configuration.update({
-      preference: 'dark', fontSize: 17, variantFont: 'Georgia', monoFont: 'JetBrains Mono',
+      preference: 'dark', fontSize: 22, variantFont: 'Georgia', monoFont: 'JetBrains Mono',
     })
     expect(rowText(collect(ctx)[0])).toContain('color-scheme:dark')
     expect(rowText(collect(ctx)[1])).toContain('const preference = "dark"')
-    expect(rowText(collect(ctx)[1])).toContain('"17px"')
+    expect(rowText(collect(ctx)[1])).toContain('"22px"')
     expect(rowText(collect(ctx)[1])).toContain('"Georgia"')
     expect(rowText(collect(ctx)[1])).toContain('"JetBrains Mono"')
     await fiber.dispose()

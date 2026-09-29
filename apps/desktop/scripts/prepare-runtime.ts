@@ -1,6 +1,7 @@
 /** Prepare the target Electron distribution and pinned pnpm CLI. */
 
 import { packagingStep } from './packaging-step.mjs'
+import { execFileSync } from 'node:child_process'
 import { chmodSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -10,6 +11,8 @@ import { downloadArtifact } from '@electron/get'
 import { parsePrimaryRuntime } from '@deepseek-ai/dsh-tool-workspace-dependencies'
 import extractZip from 'extract-zip'
 import { resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
+import { prepareCommandLink } from './prepare-command-link.ts'
+import { prepareDesktopCli } from './prepare-cli.ts'
 import { preparePrimaryRuntime, SYSTEM_RUNTIME_ENV } from './prepare-primary-runtime.ts'
 import { declaredElectronRange, resolveSystemElectron } from './system-electron.ts'
 import { resolveSystemExecutable, resolveSystemPnpm, writeSystemPnpmLauncher } from '../../../scripts/primary-runtime/prepare.ts'
@@ -66,11 +69,21 @@ async function main(): Promise<void> {
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'system:electron',
       () => cp(installed.dist, BUILD_PATHS.electron, { recursive: true }))
   }
+  const macosMinimumVersion = platform === 'darwin' ? execFileSync('/usr/libexec/PlistBuddy',
+    ['-c', 'Print LSMinimumSystemVersion', join(BUILD_PATHS.electron, 'Electron.app', 'Contents', 'Info.plist')], { encoding: 'utf8' }).trim() : undefined
   rmSync(RUNTIME_ROOT, { recursive: true, force: true })
   mkdirSync(RUNTIME_ROOT, { recursive: true })
   const pnpmVersion = process.env[SYSTEM_RUNTIME_ENV] === '1' ? prepareSystemPnpm() : preparePnpm()
   cpSync(join(import.meta.dirname, 'node-bin'), join(RUNTIME_ROOT, 'bin'), { recursive: true })
   chmodSync(join(RUNTIME_ROOT, 'bin', 'node'), 0o755)
+  // The terminal command is a macOS and Windows feature: its launcher and link helper are platform-specific.
+  if (platform !== 'linux') {
+    await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:cli',
+      async () => prepareDesktopCli(join(RUNTIME_ROOT, 'cli'), platform))
+    if (macosMinimumVersion !== undefined) prepareCommandLink(join(RUNTIME_ROOT, 'cli'), arch, macosMinimumVersion)
+    cpSync(join(import.meta.dirname, '..', 'lib', 'command-manager-entry.js'), join(RUNTIME_ROOT, 'cli', 'command-manager.js'))
+    cpSync(join(import.meta.dirname, 'command-path.ps1'), join(RUNTIME_ROOT, 'cli', 'command-path.ps1'))
+  }
   await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:primary-runtime',
     () => preparePrimaryRuntime({ deferSmoke: values['defer-primary-runtime-smoke'] }))
   // The Host and the tools it starts run on this Node, not on Electron's, so the payload records

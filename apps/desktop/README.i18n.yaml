@@ -5,6 +5,9 @@
 /deepseek-harness-desktop:
   en: cdfa3083eb7cb9a9
   zh: 6b48e4d67177905f
+/deepseek-harness-desktop/terminal-command:
+  en: bef92953c237363f
+  zh: d21d6effd21b8c00
 /deepseek-harness-desktop/closing-the-window-and-quitting:
   en: bba986aeb0aeb2b3
   zh: 05fbcc89ffecbdda
@@ -12,14 +15,20 @@
   en: 069fdfd72d2ea26a
   zh: 76ae549d43c99bb4
 /deepseek-harness-desktop/key-technical-decisions/bundled-workspace-dependencies:
-  en: bd5dbe61cbf62724
-  zh: b19f7f719472eb2c
+  en: 2c9bced788063390
+  zh: ef327cc403d57e46
+/deepseek-harness-desktop/bundled-command-runtime:
+  en: beecf076aa2f0796
+  zh: c9001ce0f22d2379
 /deepseek-harness-desktop/installation-ownership:
-  en: 5a301e28cc12e89a
-  zh: 297413668dcb8f89
+  en: b97d8939cf5c9ae9
+  zh: a8d8ad9fd6dfa696
 /deepseek-harness-desktop/installation-ownership/runtime-and-plugin-activation:
   en: e7d77a47046fcd52
   zh: 8353580e6cce331d
+/deepseek-harness-desktop/installation-ownership/host-environment:
+  en: 84a9cc7ca9455aa8
+  zh: 4091b8aa8231b74a
 /deepseek-harness-desktop/develop:
   en: 180d6bd5f3723792
   zh: cd6ef08028d2a018
@@ -42,8 +51,8 @@
   en: c0a48a5c1eb79937
   zh: 4bed00e523998fe6
 /deepseek-harness-desktop/package/upload-updates:
-  en: c64d7fe2fe2534b7
-  zh: 2188e1ae99ab4b33
+  en: 72073b2e72590067
+  zh: 63b1f9790395c37d
 /deepseek-harness-desktop/package/unsigned-windows-test-installer:
   en: cfd5780dd26a8e46
   zh: f7a16b1ede793b7b
