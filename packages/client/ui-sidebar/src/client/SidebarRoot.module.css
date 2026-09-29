@@ -462,6 +462,8 @@
 }
 
 .newSessionLabelMask { flex: 1; min-width: 0; }
+/* The rail centers its single glyph; only the expanded row is left-aligned. */
+.collapsed .newSessionContent { justify-content: center; }
 .newSession:is(:hover, :focus-visible) .newSessionLabelMask:has(+ .newSessionShortcut) { overflow: hidden; mask-image: linear-gradient(to right, black calc(100% - 16px), transparent); }
 .newSessionContent { display: flex; width: 100cqw; align-items: center; justify-content: flex-start; gap: 6px; }
 .newSessionContent > svg { flex: none; }

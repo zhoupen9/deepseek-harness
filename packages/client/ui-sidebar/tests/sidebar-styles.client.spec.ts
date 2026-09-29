@@ -82,5 +82,6 @@ describe('SidebarRoot.module.css', () => {
       'var(--dsw-alias-interactive-bg-hover)',
     )
     expect(declarations('.collapsed .newSession')?.get('justify-content')).toBe('center')
+    expect(declarations('.collapsed .newSessionContent')?.get('justify-content')).toBe('center')
   })
 })
