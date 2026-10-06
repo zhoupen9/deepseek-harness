@@ -15,7 +15,7 @@
 
 pkgbase=deepseek-harness
 pkgname=('deepseek-harness' 'deepseek-harness-desktop')
-pkgver=0.2.0_rc.2
+pkgver=0.2.1_alpha.1
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/deepseek-ai/deepseek-harness"
