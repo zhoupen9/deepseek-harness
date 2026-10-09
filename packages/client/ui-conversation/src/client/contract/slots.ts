@@ -405,6 +405,8 @@ export interface ComposerBarInjected {
     notices: ObservableSnapshot<InputNotice | null>
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>
     menuLauncher: ObservableSnapshot<string | null>
+    /** Whether composer statistics render below the card; a hidden preference renders none. */
+    statisticsVisible: ObservableSnapshot<boolean>
   }
 }
 

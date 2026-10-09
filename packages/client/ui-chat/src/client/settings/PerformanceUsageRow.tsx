@@ -18,10 +18,20 @@ export type PerformanceUsageRowProps =
   & PropsLocale<'chat'>
   & InjectFace<PerformanceUsageRowInjected>
 
-const OPTIONS: readonly { id: PerformanceUsageMode; label: ChatKey }[] = [
+const OPTIONS = [
   { id: 'compact', label: 'settings.performance.compact' },
   { id: 'detailed', label: 'settings.performance.detailed' },
-]
+  { id: 'hidden', label: 'settings.performance.hidden' },
+] as const satisfies readonly { id: PerformanceUsageMode; label: ChatKey }[]
+
+/** Menu-order label of one mode; the closed union keeps the selection total. */
+function labelOf(mode: PerformanceUsageMode): ChatKey {
+  switch (mode) {
+    case 'compact': return 'settings.performance.compact'
+    case 'detailed': return 'settings.performance.detailed'
+    case 'hidden': return 'settings.performance.hidden'
+  }
+}
 
 /**
  * Render the performance and usage detail selector.
@@ -30,15 +40,12 @@ const OPTIONS: readonly { id: PerformanceUsageMode; label: ChatKey }[] = [
  */
 export function PerformanceUsageRow({ usePerformanceUsage, setPerformanceUsage, t }: PerformanceUsageRowProps) {
   const mode = usePerformanceUsage(value => value)
-  const selectedLabel = mode === 'detailed'
-    ? 'settings.performance.detailed'
-    : 'settings.performance.compact'
   return (
     <PreferenceRow
       title={t('settings.performance.title')}
       description={t('settings.performance.description')}
       value={mode}
-      selectedLabel={t(selectedLabel)}
+      selectedLabel={t(labelOf(mode))}
       options={OPTIONS.map(option => ({ id: option.id, label: t(option.label) }))}
       onSelect={(value) => { setPerformanceUsage(value as PerformanceUsageMode) }}
     />

@@ -24,7 +24,16 @@ function projections(values: Record<string, unknown>): ContextMeterProps['usePro
 }
 
 function meter(values: Record<string, unknown>, translate: ContextMeterProps['t'] = t) {
-  return render(<ContextMeter useProjection={projections(values)} t={translate} />)
+  return render(<ContextMeter
+    useProjection={projections(values)}
+    useStatisticsVisible={statisticsVisible(true)}
+    t={translate}
+  />)
+}
+
+/** The hook seat the composer bar binds; a stub replays one visibility per render. */
+function statisticsVisible(visible: boolean): ContextMeterProps['useStatisticsVisible'] {
+  return selector => selector(visible)
 }
 
 describe('ContextMeter', () => {
@@ -125,20 +134,62 @@ describe('ContextMeter', () => {
       contextPressure: { pressureTokens: 32_000, contextWindow: 128_000 },
       contextBreakdown: BREAKDOWN,
     }
-    const view = render(<ContextMeter useProjection={(key: string) => values[key]} t={t} />)
+    const view = render(<ContextMeter
+      useProjection={(key: string) => values[key]}
+      useStatisticsVisible={statisticsVisible(true)}
+      t={t}
+    />)
     fireEvent.click(view.getByRole('button', { name: '上下文已用 25%' }))
     expect(view.queryByRole('dialog')).not.toBeNull()
 
     values = { contextPressure: { pressureTokens: 32_000 }, contextBreakdown: BREAKDOWN }
-    view.rerender(<ContextMeter useProjection={(key: string) => values[key]} t={t} />)
+    view.rerender(<ContextMeter
+      useProjection={(key: string) => values[key]}
+      useStatisticsVisible={statisticsVisible(true)}
+      t={t}
+    />)
     expect(view.container.textContent).toBe('')
 
     values = {
       contextPressure: { pressureTokens: 32_000, contextWindow: 128_000 },
       contextBreakdown: BREAKDOWN,
     }
-    view.rerender(<ContextMeter useProjection={(key: string) => values[key]} t={t} />)
+    view.rerender(<ContextMeter
+      useProjection={(key: string) => values[key]}
+      useStatisticsVisible={statisticsVisible(true)}
+      t={t}
+    />)
     expect(view.getByRole('button', { name: '上下文已用 25%' }).getAttribute('aria-expanded')).toBe('false')
+    expect(view.queryByRole('dialog')).toBeNull()
+  })
+
+  it('renders no ring while the composer statistics are hidden, and closes an open panel', () => {
+    const values = {
+      contextPressure: { pressureTokens: 32_000, contextWindow: 128_000 },
+      contextBreakdown: BREAKDOWN,
+    }
+    const view = render(<ContextMeter
+      useProjection={projections(values)}
+      useStatisticsVisible={statisticsVisible(false)}
+      t={t}
+    />)
+    expect(view.container.textContent).toBe('')
+    expect(view.queryByRole('button')).toBeNull()
+
+    // A visibility switch while the panel is open drops the whole surface with it.
+    view.rerender(<ContextMeter
+      useProjection={projections(values)}
+      useStatisticsVisible={statisticsVisible(true)}
+      t={t}
+    />)
+    fireEvent.click(view.getByRole('button', { name: '上下文已用 25%' }))
+    expect(view.queryByRole('dialog')).not.toBeNull()
+    view.rerender(<ContextMeter
+      useProjection={projections(values)}
+      useStatisticsVisible={statisticsVisible(false)}
+      t={t}
+    />)
+    expect(view.container.textContent).toBe('')
     expect(view.queryByRole('dialog')).toBeNull()
   })
 

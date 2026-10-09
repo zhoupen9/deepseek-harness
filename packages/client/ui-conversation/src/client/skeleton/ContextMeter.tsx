@@ -2,11 +2,12 @@
  * `contextPressure` projection, with a click-open panel of the heuristic
  * `contextBreakdown` composition (system prompt, tools, conversation).
  * Renders nothing until a provider reports both pressure and a route
- * capacity. */
+ * capacity, or while the composer statistics are hidden. */
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
 // Type-only: the `contextPressure` / `contextBreakdown` projection key merges.
 import type {} from '@deepseek-ai/dsh-token-meter/client'
 import { Tooltip, useAnchoredPosition, useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -49,18 +50,23 @@ function formatTokens(value: number, t: ComposerBarProps['t']): string {
 
 export interface ContextMeterProps {
   useProjection: UseProjection
+  /** Whether composer statistics are shown; a hidden preference drops the ring with the dock pills. */
+  useStatisticsVisible: SnapshotSelectorHook<boolean>
   /** The owning bar's locale seat, passed down as a plain prop. */
   t: ComposerBarProps['t']
 }
 
-export function ContextMeter({ useProjection, t }: ContextMeterProps) {
+export function ContextMeter({ useProjection, useStatisticsVisible, t }: ContextMeterProps) {
+  const visible = useStatisticsVisible(value => value)
   const pressure = useProjection('contextPressure')
   const breakdown = useProjection('contextBreakdown')
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLSpanElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const context = contextOccupancy(pressure)
-  const available = context !== null
+  // The panel belongs to a rendered ring: it is available only while pressure,
+  // capacity, and the statistics preference all keep that ring on screen.
+  const available = context !== null && visible
   const position = useAnchoredPosition({
     open: open && available,
     anchorRef: rootRef,
@@ -71,8 +77,9 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
   })
   useDismissOnOutsidePointer(rootRef, open && available, setOpen, panelRef)
 
-  // A model switch can temporarily remove capacity while this component stays
-  // mounted. Close the now-unavailable panel instead of preserving stale UI.
+  // A model switch can remove capacity, and the statistics preference can hide
+  // the ring, while this component stays mounted. Close the panel that is no
+  // longer renderable instead of preserving stale state for a later reappear.
   useEffect(() => {
     if (!available && open) setOpen(false)
   }, [available, open])
@@ -86,7 +93,7 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
     return () => { document.removeEventListener('keydown', onKeyDown) }
   }, [available, open])
 
-  if (context === null) return null
+  if (context === null || !visible) return null
   const percent = context.percent
   const reading = `${percent}%`
   const [headBefore = '', headAfter = ''] = t('context.aria', { percent: READING_SLOT })

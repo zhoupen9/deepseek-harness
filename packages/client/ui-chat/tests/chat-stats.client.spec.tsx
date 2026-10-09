@@ -192,6 +192,22 @@ describe('composer stats pills', () => {
     expect(view.container.textContent).toBe('')
   })
 
+  it('hidden renders no pill with any metric available, and an open dialog closes with it', () => {
+    const { source } = makeSource({ nodes: [timedStep()] })
+    const values = { tokenUsage: USAGE, sessionStats: sessionStats({ turns: 3, steps: 4, decodeMs: 3_000, decodeTokens: 60 }) }
+    const view = render(<StatsPills {...props(source, values)} usePerformanceUsage={selector => selector('hidden')} />)
+    expect(view.container.textContent).toBe('')
+    expect(view.queryAllByRole('button')).toHaveLength(0)
+
+    // Switching to hidden while a dialog is open drops the pill and its panel.
+    view.rerender(<StatsPills {...props(source, values)} />)
+    fireEvent.click(view.getAllByRole('button')[0]!)
+    expect(view.getByRole('dialog')).toBeTruthy()
+    view.rerender(<StatsPills {...props(source, values)} usePerformanceUsage={selector => selector('hidden')} />)
+    expect(view.queryByRole('dialog')).toBeNull()
+    expect(view.queryAllByRole('button')).toHaveLength(0)
+  })
+
   it('renders the counts reading and usage pill and hides a brand-new empty session', () => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsPills {...props(source)} />)

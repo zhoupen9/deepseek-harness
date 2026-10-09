@@ -32,7 +32,7 @@ const TRANSCRIPT_VIEW_SETTING_VALUES = [
 export const DEFAULT_TRANSCRIPT_VIEW_MODE: TranscriptViewMode = 'detailed'
 
 /** Performance and usage detail levels accepted by user settings. */
-export const PERFORMANCE_USAGE_MODES = ['compact', 'detailed'] as const
+export const PERFORMANCE_USAGE_MODES = ['compact', 'detailed', 'hidden'] as const
 
 /** Performance and usage presentation. */
 export type PerformanceUsageMode = typeof PERFORMANCE_USAGE_MODES[number]
@@ -50,7 +50,7 @@ export const DEFAULT_LINK_OPENING: LinkOpening = 'sidebar'
 export interface ChatSettings {
   /** Work-details preference; absence uses the client default, and legacy saved values remain accepted. */
   transcriptView?: TranscriptViewMode | typeof LEGACY_TRANSCRIPT_VIEW_MODE | typeof LEGACY_EXPANDED_TRANSCRIPT_VIEW_MODE | null
-  /** Detail level for composer statistics and completed-Turn usage. */
+  /** Detail level for composer statistics and completed-Turn usage; `hidden` shows none of them. */
   performanceUsage: PerformanceUsageMode
   /** Default destination for Chat HTTP(S) links. */
   linkOpening: LinkOpening

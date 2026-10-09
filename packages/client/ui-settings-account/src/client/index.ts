@@ -236,7 +236,10 @@ export function apply(ctx: Context): void {
   if ('dshDesktop' in globalThis) {
     const controller = new DesktopOnboardingController(
       ctx.configForms.get<OnboardingSettings>(DESKTOP_ONBOARDING_NAMESPACE),
-      ctx.configForms.get<{ transcriptView?: TranscriptViewMode | null; performanceUsage: 'compact' | 'detailed' }>('ui-chat'),
+      ctx.configForms.get<{
+        transcriptView?: TranscriptViewMode | null
+        performanceUsage: 'compact' | 'detailed' | 'hidden'
+      }>('ui-chat'),
       enabled => ctx.configForms.developerTools.setEnabled(enabled),
       operations.hooks.account,
       readOnboardingApiKeyPresence,

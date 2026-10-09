@@ -96,6 +96,8 @@ interface BenchOptions {
   rightItems?: React.ReactNode
   activityEntry?: (owner: InputActivityOwnerProps) => React.ReactNode
   contextPressure?: ContextPressureProjection
+  /** Whether composer statistics render, served through the bar's inject face. */
+  statisticsVisible?: boolean
   footer?: React.ReactNode
   attachments?: readonly ComposerAttachment[]
   /** Upload states served for file-kind drafts (absent = every file is ready). */
@@ -209,6 +211,7 @@ function bench(over?: BenchOptions) {
     useNotices: bindSnapshotSelector(shell.notices),
     useLexicon: bindSnapshotSelector(shell.lexicon),
     useMenuLauncher: bindSnapshotSelector(menuLauncher),
+    useStatisticsVisible: bindSnapshotSelector(createSnapshotStore(over?.statisticsVisible ?? true)),
     stop,
     // Mirrors the real lookup chain (conversation namespace, then common).
     t: over?.t ?? makeTranslate(zh, commonZh),
@@ -1776,4 +1779,16 @@ it('places context usage below the composer and hides it until the activity clos
   fireEvent.click(view.getByRole('button', { name: '上下文已用 25%' }))
   expect(view.getByRole('dialog', { name: '上下文已用' })).toBeTruthy()
   expect(view.getByRole('button', { name: '发送消息' })).toBeTruthy()
+})
+
+it('drops the context meter with the hidden statistics preference while the dock pill stays plugin-owned', () => {
+  const { view } = bench({
+    draft: 'draft',
+    contextPressure: { pressureTokens: 32_000, contextWindow: 128_000 },
+    statisticsVisible: false,
+    footer: <span data-testid="stat-pill" />,
+  })
+  expect(view.queryByRole('button', { name: '上下文已用 25%' })).toBeNull()
+  // The dock itself is another plugin's; only the pills' own mode hides them.
+  expect(view.getByTestId('stat-pill')).toBeTruthy()
 })

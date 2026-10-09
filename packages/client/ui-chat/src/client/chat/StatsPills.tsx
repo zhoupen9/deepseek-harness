@@ -1,8 +1,8 @@
 // Composer statistics pills, each its own 'conversation.composer.dock' list
 // entry (activity, usage) so a plugin can replace or add one pill by id.
 // Compact keeps speed and cache hit as plain readings; Detailed adds counts,
-// token totals, and click-open dialogs. Settled-node identity prevents
-// stream-delta updates from rerendering the pills.
+// token totals, and click-open dialogs; Hidden renders nothing. Settled-node
+// identity prevents stream-delta updates from rerendering the pills.
 
 import { memo, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -239,6 +239,7 @@ export const ActivityPill = memo(function ActivityPill({ useChat, useProjection,
   const stats = useSessionStats(useChat, useProjection)
   const speed = stats.decodeMs > 0 ? decodeSpeed(stats, t) : null
   const icon = <IconGaugeOutlineRegular />
+  if (mode === 'hidden') return null
   if (mode === 'compact') return speed === null ? null : <PlainPill stat="activity" icon={icon} label={speed} />
   if (stats.steps === 0) return null
   const counts = t('stats.counts', { turns: stats.turns, steps: stats.steps })
@@ -281,6 +282,7 @@ export const ActivityPill = memo(function ActivityPill({ useChat, useProjection,
 /** Whole-log token total and cache hit; Compact keeps only the cache hit. */
 export const UsagePill = memo(function UsagePill({ useProjection, usePerformanceUsage, t }: StatPillProps) {
   const mode = usePerformanceUsage(value => value)
+  if (mode === 'hidden') return null
   const usage = useProjection('tokenUsage')
   // Gated on actual token activity: a session whose steps all settled without
   // billing (e.g. every request failed) shows no usage pill.
