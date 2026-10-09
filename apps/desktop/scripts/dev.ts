@@ -89,8 +89,11 @@ async function launchElectron(): Promise<void> {
   const hostPort = debugPort('DSH_DESKTOP_HOST_INSPECT_PORT', 9230)
   const home = resolve(process.env.DSH_HOME ?? join(DEVELOPMENT_ROOT, 'home'))
   const userData = resolve(process.env.DSH_DESKTOP_USER_DATA_DIR ?? join(DEVELOPMENT_ROOT, 'electron-user-data'))
+  // The Desktop host sets this for the Node subprocesses it spawns; an Electron
+  // that inherits it runs as plain Node and never draws the shell window.
+  const { ELECTRON_RUN_AS_NODE: _runAsNode, ...parentEnvironment } = process.env
   const environment: NodeJS.ProcessEnv = {
-    ...process.env,
+    ...parentEnvironment,
     DSH_HOME: home,
     DSH_DESKTOP_PRIMARY_RUNTIME_DIR: process.env.DSH_DESKTOP_PRIMARY_RUNTIME_DIR ?? developmentRuntimeDirectory(),
     DSH_DESKTOP_HOST_INSPECT_PORT: String(hostPort),
