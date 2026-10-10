@@ -37,7 +37,8 @@ def main():
         for distribution in importlib.metadata.distributions()
     }
     # A system interpreter shares site-packages with unrelated distributions; only a closed payload owns an exact set.
-    if len(sys.argv) <= 4 or sys.argv[4] != "--external":
+    external = len(sys.argv) > 4 and sys.argv[4] == "--external"
+    if not external:
         assert installed_names == expected_names, {"unexpected": sorted(installed_names - expected_names), "missing": sorted(expected_names - installed_names)}
     for name, expected in versions.items():
         actual = importlib.metadata.version(name)
@@ -46,14 +47,17 @@ def main():
     assert pandas.DataFrame({"n": [1, 2]}).n.sum() == 3
     numpy.testing.assert_allclose(numpy.arange(4), [0, 1, 2, 3])
     pandas.testing.assert_frame_equal(pandas.DataFrame({"n": [1, 2]}), pandas.DataFrame({"n": [1, 2]}))
-    for library in (numpy, pandas):
-        root = Path(library.__file__).parent
-        assert not any(path.is_dir() for path in root.rglob("tests")), root
-        distribution = importlib.metadata.distribution(library.__name__)
-        record = distribution.read_text("RECORD")
-        assert record, library.__name__
-        for file, _hash, _size in csv.reader(io.StringIO(record)):
-            assert distribution.locate_file(file).is_file(), file
+    # Pruned test suites and RECORD completeness describe the closed payload, which must keep every
+    # declared file; a system interpreter keeps its distribution's own files, so neither applies.
+    if not external:
+        for library in (numpy, pandas):
+            root = Path(library.__file__).parent
+            assert not any(path.is_dir() for path in root.rglob("tests")), root
+            distribution = importlib.metadata.distribution(library.__name__)
+            record = distribution.read_text("RECORD")
+            assert record, library.__name__
+            for file, _hash, _size in csv.reader(io.StringIO(record)):
+                assert distribution.locate_file(file).is_file(), file
 
     with tempfile.TemporaryDirectory(prefix="dsh-office-smoke-") as directory:
         root = Path(directory)
