@@ -97,7 +97,9 @@ vi.mock('electron', () => ({
   },
   dialog: { showErrorBox: vi.fn(), showMessageBox: vi.fn() },
   Menu: { buildFromTemplate: state.menu, setApplicationMenu: vi.fn() },
-  nativeImage: { createFromPath: (path: string) => ({ path }) },
+  // resize mirrors Electron's non-enumerable method; welcome startup only loads the app icon.
+  nativeImage: { createFromPath: (path: string) => Object.defineProperty({ path }, 'resize',
+    { value: (size: { width: number; height: number }) => ({ path, size }) }) },
 }))
 // The Windows tray relabels through Menu as well; keep the menu call counts below platform-neutral.
 vi.mock('../src/tray.ts', () => ({ DesktopTray: class { relabel() {} dispose() {} } }))

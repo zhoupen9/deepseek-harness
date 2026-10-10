@@ -77,6 +77,20 @@ describe('installer preparation preserves application dependencies', () => {
     expect(config.extraResources.find(resource => resource.to === 'tray.ico')).toBeUndefined()
   })
 
+  it('keeps the packaged Linux desktop entry on the manifest desktop identity', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const config = createElectronBuilderConfig({
+      DSH_DESKTOP_APP_ID: 'com.example.installer',
+      DSH_DESKTOP_TARGET_PLATFORM: 'linux',
+      DSH_DESKTOP_TARGET_ARCH: 'x64',
+    }, 'linux', 'x64')
+    // Electron reports desktopName as the Wayland app_id and the X11 WM_CLASS, so the generated
+    // entry filename and its StartupWMClass must follow the manifest rather than the executable.
+    const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { desktopName?: string }
+    expect(manifest.desktopName).toBe('deepseek-harness-desktop')
+    expect(config.linux.syncDesktopName).toBe(true)
+  })
+
   it('names unsigned Windows artifacts so they cannot pass for release builds', async () => {
     const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
     const config = createElectronBuilderConfig({

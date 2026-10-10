@@ -6,7 +6,7 @@ import { once } from 'node:events'
 import fs from 'node:fs'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join, sep } from 'node:path'
-import { app, BrowserWindow, protocol, shell, clipboard } from 'electron'
+import { app, BrowserWindow, nativeImage, protocol, shell, clipboard } from 'electron'
 import { fileURLToPath } from 'node:url'
 import updaterModule from 'electron-updater'
 import { DesktopUpdateCoordinator } from '../../lib/types/update-coordinator.js'
@@ -245,7 +245,9 @@ async function main() {
         () => ({ version: '1.0.0', locale: 'zh-CN', timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60 }))
       modal = new DesktopMandatoryUpdateWindow({
         preload: fileURLToPath(new URL('../../lib/preload-mandatory.cjs', import.meta.url)),
-        locale: resolveDesktopLocale('zh-CN'), allowedPageOrigins: config.allowedPageOrigins,
+        locale: resolveDesktopLocale('zh-CN'),
+        notificationIcon: nativeImage.createFromPath(fileURLToPath(new URL('../../resources/icon-windows.png', import.meta.url))),
+        allowedPageOrigins: config.allowedPageOrigins,
         parent: () => parent, policy: () => policy.state, update: () => f.coordinator.state,
         refresh: async () => { await Promise.all([policy.check('manual', true), f.coordinator.check(true)]); modal.sync() },
         download: async version => { const pending = f.coordinator.download(version); await Promise.resolve(); modal.sync();

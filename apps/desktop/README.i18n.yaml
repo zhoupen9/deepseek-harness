@@ -12,8 +12,8 @@
   en: bba986aeb0aeb2b3
   zh: 05fbcc89ffecbdda
 /deepseek-harness-desktop/key-technical-decisions:
-  en: 069fdfd72d2ea26a
-  zh: 76ae549d43c99bb4
+  en: 37b2166bd56aa8f7
+  zh: 9a4ac27bb861e988
 /deepseek-harness-desktop/key-technical-decisions/bundled-workspace-dependencies:
   en: 78f7c2c4cbf6d8b9
   zh: 7803c5945db7dbc2
@@ -42,8 +42,8 @@
   en: cce814303d9867d6
   zh: f8e5fb77a44eab70
 /deepseek-harness-desktop/package/distribution-electron:
-  en: 852cdc29195a24c1
-  zh: 214aadb9f827bda3
+  en: 8abca79dd19b9767
+  zh: e95be69e58639e3a
 /deepseek-harness-desktop/package/release-versions:
   en: d938302f92fc3a1a
   zh: 29df50bc8791baa7

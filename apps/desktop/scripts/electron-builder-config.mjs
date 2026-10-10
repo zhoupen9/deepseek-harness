@@ -238,6 +238,9 @@ export function createElectronBuilderConfig(
       // re-deriving electron-builder's product-name sanitization.
       executableName: 'deepseek-harness',
       icon: fileURLToPath(new URL('../resources/icon.png', import.meta.url)),
+      // Name the entry and its StartupWMClass after package.json desktopName, which is the identity
+      // Electron reports as the Wayland app_id and the X11 WM_CLASS.
+      syncDesktopName: true,
     },
     nsis: {
       installerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),

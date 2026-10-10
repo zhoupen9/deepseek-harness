@@ -1,6 +1,6 @@
 /** Shell-owned modal policy UI; only explicit actions authorize downloads or browser navigation. */
 
-import { app, BrowserWindow, clipboard, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, shell, type IpcMainInvokeEvent, type NativeImage } from 'electron'
 import type { DesktopLocale } from './locale.ts'
 import { assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
 import { desktopPolicyPage, type DesktopPolicyState } from './mandatory-update-policy.ts'
@@ -35,6 +35,8 @@ export interface MandatoryUpdateWindowOptions {
   readonly preload: string
   readonly overlays: Pick<DesktopUpdateOverlays, 'create'>
   readonly locale: DesktopLocale
+  /** Application image shown by the background installation reminder. */
+  readonly notificationIcon: NativeImage
   readonly allowedPageOrigins: readonly string[]
   readonly parent: () => BrowserWindow | undefined
   readonly policy: () => DesktopPolicyState
@@ -69,7 +71,7 @@ export class DesktopMandatoryUpdateWindow {
 
   /** @param options - Main-process actions and immutable deployment/navigation settings. */
   constructor(private readonly options: MandatoryUpdateWindowOptions) {
-    this.attention = new DesktopUpdateAttention(options.locale)
+    this.attention = new DesktopUpdateAttention({ locale: options.locale, notificationIcon: options.notificationIcon })
     this.embeddedParent = this.embedded ? options.parent() : undefined
     this.embeddedParent?.webContents.on('did-finish-load', this.publishEmbedded)
     ipcMain.handle(MANDATORY_IPC.status, (event) => { this.assertSender(event); return this.view() })

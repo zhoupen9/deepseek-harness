@@ -236,7 +236,7 @@ const harness = await vi.hoisted(async () => {
     set publishUpdate(value: (state: DesktopUpdateState) => DesktopUpdateState) { publishUpdate = value },
     dialog: { showOpenDialog: vi.fn(), showErrorBox: vi.fn(), showMessageBox: vi.fn() },
     openExternal: vi.fn(async () => {}),
-    notifications: [] as { title: string; body: string }[],
+    notifications: [] as { title: string; body: string; icon?: unknown }[],
     protocolHandle: vi.fn<(scheme: string, handler: (request: Request) => Response | Promise<Response>) => void>(),
     applyRelease: vi.fn(() => { preparing.resolve(); return prepared.promise }),
     disableAllPlugins: vi.fn(async () => {
@@ -320,11 +320,14 @@ vi.mock('electron', () => ({
   powerMonitor: harness.powerMonitor,
   Notification: class {
     static isSupported(): boolean { return true }
-    constructor(options: { title: string; body: string }) { harness.notifications.push(options) }
+    constructor(options: { title: string; body: string; icon?: unknown }) { harness.notifications.push(options) }
     show(): void {}
   },
   Tray: harness.FakeTray,
-  nativeImage: { createFromPath: (path: string) => ({ path }) },
+  // resize mirrors Electron's non-enumerable method, so images that are only loaded still compare
+  // as plain paths in the tray and close-dialog assertions.
+  nativeImage: { createFromPath: (path: string) => Object.defineProperty({ path }, 'resize',
+    { value: (size: { width: number; height: number }) => ({ path, size }) }) },
 }))
 vi.mock('../src/background-notice.ts', () => ({ DesktopBackgroundNotice: class {
   constructor(options: { markerPath: string }) { harness.backgroundNotice.markerPath = options.markerPath }
@@ -1027,6 +1030,7 @@ describe('desktop main startup', () => {
     expect(harness.notifications).toHaveLength(1)
     expect(harness.notifications[0]).toEqual({
       title: 'Approval requested', body: 'DeepSeek Harness needs your approval to continue.',
+      icon: { path: join(dirname(harness.app.getAppPath()), 'icon.png'), size: { width: 256, height: 256 } },
     })
   })
 

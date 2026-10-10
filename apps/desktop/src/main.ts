@@ -718,6 +718,14 @@ async function main(): Promise<void> {
     process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux', () => { refreshApplicationMenu() }, window => updateOverlays.input(window))
   app.on('will-quit', () => { shortcuts.dispose() })
 
+  // Packaged builds carry the Windows artwork as 'resources/icon.png' (electron-builder-config.mjs
+  // extraResources), so development reads that same checked-in file.
+  const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
+    : join(resources.root, 'icon.png')
+  // The application artwork is 1024 px for installers and the About panel. A notification service
+  // draws the image it is given, so the shell hands it a 256 px copy.
+  const notificationIcon = nativeImage.createFromPath(applicationIconPath).resize({ width: 256, height: 256 })
+
   /**
    * Raise a native notification for one Web UI attention kind. A window already
    * in front of the user shows the event itself, so it is not interrupted.
@@ -739,7 +747,7 @@ async function main(): Promise<void> {
     if (selected === undefined) return
     if (mainWindow !== undefined && mainWindow.isFocused()) return
     if (!Notification.isSupported()) return
-    new Notification({ title: selected.title, body: selected.body }).show()
+    new Notification({ title: selected.title, body: selected.body, icon: notificationIcon }).show()
   }
   ipcMain.on(DESKTOP_IPC.notify, (event, payload: unknown) => {
     assertDesktopSender(event, ['app'])
@@ -1015,8 +1023,6 @@ async function main(): Promise<void> {
     updates.dispose()
   })
 
-  const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
-    : join(resources.root, 'icon.png')
   app.setAboutPanelOptions({
     applicationName: 'DeepSeek Harness',
     applicationVersion: app.getVersion(),
@@ -1421,7 +1427,7 @@ async function main(): Promise<void> {
     const policy = mandatoryPolicy
     mandatoryUI = new DesktopMandatoryUpdateWindow({
       overlays: updateOverlays,
-      preload: fileURLToPath(new URL('./preload-mandatory.cjs', import.meta.url)), locale,
+      preload: fileURLToPath(new URL('./preload-mandatory.cjs', import.meta.url)), locale, notificationIcon,
       allowedPageOrigins: policyConfig.allowedPageOrigins, parent: () => mainWindow,
       policy: () => policy.state, update: () => updates.state,
       refresh: async () => { await Promise.all([checkPolicyManually(), updateSchedule.check(true)]) },

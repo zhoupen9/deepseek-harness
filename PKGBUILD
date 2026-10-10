@@ -264,7 +264,7 @@ Icon=deepseek-harness
 Terminal=false
 Type=Application
 Categories=Development;Utility;
-StartupWMClass=deepseek-harness
+StartupWMClass=deepseek-harness-desktop
 EOF
 
   install -Dm644 "$srcdir/deepseek-harness/LICENSE" \
