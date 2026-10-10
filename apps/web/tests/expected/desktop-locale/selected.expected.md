@@ -18,20 +18,18 @@
   - text: Font size Only affects conversation content 14
   - button "Increase font size"
   - button "Decrease font size"
-  - text: px Font color Default text color for light and dark mode Light mode
+  - text: px
+  - button "More font settings"
+  - text: Font color Default text color for light and dark mode Light mode
   - textbox "Light mode": "#0f1115"
   - button "Reset Light mode": Reset
   - text: Dark mode
   - textbox "Dark mode": "#f9fafb"
   - button "Reset Dark mode": Reset
-  - text: Font Font used for interface text
-  - combobox "Font":
-    - option "Default" [selected]
   - text: Work details Choose how much detail to show for tool calls
   - button "Standard"
-  - text: Monospace font Font used for code blocks and terminals
-  - combobox "Monospace font":
-    - option "Default" [selected]
+  - text: When to Collapse Work Details Choose when to automatically collapse work details
+  - button "On completion"
   - text: Show coding view Shows trajectory, code diffs, and all Agent presets
   - switch "Show coding view" [checked]
   - text: Keyboard shortcuts

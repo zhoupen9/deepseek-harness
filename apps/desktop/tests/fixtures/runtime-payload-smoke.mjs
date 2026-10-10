@@ -1,4 +1,4 @@
-/** Exercise filtered Desktop native and HTML dependencies under its Electron Node runtime. */
+/** Exercise filtered Desktop native and HTML dependencies under the payload's own Node.js runtime. */
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -8,44 +8,18 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { checkPnpm } from './pnpm-smoke.mjs'
 
 const runtime = process.argv[2]
 assert.ok(runtime, 'Pass the filtered resources/dsh directory')
 const root = resolve(runtime)
 const descriptor = JSON.parse(readFileSync(join(root, 'desktop-runtime.json'), 'utf8'))
-assert.equal(process.versions.node, descriptor.release.nodeVersion, 'Run with the Electron Node runtime version')
+assert.equal(process.versions.node, descriptor.release.nodeVersion, 'Run with the payload Node.js runtime version')
 assert.equal(process.platform, descriptor.platform)
 assert.equal(process.arch, descriptor.arch)
 const resourcesRuntime = process.argv[3] ?? join(dirname(root), 'runtime')
 const requireRuntime = createRequire(join(root, 'package.json'))
 const scratch = mkdtempSync(join(tmpdir(), 'dsh-runtime-payload-'))
-
-/** Run a package script with only the shipped node launcher available on PATH. */
-function checkPnpm() {
-  const bin = join(resourcesRuntime, 'bin')
-  const pnpm = join(resourcesRuntime, 'pnpm', 'bin', 'pnpm.mjs')
-  writeFileSync(join(scratch, 'package.json'), JSON.stringify({
-    name: 'desktop-node-script-smoke', private: true, scripts: { check: 'node check.cjs' },
-  }))
-  writeFileSync(join(scratch, 'check.cjs'), `
-const assert = require('node:assert/strict')
-assert.equal(process.execPath, ${JSON.stringify(process.execPath)})
-assert.ok(!process.versions.electron)
-assert.ok(process.execArgv.includes('--expose-internals'))
-assert.equal(typeof require('internal/modules/esm/loader').getOrInitializeCascadedLoader, 'function')
-console.log('desktop-node-script-ok')
-`)
-  const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(?:systemroot|windir|comspec)$/iu.test(name)))
-  const systemBin = process.platform === 'win32' ? join(process.env.SystemRoot, 'System32') : '/usr/bin:/bin'
-  // This dependency-free fixture checks script launch, without pnpm's implicit install and update-network check.
-  const output = execFileSync(process.execPath, ['--expose-internals', pnpm, 'run', 'check'], {
-    cwd: scratch, encoding: 'utf8', timeout: 45_000,
-    env: { ...environment, pnpm_config_verify_deps_before_run: 'false',
-      DSH_DESKTOP_NODE_EXECUTABLE: process.execPath,
-      PATH: `${bin}${delimiter}${systemBin}`, HOME: scratch, USERPROFILE: scratch, TMP: scratch, TEMP: scratch, TMPDIR: scratch },
-  })
-  assert.match(output, /desktop-node-script-ok/u)
-}
 
 /** Spawn only a fixed Node program and await the terminal's drained exit event. */
 async function checkPty() {
@@ -61,7 +35,11 @@ async function checkPty() {
   // A Windows GUI executable needs a console-owning shell when launched inside ConPTY.
   const executable = process.platform === 'win32' ? process.env.ComSpec : process.execPath
   const args = process.platform === 'win32' ? ['/d', '/c', 'node', script] : [script]
-  const terminal = pty.spawn(executable, args, { cwd: scratch, env, cols: 80, rows: 24 })
+  // Mirror the product's Windows allocation: the console host node-pty ships.
+  const terminal = pty.spawn(executable, args, {
+    cwd: scratch, env, cols: 80, rows: 24,
+    ...(process.platform === 'win32' ? { useConptyDll: true } : {}),
+  })
   let output = ''
   let exited = false
   let timedOut = false
@@ -157,12 +135,19 @@ function checkHtml() {
 try {
   const builtin = requireRuntime('node-addon-require-builtin')
   assert.equal(typeof builtin.requireBuiltin('internal/modules/esm/loader').getOrInitializeCascadedLoader, 'function')
-  checkPnpm()
+  console.error('runtime payload: pnpm')
+  await checkPnpm(resourcesRuntime)
+  console.error('runtime payload: koffi')
   checkKoffi()
+  console.error('runtime payload: sharp')
   await checkSharp()
+  console.error('runtime payload: html')
   checkHtml()
+  console.error('runtime payload: pty')
   await checkPty()
+  console.error('runtime payload: search')
   await checkSearch()
+  console.error('runtime payload: checks complete; awaiting process exit')
 } finally {
   // This private tree contains only fixture files; Windows may release handles after terminal exit.
   await rm(scratch, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 })

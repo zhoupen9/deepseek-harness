@@ -4,8 +4,9 @@
  * `prefers-color-scheme`, and publishes immutable snapshots; it never touches
  * the DOM — ui-layout's presenter consumes the resolved snapshot. The Host
  * settings scope loads and stores the preference in the user-settings
- * document. The plugin also registers the Appearance preference row into the
- * settings General section — the theme feature owns its own settings surface.
+ * document. The plugin also registers the Appearance and font settings rows
+ * into the settings General section — the theme feature owns its own settings
+ * surface.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
@@ -18,34 +19,27 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { AppearanceRowInjected } from './AppearanceRow.tsx'
 import { AppearanceRow } from './AppearanceRow.tsx'
-import type { FontSizeRowInjected } from './FontSizeRow.tsx'
-import { FontSizeRow } from './FontSizeRow.tsx'
-import type { FontFaceRowInjected } from './FontFaceRow.tsx'
-import { FontFaceRow } from './FontFaceRow.tsx'
 import type { FontColorRowInjected } from './FontColorRow.tsx'
 import { FontColorRow } from './FontColorRow.tsx'
-import { createAppearanceRowStore, createFontColorRowStore, createFontFaceRowStore, createFontSizeRowStore } from './settings-store.ts'
+import type { FontSettingsInjected } from './FontSettingsGroup.tsx'
+import { FontSettingsGroup } from './FontSettingsGroup.tsx'
+import { createAppearanceRowStore, createFontColorRowStore, createFontRowStore } from './settings-store.ts'
 import { installThemeStyles } from './styles.ts'
 import { en, zh, type ThemeKey } from './locales.ts'
 import {
-  DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, DEFAULT_VARIANT_FONT,
-  FONT_COLOR_DARK_FIELD, FONT_COLOR_LIGHT_FIELD, FONT_SIZE_FIELD, FONT_SIZE_MAX,
-  FONT_SIZE_MIN, isFontColor, isFontFamily, isThemePreference, MONO_FONT_FIELD,
-  THEME_PREFERENCE_FIELD, THEME_SETTINGS_NAMESPACE, VARIANT_FONT_FIELD,
-  type ThemePreference, type ThemeSettings,
+  DEFAULT_FONT_SIZES, DEFAULT_PREFERENCE, FONT_COLOR_DARK_FIELD, FONT_COLOR_LIGHT_FIELD,
+  FONT_FAMILY_FIELDS, FONT_ROLES, FONT_SIZE_SPECS,
+  fontFamilyVariable, isFontColor, isFontSize, isThemePreference, normalizeFontFamily, sectionFontSizes,
+  THEME_PREFERENCE_FIELD, THEME_SETTINGS_NAMESPACE,
+  type FontFamilies, type FontRole, type FontSizes, type ThemePreference, type ThemeSettings,
 } from '../theme-settings.ts'
-import {
-  loadInstalledFonts, MONO_FONT_ID_ATTRIBUTE, monoFontStack, UI_FONT_ID_ATTRIBUTE,
-  variantFontStack,
-} from '../styles/font-stacks.ts'
 
 export type { AppearanceRowComponentProps, AppearanceRowInjected } from './AppearanceRow.tsx'
 export type { FontColorRowComponentProps, FontColorRowInjected } from './FontColorRow.tsx'
-export type { FontSizeRowComponentProps, FontSizeRowInjected } from './FontSizeRow.tsx'
-export type { FontFaceRowComponentProps, FontFaceRowInjected } from './FontFaceRow.tsx'
-export type { AppearanceRowState, FontColorRowState, FontFaceRowState, FontSizeRowState } from './settings-store.ts'
+export type { FontSettingsGroupProps, FontSettingsInjected } from './FontSettingsGroup.tsx'
+export type { AppearanceRowState, FontColorRowState, FontRowState } from './settings-store.ts'
 export type { ThemeKey } from './locales.ts'
-export type { ThemePreference, ThemeSettings } from '../theme-settings.ts'
+export type { FontFamilies, FontRole, FontSizes, ThemePreference, ThemeSettings } from '../theme-settings.ts'
 
 /** Namespace owning this feature's settings-row copy. */
 export const SETTINGS_NS = 'settings.theme'
@@ -92,20 +86,14 @@ export interface ThemeDefinition {
 export interface ThemeSnapshot {
   /** The persisted preference (may be `system`). */
   preference: ThemePreference
-  /** Conversation content font size in px (integer within FONT_SIZE_MIN..FONT_SIZE_MAX). */
-  fontSize: number
-  /** Selected variant (proportional) font family name ('' = built-in default). */
-  variantFont: string
-  /** Selected fixed-width (monospace) font family name ('' = built-in default). */
-  monoFont: string
+  /** Integer px font sizes by role, each within its `FONT_SIZE_SPECS` range (`text` is the conversation content size). */
+  fontSizes: FontSizes
+  /** Normalized user font lists by role; `''` selects the role's built-in stack. */
+  fontFamilies: FontFamilies
   /** Default text color while the light palette is active ('' = no override). */
   fontColorLight: string
   /** Default text color while the dark palette is active ('' = no override). */
   fontColorDark: string
-  /** Resolved CSS font-family stack for the variant font. */
-  uiFontStack: string
-  /** Resolved CSS font-family stack for the fixed-width font. */
-  monoFontStack: string
   /**
    * The resolved active theme (`system` resolved via prefers-color-scheme)
    * with override layers folded into its tokens (seq order, later layers win
@@ -188,12 +176,13 @@ export class ThemeRuntime {
   private readonly host: ConfigForm<ThemeSettings>
   private themes: ThemeDefinition[] = [...BUILTIN_THEMES]
   private preference: ThemePreference
-  private fontSize: number = bootstrapFontSize()
-  private variantFont: string = bootstrapFontFamily(UI_FONT_ID_ATTRIBUTE)
-  private monoFont: string = bootstrapFontFamily(MONO_FONT_ID_ATTRIBUTE)
+  private fontSizes: FontSizes = bootstrapFontSizes()
+  private fontFamilies: FontFamilies = bootstrapFontFamilies()
   private fontColorLight = ''
   private fontColorDark = ''
   private revision = 0
+  /** Own settings writes not yet settled; adoption waits for zero so a Host echo of an earlier write cannot revert a later local change. */
+  private pendingWrites = 0
   private snapshot: ThemeSnapshot
   private readonly media: MediaQueryList | undefined
   /** Override layers by source; seq (monotonic) is the stacking order. */
@@ -266,51 +255,37 @@ export class ThemeRuntime {
     }
     if (this.preference === id) return
     this.preference = id as ThemePreference
-    if (isThemePreference(id)) void this.host.set(THEME_PREFERENCE_FIELD, id)
+    if (isThemePreference(id)) this.write(THEME_PREFERENCE_FIELD, id)
     this.publish()
   }
 
   /**
-   * Change the conversation content font size — the only font-size write
-   * entry. Accepted values are written through the settings scope and emit
-   * `theme/change`.
-   * @param px - integer px within FONT_SIZE_MIN..FONT_SIZE_MAX; out-of-range or fractional values throw.
+   * Change one role's font size — the only font-size write entry. Accepted
+   * values are written through the settings scope and emit `theme/change`.
+   * @param role - font role.
+   * @param px - integer px within the role's `FONT_SIZE_SPECS` range; out-of-range or fractional values throw.
    */
-  setFontSize(px: number): void {
-    if (!Number.isInteger(px) || px < FONT_SIZE_MIN || px > FONT_SIZE_MAX) {
-      throw new Error(`font size ${px} is outside ${FONT_SIZE_MIN}..${FONT_SIZE_MAX}`)
-    }
-    if (this.fontSize === px) return
-    this.fontSize = px
-    void this.host.set(FONT_SIZE_FIELD, px)
+  setFontSize(role: FontRole, px: number): void {
+    const spec = FONT_SIZE_SPECS[role]
+    if (!isFontSize(role, px)) throw new Error(`${role} font size ${px} is outside ${spec.min}..${spec.max}`)
+    if (this.fontSizes[role] === px) return
+    this.fontSizes = Object.freeze({ ...this.fontSizes, [role]: px })
+    this.write(spec.field, px)
     this.publish()
   }
 
   /**
-   * Change the variant (proportional) font family — a write entry mirroring
-   * {@link setTheme}. Accepted values are written through the settings scope
-   * and emit `theme/change`.
-   * @param family - a font family name ('' restores the built-in default); overlong or non-string values throw.
+   * Change one role's font list — the only font-family write entry. The value
+   * is normalized, written through the settings scope, and emits `theme/change`
+   * when the normalized list differs.
+   * @param role - font role.
+   * @param value - comma-separated family names; a value without names restores the built-in stack.
    */
-  setVariantFont(family: string): void {
-    if (!isFontFamily(family)) throw new Error('variant font family is invalid')
-    if (this.variantFont === family) return
-    this.variantFont = family
-    void this.host.set(VARIANT_FONT_FIELD, family)
-    this.publish()
-  }
-
-  /**
-   * Change the fixed-width (monospace) font family — a write entry mirroring
-   * {@link setTheme}. Accepted values are written through the settings scope
-   * and emit `theme/change`.
-   * @param family - a font family name ('' restores the built-in default); overlong or non-string values throw.
-   */
-  setMonoFont(family: string): void {
-    if (!isFontFamily(family)) throw new Error('mono font family is invalid')
-    if (this.monoFont === family) return
-    this.monoFont = family
-    void this.host.set(MONO_FONT_FIELD, family)
+  setFontFamily(role: FontRole, value: string): void {
+    const list = normalizeFontFamily(value)
+    if (this.fontFamilies[role] === list) return
+    this.fontFamilies = Object.freeze({ ...this.fontFamilies, [role]: list })
+    this.write(FONT_FAMILY_FIELDS[role], list)
     this.publish()
   }
 
@@ -325,7 +300,7 @@ export class ThemeRuntime {
     if (!isFontColor(color)) throw new Error('light-mode text color is invalid')
     if (this.fontColorLight === color) return
     this.fontColorLight = color
-    void this.host.set(FONT_COLOR_LIGHT_FIELD, color)
+    this.write(FONT_COLOR_LIGHT_FIELD, color)
     this.publish()
   }
 
@@ -338,25 +313,36 @@ export class ThemeRuntime {
     if (!isFontColor(color)) throw new Error('dark-mode text color is invalid')
     if (this.fontColorDark === color) return
     this.fontColorDark = color
-    void this.host.set(FONT_COLOR_DARK_FIELD, color)
+    this.write(FONT_COLOR_DARK_FIELD, color)
     this.publish()
+  }
+
+  /** Write one field through the settings scope, then adopt the durable section once no own write remains. */
+  private write(field: string, value: string | number): void {
+    this.pendingWrites += 1
+    void this.host.set(field, value).finally(() => {
+      this.pendingWrites -= 1
+      this.adopt()
+    })
   }
 
   /** Adopt the scope's accepted durable preference without writing it back. */
   private adopt(): void {
+    if (this.pendingWrites > 0) return
     const section = this.host.getSnapshot().value
     if (section === undefined) return
+    const fontFamilies = durableFontFamilies(section)
+    const fontSizes = sectionFontSizes(section)
     // Sections written before the color fields existed carry no keys; absent
     // means the same no-override value as ''.
     const fontColorLight = section.fontColorLight ?? ''
     const fontColorDark = section.fontColorDark ?? ''
-    if (this.preference === section.preference && this.fontSize === section.fontSize
-      && this.variantFont === section.variantFont && this.monoFont === section.monoFont
+    if (this.preference === section.preference
+      && FONT_ROLES.every(role => this.fontSizes[role] === fontSizes[role] && this.fontFamilies[role] === fontFamilies[role])
       && this.fontColorLight === fontColorLight && this.fontColorDark === fontColorDark) return
     this.preference = section.preference
-    this.fontSize = section.fontSize
-    this.variantFont = section.variantFont
-    this.monoFont = section.monoFont
+    this.fontSizes = fontSizes
+    this.fontFamilies = fontFamilies
     this.fontColorLight = fontColorLight
     this.fontColorDark = fontColorDark
     this.publish()
@@ -425,13 +411,10 @@ export class ThemeRuntime {
     if (active === undefined) throw new Error(`theme registry lost "${resolvedId}"`)
     return Object.freeze({
       preference: this.preference,
-      fontSize: this.fontSize,
-      variantFont: this.variantFont,
-      monoFont: this.monoFont,
+      fontSizes: this.fontSizes,
+      fontFamilies: this.fontFamilies,
       fontColorLight: this.fontColorLight,
       fontColorDark: this.fontColorDark,
-      uiFontStack: variantFontStack(this.variantFont),
-      monoFontStack: monoFontStack(this.monoFont),
       active: this.composeActive(active),
       themes: Object.freeze([...this.themes]),
       revision: this.revision,
@@ -469,34 +452,41 @@ export class ThemeRuntime {
 }
 
 /**
- * Read the font size the Host boot script wrote on `body` before any plugin
+ * Read the font sizes the Host boot script wrote on `body` before any plugin
  * ran, so the initial snapshot matches first paint and ui-layout's presenter
- * does not flash the schema default while the settings read is in flight.
- * Non-browser runs and mounts without the boot script fall back to the
- * schema default; the durable settings adoption still lands afterwards.
+ * does not flash the schema defaults while the settings read is in flight.
+ * Non-browser runs, mounts without the boot script, and out-of-range values
+ * fall back to each role's default; the durable settings adoption still lands afterwards.
  */
-function bootstrapFontSize(): number {
+function bootstrapFontSizes(): FontSizes {
   /* v8 ignore next -- needs a documentless run (node e2e booting the client tree), not constructible under jsdom */
-  if (typeof document === 'undefined') return DEFAULT_FONT_SIZE
-  const raw = document.body.style.getPropertyValue('--dsh-content-font-size')
-  const parsed = Number.parseInt(raw, 10)
-  return Number.isInteger(parsed) && parsed >= FONT_SIZE_MIN && parsed <= FONT_SIZE_MAX
-    ? parsed
-    : DEFAULT_FONT_SIZE
+  if (typeof document === 'undefined') return DEFAULT_FONT_SIZES
+  const read = (role: FontRole): number => {
+    const parsed = Number.parseInt(document.body.style.getPropertyValue(FONT_SIZE_SPECS[role].variable), 10)
+    return isFontSize(role, parsed) ? parsed : FONT_SIZE_SPECS[role].default
+  }
+  return Object.freeze({ text: read('text'), code: read('code'), terminal: read('terminal') })
 }
 
-/**
- * Read the font family name the Host boot script wrote on `body`'s dataset
- * before any plugin ran, so the initial snapshot matches first paint (the
- * presenter writes the same stack the boot script did). Invalid values fall
- * back to the empty (built-in default) family; the durable settings adoption
- * still lands.
- */
-function bootstrapFontFamily(attribute: string): string {
-  /* v8 ignore next -- needs a documentless run, not constructible under jsdom */
-  if (typeof document === 'undefined') return DEFAULT_VARIANT_FONT
-  const raw = document.body.dataset[attribute]
-  return isFontFamily(raw) ? raw : DEFAULT_VARIANT_FONT
+/** Font lists the Host boot script wrote on `body`, read for the same first-paint reason as {@link bootstrapFontSizes}. */
+function bootstrapFontFamilies(): FontFamilies {
+  /* v8 ignore next -- needs a documentless run (node e2e booting the client tree), not constructible under jsdom */
+  if (typeof document === 'undefined') return Object.freeze({ text: '', code: '', terminal: '' })
+  const style = document.body.style
+  return Object.freeze({
+    text: normalizeFontFamily(style.getPropertyValue(fontFamilyVariable('text'))),
+    code: normalizeFontFamily(style.getPropertyValue(fontFamilyVariable('code'))),
+    terminal: normalizeFontFamily(style.getPropertyValue(fontFamilyVariable('terminal'))),
+  })
+}
+
+/** Normalized font lists from one accepted settings section (hand-edited documents may hold raw input). */
+function durableFontFamilies(section: ThemeSettings): FontFamilies {
+  return Object.freeze({
+    text: normalizeFontFamily(section.textFontFamily),
+    code: normalizeFontFamily(section.codeFontFamily),
+    terminal: normalizeFontFamily(section.terminalFontFamily),
+  })
 }
 
 /**
@@ -545,7 +535,7 @@ export const inject = ['slots', 'locale', 'remote', 'configForms']
 
 /**
  * Client plugin body: provide the theme service and register the
- * feature-owned Appearance preference row into the General section's item
+ * feature-owned Appearance and font settings rows into the General section's item
  * slot (a feature owns its settings surface).
  * @param ctx - client cordis context.
  */
@@ -559,14 +549,11 @@ export function apply(ctx: ClientContext): void {
 
   const store = createAppearanceRowStore()
   let bound: BoundActions<typeof store> | undefined
-  const fontSizeStore = createFontSizeRowStore()
-  let fontSizeBound: BoundActions<typeof fontSizeStore> | undefined
-  const fontColorStore = createFontColorRowStore()
-  let fontColorBound: BoundActions<typeof fontColorStore> | undefined
+  const fontStore = createFontRowStore()
+  let fontBound: BoundActions<typeof fontStore> | undefined
   const sync = (snapshot: ThemeSnapshot): void => {
     bound?.sync(snapshot.preference, snapshot.revision)
-    fontSizeBound?.sync(snapshot.fontSize, snapshot.revision)
-    fontColorBound?.sync(snapshot.fontColorLight, snapshot.fontColorDark, snapshot.revision)
+    fontBound?.sync(snapshot.fontSizes, snapshot.fontFamilies, snapshot.revision)
   }
   ctx.on('theme/change', sync)
   const injected = (actions: BoundActions<typeof store>): AppearanceRowInjected => {
@@ -587,25 +574,33 @@ export function apply(ctx: ClientContext): void {
     inject: injected,
   }, AppearanceRow))
 
-  const fontSizeInjected = (actions: BoundActions<typeof fontSizeStore>): FontSizeRowInjected => {
-    fontSizeBound = actions
-    sync(theme.getTheme())
-    return {
-      setFontSize: (px) => { theme.setFontSize(px) },
-    }
-  }
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
     id: 'font-size',
     order: 11,
-    store: fontSizeStore,
+    store: fontStore,
     locale: SETTINGS_NS,
-    inject: fontSizeInjected,
-  }, FontSizeRow))
+    inject: (actions: BoundActions<typeof fontStore>): FontSettingsInjected => {
+      fontBound = actions
+      sync(theme.getTheme())
+      return {
+        setFontFamily: (role, value) => { theme.setFontFamily(role, value) },
+        setFontSize: (role, px) => { theme.setFontSize(role, px) },
+      }
+    },
+  }, FontSettingsGroup))
 
+  const fontColorStore = createFontColorRowStore()
+  let fontColorBound: BoundActions<typeof fontColorStore> | undefined
+  const syncFontColor = (snapshot: ThemeSnapshot): void => {
+    fontColorBound?.sync(snapshot.fontColorLight, snapshot.fontColorDark, snapshot.revision)
+  }
+  ctx.on('theme/change', syncFontColor)
   const fontColorInjected = (actions: BoundActions<typeof fontColorStore>): FontColorRowInjected => {
     fontColorBound = actions
-    sync(theme.getTheme())
+    // Re-sync from the getter so no event is lost between registration and
+    // first render (the store's revision guard drops stale duplicates).
+    syncFontColor(theme.getTheme())
     return {
       setFontColorLight: (color) => { theme.setFontColorLight(color) },
       setFontColorDark: (color) => { theme.setFontColorDark(color) },
@@ -619,70 +614,4 @@ export function apply(ctx: ClientContext): void {
     locale: SETTINGS_NS,
     inject: fontColorInjected,
   }, FontColorRow))
-
-  const variantFontStore = createFontFaceRowStore()
-  let variantFontBound: BoundActions<typeof variantFontStore> | undefined
-  const monoFontStore = createFontFaceRowStore()
-  let monoFontBound: BoundActions<typeof monoFontStore> | undefined
-  const syncFonts = (snapshot: ThemeSnapshot): void => {
-    variantFontBound?.sync(snapshot.variantFont, snapshot.revision)
-    monoFontBound?.sync(snapshot.monoFont, snapshot.revision)
-  }
-  ctx.on('theme/change', syncFonts)
-
-  // The async installed-font result is buffered here so a row that binds after
-  // the promise settles still receives it (inject re-applies below).
-  let loadedFamilies: string[] | undefined
-  const applyFamilies = (bound: BoundActions<typeof variantFontStore> | undefined): void => {
-    if (bound !== undefined && loadedFamilies !== undefined) bound.setFamilies(loadedFamilies, false)
-  }
-
-  const variantFontInjected = (actions: BoundActions<typeof variantFontStore>): FontFaceRowInjected => {
-    variantFontBound = actions
-    syncFonts(theme.getTheme())
-    applyFamilies(variantFontBound)
-    return {
-      titleKey: 'variantFont.title',
-      descKey: 'variantFont.description',
-      defaultKey: 'variantFont.default',
-      setFont: (family) => { theme.setVariantFont(family) },
-    }
-  }
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item',
-    id: 'variant-font',
-    order: 12,
-    store: variantFontStore,
-    locale: SETTINGS_NS,
-    inject: variantFontInjected,
-  }, FontFaceRow))
-
-  const monoFontInjected = (actions: BoundActions<typeof monoFontStore>): FontFaceRowInjected => {
-    monoFontBound = actions
-    syncFonts(theme.getTheme())
-    applyFamilies(monoFontBound)
-    return {
-      titleKey: 'monoFont.title',
-      descKey: 'monoFont.description',
-      defaultKey: 'monoFont.default',
-      setFont: (family) => { theme.setMonoFont(family) },
-    }
-  }
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item',
-    id: 'mono-font',
-    order: 13,
-    store: monoFontStore,
-    locale: SETTINGS_NS,
-    inject: monoFontInjected,
-  }, FontFaceRow))
-
-  // One installed-font load feeds both rows: the result lands in each store's
-  // families/loading fields the rows render from. Best-effort — a missing API or
-  // denied permission leaves the lists empty and the pickers on the default.
-  void loadInstalledFonts().then((families) => {
-    loadedFamilies = families
-    variantFontBound?.setFamilies(families, false)
-    monoFontBound?.setFamilies(families, false)
-  })
 }

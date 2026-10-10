@@ -26,7 +26,7 @@ describe('ThemeRuntime', () => {
     const { theme } = make()
     const snapshot = theme.getTheme()
     expect(snapshot.preference).toBe('system')
-    expect(snapshot.fontSize).toBe(14)
+    expect(snapshot.fontSizes.text).toBe(14)
     // jsdom matchMedia is absent; system resolves to light.
     expect(snapshot.active.id).toBe('light')
     expect(snapshot.active.colorScheme).toBe('light')
@@ -38,9 +38,9 @@ describe('ThemeRuntime', () => {
     // runs; the first snapshot must match it so activation never flashes 14.
     document.body.style.setProperty('--dsh-content-font-size', '22px')
     try {
-      expect(make().theme.getTheme().fontSize).toBe(22)
+      expect(make().theme.getTheme().fontSizes.text).toBe(22)
       document.body.style.setProperty('--dsh-content-font-size', '23px')
-      expect(make().theme.getTheme().fontSize).toBe(14)
+      expect(make().theme.getTheme().fontSizes.text).toBe(14)
     } finally {
       document.body.style.removeProperty('--dsh-content-font-size')
     }
@@ -48,11 +48,11 @@ describe('ThemeRuntime', () => {
 
   it.each([10, 22])('setFontSize(%i) switches, writes through the scope, and republishes; same value is a no-op', (fontSize) => {
     const { theme, events, host } = make()
-    theme.setFontSize(fontSize)
-    expect(theme.getTheme().fontSize).toBe(fontSize)
+    theme.setFontSize('text', fontSize)
+    expect(theme.getTheme().fontSizes.text).toBe(fontSize)
     expect(host.set).toHaveBeenCalledWith('fontSize', fontSize)
     expect(events).toHaveLength(1)
-    theme.setFontSize(fontSize)
+    theme.setFontSize('text', fontSize)
     expect(events).toHaveLength(1)
     expect(host.set).toHaveBeenCalledOnce()
   })
@@ -60,42 +60,142 @@ describe('ThemeRuntime', () => {
   it('rejects out-of-range and fractional font sizes', () => {
     const { theme, events, host } = make()
     for (const px of [9, 23, 14.5, Number.NaN]) {
-      expect(() => { theme.setFontSize(px) }).toThrow('outside 10..22')
+      expect(() => { theme.setFontSize('text', px) }).toThrow('outside 10..22')
     }
     expect(events).toHaveLength(0)
     expect(host.set).not.toHaveBeenCalled()
   })
 
-  it('setVariantFont and setMonoFont switch, write through the scope, and reject invalid families', () => {
-    const { theme, events, host } = make()
-    theme.setVariantFont('Georgia')
-    expect(theme.getTheme().variantFont).toBe('Georgia')
-    expect(theme.getTheme().uiFontStack).toContain('"Georgia"')
-    expect(host.set).toHaveBeenCalledWith('variantFont', 'Georgia')
+  it('sets code and terminal sizes independently within their own ranges', () => {
+    const { theme, host } = make()
+    theme.setFontSize('code', 16)
+    theme.setFontSize('terminal', 20)
+    expect(theme.getTheme().fontSizes).toEqual({ text: 14, code: 16, terminal: 20 })
+    expect(host.set).toHaveBeenCalledWith('codeFontSize', 16)
+    expect(host.set).toHaveBeenCalledWith('terminalFontSize', 20)
+    expect(() => { theme.setFontSize('code', 17) }).toThrow('code font size 17 is outside 10..16')
+    expect(() => { theme.setFontSize('terminal', 9) }).toThrow('outside 10..20')
+  })
 
-    theme.setMonoFont('JetBrains Mono')
-    expect(theme.getTheme().monoFont).toBe('JetBrains Mono')
-    expect(theme.getTheme().monoFontStack).toContain('"JetBrains Mono"')
-    expect(host.set).toHaveBeenCalledWith('monoFont', 'JetBrains Mono')
-    expect(events).toHaveLength(2)
-
-    // Same value is a no-op; invalid values throw before writing.
-    theme.setVariantFont('Georgia')
-    expect(events).toHaveLength(2)
-    expect(() => { theme.setVariantFont('x'.repeat(65)) }).toThrow('invalid')
-    expect(() => { theme.setMonoFont('x'.repeat(65)) }).toThrow('invalid')
-    expect(host.set).toHaveBeenCalledTimes(2)
-
-    // '' restores the built-in default stack.
-    theme.setVariantFont('')
-    expect(theme.getTheme().uiFontStack).toContain('-apple-system')
+  it('seeds code and terminal sizes from the boot-script body variables, ignoring junk', () => {
+    document.body.style.setProperty('--dsh-code-font-size', '14px')
+    document.body.style.setProperty('--dsh-terminal-font-size', '99px')
+    try {
+      expect(make().theme.getTheme().fontSizes).toEqual({ text: 14, code: 14, terminal: 13 })
+    } finally {
+      document.body.style.removeProperty('--dsh-code-font-size')
+      document.body.style.removeProperty('--dsh-terminal-font-size')
+    }
   })
 
   it('adopts a published Host font size without writing it back', () => {
     const { theme, events, host } = make()
-    host.publish({ status: 'ready', value: { preference: 'system', fontSize: 12, variantFont: 'default', monoFont: 'default' }, revision: 1, writable: true })
-    expect(theme.getTheme().fontSize).toBe(12)
+    host.publish({ status: 'ready', value: { preference: 'system', fontSize: 12, codeFontSize: 15, terminalFontSize: 18, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '' }, revision: 1, writable: true })
+    expect(theme.getTheme().fontSizes).toEqual({ text: 12, code: 15, terminal: 18 })
     expect(events).toHaveLength(1)
+    expect(host.set).not.toHaveBeenCalled()
+  })
+
+  it('seeds initial font lists from the boot-script body variables, normalizing them', () => {
+    document.body.style.setProperty('--dsh-font-family-code', 'Iosevka')
+    try {
+      expect(make().theme.getTheme().fontFamilies).toEqual({ text: '', code: '"Iosevka"', terminal: '' })
+    } finally {
+      document.body.style.removeProperty('--dsh-font-family-code')
+    }
+  })
+
+  it('setFontFamily normalizes, writes one role through the scope, and republishes; same list is a no-op', () => {
+    const { theme, events, host } = make()
+    theme.setFontFamily('terminal', ' MesloLGS NF ,monospace,, ')
+    expect(theme.getTheme().fontFamilies).toEqual({ text: '', code: '', terminal: '"MesloLGS NF", monospace' })
+    expect(host.set).toHaveBeenCalledWith('terminalFontFamily', '"MesloLGS NF", monospace')
+    expect(events).toHaveLength(1)
+    theme.setFontFamily('terminal', '"MesloLGS NF", monospace')
+    expect(events).toHaveLength(1)
+    theme.setFontFamily('terminal', ' , ')
+    expect(theme.getTheme().fontFamilies.terminal).toBe('')
+    expect(host.set).toHaveBeenLastCalledWith('terminalFontFamily', '')
+  })
+
+  it('adopts published Host font lists, normalizing hand-edited values, without writing them back', () => {
+    const { theme, events, host } = make()
+    host.publish({ status: 'ready', value: { preference: 'system', fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: 'Inter', codeFontFamily: '"Fira Code"', terminalFontFamily: '' }, revision: 1, writable: true })
+    expect(theme.getTheme().fontFamilies).toEqual({ text: '"Inter"', code: '"Fira Code"', terminal: '' })
+    expect(events).toHaveLength(1)
+    host.publish({ value: { preference: 'system', fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '"Inter"', codeFontFamily: 'Fira Code', terminalFontFamily: '' }, revision: 2 })
+    expect(events).toHaveLength(1)
+    expect(host.set).not.toHaveBeenCalled()
+  })
+
+  it('defaults both font colors to no override and switches them through the scope', () => {
+    const { theme, events, host } = make()
+    expect(theme.getTheme().fontColorLight).toBe('')
+    expect(theme.getTheme().fontColorDark).toBe('')
+    theme.setFontColorLight('#0f1115')
+    expect(theme.getTheme().fontColorLight).toBe('#0f1115')
+    expect(host.set).toHaveBeenCalledWith('fontColorLight', '#0f1115')
+    expect(events).toHaveLength(1)
+    theme.setFontColorDark('#f9fafb')
+    expect(theme.getTheme().fontColorDark).toBe('#f9fafb')
+    expect(host.set).toHaveBeenCalledWith('fontColorDark', '#f9fafb')
+    expect(events).toHaveLength(2)
+    // Same value is a no-op; invalid colors throw before writing.
+    theme.setFontColorLight('#0f1115')
+    expect(events).toHaveLength(2)
+    expect(() => { theme.setFontColorLight('red') }).toThrow('invalid')
+    expect(() => { theme.setFontColorDark('rgba(0, 0, 0, 0.5)') }).toThrow('invalid')
+    expect(host.set).toHaveBeenCalledTimes(2)
+    // '' restores no override.
+    theme.setFontColorDark('')
+    expect(theme.getTheme().fontColorDark).toBe('')
+    expect(events).toHaveLength(3)
+  })
+
+  it('folds the active mode font color into the primary text token and omits it when unset', () => {
+    const { theme } = make()
+    theme.setTheme('light')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBeUndefined()
+    theme.setFontColorLight('#101010')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBe('#101010')
+    // Unset dark leaves no override once the dark scheme is active.
+    theme.setTheme('dark')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBeUndefined()
+    theme.setFontColorDark('#202020')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBe('#202020')
+    // Each scheme carries its own value; resetting removes the token.
+    theme.setTheme('light')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBe('#101010')
+    theme.setFontColorLight('')
+    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBeUndefined()
+  })
+
+  it('adopts font colors from the Host section, treating absent keys as no override', () => {
+    const { theme, events, host } = make()
+    const withColors = {
+      preference: 'light' as const, fontSize: 14, codeFontSize: 11, terminalFontSize: 13,
+      textFontFamily: '', codeFontFamily: '', terminalFontFamily: '',
+      fontColorLight: '#123456', fontColorDark: '#abcdef',
+    }
+    host.publish({ status: 'ready', value: withColors, revision: 1, writable: true })
+    expect(theme.getTheme().fontColorLight).toBe('#123456')
+    expect(theme.getTheme().fontColorDark).toBe('#abcdef')
+    expect(events).toHaveLength(1)
+    expect(host.set).not.toHaveBeenCalled()
+    // Re-publishing the same section does not republish.
+    host.publish({ value: withColors, revision: 2 })
+    expect(events).toHaveLength(1)
+    // A section written before the color fields existed (no keys) resets to ''.
+    host.publish({
+      value: {
+        preference: 'light', fontSize: 14, codeFontSize: 11, terminalFontSize: 13,
+        textFontFamily: '', codeFontFamily: '', terminalFontFamily: '',
+      },
+      revision: 3,
+    })
+    expect(theme.getTheme().fontColorLight).toBe('')
+    expect(theme.getTheme().fontColorDark).toBe('')
+    expect(events).toHaveLength(2)
     expect(host.set).not.toHaveBeenCalled()
   })
 
@@ -117,17 +217,32 @@ describe('ThemeRuntime', () => {
 
   it('adopts a published Host section without writing it back', () => {
     const { theme, events, host } = make()
-    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14, variantFont: 'default', monoFont: 'default' }, revision: 1, writable: true })
+    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '' }, revision: 1, writable: true })
     expect(theme.getTheme().preference).toBe('dark')
     expect(events).toHaveLength(1)
     expect(host.set).not.toHaveBeenCalled()
-    host.publish({ value: { preference: 'dark', fontSize: 14, variantFont: 'default', monoFont: 'default' }, revision: 2 })
+    host.publish({ value: { preference: 'dark', fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '' }, revision: 2 })
     expect(events).toHaveLength(1)
+  })
+
+  it('holds its own changes while writes are pending, then converges on the durable section', async () => {
+    const { theme, host } = make()
+    const section = { preference: 'system' as const, fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '' }
+    host.publish({ status: 'ready', value: section, revision: 1, writable: true })
+    const write = Promise.withResolvers<boolean>()
+    host.set.mockReturnValue(write.promise)
+    theme.setFontSize('code', 13)
+    // A Host echo of an earlier write must not revert the pending local change.
+    host.publish({ value: { ...section, terminalFontSize: 15 }, revision: 2 })
+    expect(theme.getTheme().fontSizes).toEqual({ text: 14, code: 13, terminal: 13 })
+    host.publish({ value: { ...section, codeFontSize: 13, terminalFontSize: 15 }, revision: 3 })
+    write.resolve(true)
+    await vi.waitFor(() => { expect(theme.getTheme().fontSizes).toEqual({ text: 14, code: 13, terminal: 15 }) })
   })
 
   it('adopts a section already standing at construction', () => {
     const host = stubConfigForm<ThemeSettings>()
-    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14, variantFont: 'default', monoFont: 'default' }, revision: 1, writable: true })
+    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '' }, revision: 1, writable: true })
     const { theme } = make(host)
     expect(theme.getTheme().preference).toBe('dark')
   })
@@ -264,70 +379,6 @@ describe('ThemeRuntime', () => {
     expect(host.listenerCount()).toBe(1)
     await ctx.fiber.dispose()
     expect(host.listenerCount()).toBe(0)
-  })
-
-  it('defaults both font colors to no override and switches them through the scope', () => {
-    const { theme, events, host } = make()
-    expect(theme.getTheme().fontColorLight).toBe('')
-    expect(theme.getTheme().fontColorDark).toBe('')
-    theme.setFontColorLight('#0f1115')
-    expect(theme.getTheme().fontColorLight).toBe('#0f1115')
-    expect(host.set).toHaveBeenCalledWith('fontColorLight', '#0f1115')
-    expect(events).toHaveLength(1)
-    theme.setFontColorDark('#f9fafb')
-    expect(theme.getTheme().fontColorDark).toBe('#f9fafb')
-    expect(host.set).toHaveBeenCalledWith('fontColorDark', '#f9fafb')
-    expect(events).toHaveLength(2)
-    // Same value is a no-op; invalid colors throw before writing.
-    theme.setFontColorLight('#0f1115')
-    expect(events).toHaveLength(2)
-    expect(() => { theme.setFontColorLight('red') }).toThrow('invalid')
-    expect(() => { theme.setFontColorDark('rgba(0, 0, 0, 0.5)') }).toThrow('invalid')
-    expect(host.set).toHaveBeenCalledTimes(2)
-    theme.setFontColorDark('#f9fafb')
-    expect(events).toHaveLength(2)
-    expect(host.set).toHaveBeenCalledTimes(2)
-    // '' restores no override.
-    theme.setFontColorDark('')
-    expect(theme.getTheme().fontColorDark).toBe('')
-    expect(events).toHaveLength(3)
-  })
-
-  it('folds the active mode font color into the primary text token and omits it when unset', () => {
-    const { theme } = make()
-    theme.setTheme('light')
-    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBeUndefined()
-    theme.setFontColorLight('#101010')
-    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBe('#101010')
-    // Unset dark leaves no override once the dark scheme is active.
-    theme.setTheme('dark')
-    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBeUndefined()
-    theme.setFontColorDark('#202020')
-    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBe('#202020')
-    // Each scheme carries its own value; resetting removes the token.
-    theme.setTheme('light')
-    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBe('#101010')
-    theme.setFontColorLight('')
-    expect(theme.getTheme().active.tokens['--dsw-alias-label-primary']).toBeUndefined()
-  })
-
-  it('adopts font colors from the Host section, treating absent keys as no override', () => {
-    const { theme, events, host } = make()
-    const withColors = { preference: 'light' as const, fontSize: 14, variantFont: 'default', monoFont: 'default', fontColorLight: '#123456', fontColorDark: '#abcdef' }
-    host.publish({ status: 'ready', value: withColors, revision: 1, writable: true })
-    expect(theme.getTheme().fontColorLight).toBe('#123456')
-    expect(theme.getTheme().fontColorDark).toBe('#abcdef')
-    expect(events).toHaveLength(1)
-    expect(host.set).not.toHaveBeenCalled()
-    // Re-publishing the same section does not republish.
-    host.publish({ value: withColors, revision: 2 })
-    expect(events).toHaveLength(1)
-    // A section written before the color fields existed (no keys) resets to ''.
-    host.publish({ value: { preference: 'light', fontSize: 14, variantFont: 'default', monoFont: 'default' }, revision: 3 })
-    expect(theme.getTheme().fontColorLight).toBe('')
-    expect(theme.getTheme().fontColorDark).toBe('')
-    expect(events).toHaveLength(2)
-    expect(host.set).not.toHaveBeenCalled()
   })
 
   describe('prefers-color-scheme resolution (stubbed matchMedia)', () => {

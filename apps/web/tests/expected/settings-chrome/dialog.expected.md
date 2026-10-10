@@ -18,26 +18,18 @@
   - text: 字号大小 仅影响会话内容的字号 14
   - button "增大字号"
   - button "减小字号"
-  - text: px 字体颜色 浅色与深色模式下的默认文字颜色 浅色模式
+  - text: px
+  - button "更多字体设置"
+  - text: 字体颜色 浅色与深色模式下的默认文字颜色 浅色模式
   - textbox "浅色模式": "#0f1115"
   - button "重置 浅色模式": 重置
   - text: 深色模式
   - textbox "深色模式": "#f9fafb"
   - button "重置 深色模式": 重置
-  - text: 字体 界面正文使用的字体
-  - combobox "字体":
-    - option "默认" [selected]
-    - option "Arial"
-    - option "DejaVu Sans"
-    - option "DejaVu Sans Mono"
   - text: 工作步骤展示 选择希望看到多少工具调用细节
   - button "详细"
-  - text: 等宽字体 代码块与终端使用的字体
-  - combobox "等宽字体":
-    - option "默认" [selected]
-    - option "Arial"
-    - option "DejaVu Sans"
-    - option "DejaVu Sans Mono"
+  - text: 工作步骤收起时机 选择何时自动收起工作步骤
+  - button "回答结束后"
   - text: 显示代码工作视图 开启后，显示轨迹、本轮代码差异，可选择完整的 Agent 预设切换
   - switch "显示代码工作视图"
   - text: 快捷键

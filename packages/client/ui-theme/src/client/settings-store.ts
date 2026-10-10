@@ -1,10 +1,10 @@
 /**
- * Appearance, font-size, font-color, and font-face row slot stores: mirrors of
- * the theme service snapshot. The plugin's apply-world change listener is the
- * only writer; the row components read via props.useStore.
+ * Appearance, font, and font-color row slot stores: mirrors of the theme
+ * service snapshot. The plugin's apply-world change listener is the only
+ * writer; the row components read via props.useStore.
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
-import { DEFAULT_FONT_SIZE, type ThemePreference } from '../theme-settings.ts'
+import { DEFAULT_FONT_SIZES, type FontFamilies, type FontSizes, type ThemePreference } from '../theme-settings.ts'
 
 /** Store state mirrored from the theme snapshot. */
 export interface AppearanceRowState {
@@ -36,30 +36,33 @@ export function createAppearanceRowStore(): EngineStoreHandle<AppearanceRowState
   })
 }
 
-/** Store state mirrored from the theme snapshot's font size. */
-export interface FontSizeRowState {
-  /** Persisted content font size in px. */
-  fontSize: number
+/** Store state mirrored from the theme snapshot's fonts (shared by the font-size row and the font settings group). */
+export interface FontRowState {
+  /** Persisted font sizes in px by role. */
+  fontSizes: FontSizes
+  /** Persisted normalized font lists by role. */
+  fontFamilies: FontFamilies
   /** Service revision; -1 until first sync so revision 0 lands as a change. */
   revision: number
 }
 
 /** Declared action shape giving the exported factory a stable return type. */
-type FontSizeRowActions = {
-  sync: (draft: FontSizeRowState, fontSize: number, revision: number) => void
+type FontRowActions = {
+  sync: (draft: FontRowState, fontSizes: FontSizes, fontFamilies: FontFamilies, revision: number) => void
 }
 
 /**
- * Declares the font-size row state and write surface.
+ * Declares the font rows' state and write surface.
  * @returns the store handle.
  */
-export function createFontSizeRowStore(): EngineStoreHandle<FontSizeRowState, FontSizeRowActions> {
+export function createFontRowStore(): EngineStoreHandle<FontRowState, FontRowActions> {
   return defineStore({
-    init: (): FontSizeRowState => ({ fontSize: DEFAULT_FONT_SIZE, revision: -1 }),
+    init: (): FontRowState => ({ fontSizes: DEFAULT_FONT_SIZES, fontFamilies: { text: '', code: '', terminal: '' }, revision: -1 }),
     actions: {
-      sync: (d, fontSize: number, revision: number) => {
+      sync: (d, fontSizes: FontSizes, fontFamilies: FontFamilies, revision: number) => {
         if (revision <= d.revision) return
-        d.fontSize = fontSize
+        d.fontSizes = fontSizes
+        d.fontFamilies = fontFamilies
         d.revision = revision
       },
     },
@@ -94,45 +97,6 @@ export function createFontColorRowStore(): EngineStoreHandle<FontColorRowState, 
         d.fontColorLight = fontColorLight
         d.fontColorDark = fontColorDark
         d.revision = revision
-      },
-    },
-  })
-}
-
-/** Store state mirrored from the theme snapshot's font family. */
-export interface FontFaceRowState {
-  /** Persisted font family name ('' = built-in default). */
-  font: string
-  /** Installed font family names for the picker's options. */
-  families: string[]
-  /** Whether the installed-font load is still in flight. */
-  loading: boolean
-  /** Service revision; -1 until first sync so revision 0 lands as a change. */
-  revision: number
-}
-
-/** Declared action shape giving the exported factory a stable return type. */
-type FontFaceRowActions = {
-  sync: (draft: FontFaceRowState, font: string, revision: number) => void
-  setFamilies: (draft: FontFaceRowState, families: string[], loading: boolean) => void
-}
-
-/**
- * Declares the font-face row state and write surface.
- * @returns the store handle.
- */
-export function createFontFaceRowStore(): EngineStoreHandle<FontFaceRowState, FontFaceRowActions> {
-  return defineStore({
-    init: (): FontFaceRowState => ({ font: '', families: [], loading: true, revision: -1 }),
-    actions: {
-      sync: (d, font: string, revision: number) => {
-        if (revision <= d.revision) return
-        d.font = font
-        d.revision = revision
-      },
-      setFamilies: (d, families: string[], loading: boolean) => {
-        d.families = families
-        d.loading = loading
       },
     },
   })

@@ -15,8 +15,8 @@
 
 pkgbase=deepseek-harness
 pkgname=('deepseek-harness' 'deepseek-harness-desktop')
-pkgver=0.2.1_alpha.1
-pkgrel=2
+pkgver=0.2.1_alpha.2
+pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/deepseek-ai/deepseek-harness"
 license=('MIT')
@@ -100,7 +100,7 @@ prepare() {
   fi
   # The node:url browser stub (apps/web/src/node-url-stub.ts) and its vite
   # alias already exist in the electron branch, so no patch is needed here.
-  corepack prepare pnpm@11.7.0 --activate
+  corepack prepare pnpm@11.28.5 --activate
   resolve_pnpm_cache_paths
   export pnpm_config_store_dir="$_pnpm_store"
   # Packaging assembles the application against the distribution Electron

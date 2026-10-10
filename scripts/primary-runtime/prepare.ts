@@ -1,8 +1,8 @@
 /** Prepare pinned, relocatable script interpreters without installing into the build host. */
 
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { accessSync, constants, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash, randomUUID } from 'node:crypto'
+import { accessSync, constants, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -11,8 +11,9 @@ import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import extractZip from 'extract-zip'
 import { x as extractTar } from 'tar'
-import { parsePrimaryRuntime, workspaceDependencyPaths, type PrimaryRuntimeManifest } from '../../packages/skill/tool-workspace-dependencies/src/index.ts'
+import { parsePrimaryRuntime, workspaceDependencyPaths, type PrimaryRuntimeManifest } from '@deepseek-ai/dsh-tool-workspace-dependencies'
 import lock from './lock.json' with { type: 'json' }
+import { prunePrimaryRuntimePythonTests } from './prune-python-tests.ts'
 
 /**
  * Checksum-verified transport mirror for the Node.js distribution. Some networks
@@ -23,22 +24,38 @@ const NODE_DIST_MIRROR = 'https://npmmirror.com/mirrors/node'
 /**
  * Download or reuse an archive only when its bytes match the release lock.
  * @param url - Locked archive URL.
- * @param sha256 - Expected SHA-256 digest.
+ * @param sha256 - Expected hexadecimal digest for the selected algorithm.
  * @param cache - Download cache directory.
  * @param mirrors - Transport mirrors tried after the locked URL; the digest still decides the accepted bytes.
+ * @param algorithm - Digest algorithm; npm archives use SHA-512.
  * @returns Verified local archive path.
  */
 export async function downloadPrimaryRuntimeAsset(
-  url: string, sha256: string, cache: string, mirrors: readonly string[] = [],
+  url: string, sha256: string, cache: string, mirrors: readonly string[] = [], algorithm: 'sha256' | 'sha512' = 'sha256',
 ): Promise<string> {
+  mkdirSync(cache, { recursive: true })
   const destination = join(cache, sha256)
   let bytes: Buffer
+  let cached = true
   try { bytes = readFileSync(destination) } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    bytes = await fetchFirstAvailable([url, ...mirrors], url)
+    cached = false
+    const timeout = Number(process.env.DSH_RESOURCE_DOWNLOAD_TIMEOUT_MS ?? '300000')
+    if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 2_147_483_647) throw new Error('DSH_RESOURCE_DOWNLOAD_TIMEOUT_MS must be an integer from 1 to 2147483647')
+    bytes = await fetchFirstAvailable([url, ...mirrors], url, timeout)
   }
-  if (createHash('sha256').update(bytes).digest('hex') !== sha256) throw new Error(`primary runtime download: checksum mismatch for ${url}`)
-  writeFileSync(destination, bytes)
+  if (createHash(algorithm).update(bytes).digest('hex') !== sha256) {
+    rmSync(destination, { force: true })
+    throw new Error(`primary runtime download: checksum mismatch for ${url}`)
+  }
+  if (cached) return destination
+  const temporary = join(cache, `.${randomUUID()}`)
+  try {
+    writeFileSync(temporary, bytes)
+    renameSync(temporary, destination)
+  } finally {
+    rmSync(temporary, { force: true })
+  }
   return destination
 }
 
@@ -46,13 +63,14 @@ export async function downloadPrimaryRuntimeAsset(
  * Fetch an archive from the first source that answers, so a blocked locked host can fall back to a mirror.
  * @param sources - The locked URL followed by mirror URLs.
  * @param url - The locked URL named in the failure message.
+ * @param timeoutMs - Per-attempt timeout in milliseconds.
  * @returns The first successful response body.
  */
-async function fetchFirstAvailable(sources: readonly string[], url: string): Promise<Buffer> {
+async function fetchFirstAvailable(sources: readonly string[], url: string, timeoutMs: number): Promise<Buffer> {
   const failures: string[] = []
   for (const source of sources) {
     try {
-      const response = await fetch(source)
+      const response = await fetch(source, { signal: AbortSignal.timeout(timeoutMs) })
       if (!response.ok) { failures.push(`${String(response.status)} ${source}`); continue }
       return Buffer.from(await response.arrayBuffer())
     } catch (error) {
@@ -60,6 +78,61 @@ async function fetchFirstAvailable(sources: readonly string[], url: string): Pro
     }
   }
   throw new Error(`primary runtime download failed for ${url}: ${failures.join('; ')}`)
+}
+
+/** Pinned npm tarball, without dependency resolution or lifecycle scripts. */
+export interface RuntimeNpmArchive {
+  /** Exact published package name. */
+  readonly name: string
+  /** Exact published version. */
+  readonly version: string
+  /** Registry tarball URL. */
+  readonly url: string
+  /** npm SHA-512 integrity. */
+  readonly integrity: string
+}
+
+/**
+ * Download and unpack one locked npm package without running its scripts.
+ * @param artifact - Published tarball identity and integrity.
+ * @param destination - Empty package directory.
+ * @param cache - Verified archive cache.
+ * @returns Resolves after package identity validation.
+ */
+export async function downloadRuntimeNpmPackage(artifact: RuntimeNpmArchive, destination: string, cache: string): Promise<void> {
+  if (!/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(artifact.integrity)) throw new Error(`runtime download: invalid integrity for ${artifact.name}`)
+  const checksum = Buffer.from(artifact.integrity.slice(7), 'base64').toString('hex')
+  const archive = await downloadPrimaryRuntimeAsset(artifact.url, checksum, cache, [], 'sha512')
+  mkdirSync(destination, { recursive: true })
+  await extractTar({ file: archive, cwd: destination, strip: 1 })
+  const installed = JSON.parse(readFileSync(join(destination, 'package.json'), 'utf8')) as { name?: string; version?: string }
+  if (installed.name !== artifact.name || installed.version !== artifact.version) throw new Error(`runtime download: package identity mismatch for ${artifact.name}`)
+}
+
+/**
+ * Prepare the locked standalone Node independently of Python and pnpm.
+ * @param target - Target interpreter platform.
+ * @param destination - Directory receiving bin/node and LICENSE.
+ * @param cache - Verified archive cache.
+ * @returns Resolves after extracting the interpreter.
+ */
+export async function downloadNodeRuntime(target: PrimaryRuntimeTarget, destination: string, cache: string): Promise<void> {
+  const artifact = lock.targets[target]
+  const filename = `node-v${lock.nodeVersion}-${artifact.nodeArchive}`
+  const archive = await downloadPrimaryRuntimeAsset(`https://nodejs.org/dist/v${lock.nodeVersion}/${filename}`, artifact.nodeSha256, cache,
+    [`${NODE_DIST_MIRROR}/v${lock.nodeVersion}/${filename}`])
+  const staging = mkdtempSync(join(tmpdir(), 'dsh-node-'))
+  try {
+    if (target === 'win-x64') await extractZip(archive, { dir: staging })
+    else await extractTar({ file: archive, cwd: staging })
+    const source = join(staging, filename.replace(/\.(?:zip|tar\.gz)$/u, ''))
+    mkdirSync(join(destination, 'bin'), { recursive: true })
+    cpSync(join(source, ...(target === 'win-x64' ? ['node.exe'] : ['bin', 'node'])),
+      join(destination, 'bin', target === 'win-x64' ? 'node.exe' : 'node'))
+    cpSync(join(source, 'LICENSE'), join(destination, 'LICENSE'))
+  } finally {
+    rmSync(staging, { recursive: true, force: true })
+  }
 }
 
 async function pythonArchive(target: keyof typeof lock.targets, cache: string): Promise<string> {
@@ -82,7 +155,7 @@ export function primaryRuntimePayloadDigest(
   // Identity preserves key order within the selected target, wheel records and distribution map, plus wheel-entry order.
   // Bump format when extraction or assembly changes payload bytes without changing locked inputs.
   return createHash('sha256').update(JSON.stringify({
-    format: 4, target, pythonVersion, pythonRelease, nodeVersion: pnpmVersion === undefined ? undefined : nodeVersion,
+    format: 6, target, pythonVersion, pythonRelease, nodeVersion: pnpmVersion === undefined ? undefined : nodeVersion,
     artifact: runtimeLock.targets[target], wheels, pythonPackages, pnpm: pnpmVersion,
   })).digest('hex')
 }
@@ -261,7 +334,8 @@ export async function prepareSystemPrimaryRuntime(options: SystemPrimaryRuntimeO
 
 /**
  * Write the pnpm launcher that a system payload executes under its own Node.js.
- * @param root - Desktop runtime root receiving `pnpm/bin/pnpm.mjs`.
+ * @param root - Directory receiving `pnpm/bin/pnpm.mjs`; callers pass the
+ * primary-runtime dependencies directory so both runtime modes share one pnpm location.
  * @param entry - Absolute system pnpm entry script.
  * @returns Absolute launcher path.
  */
@@ -273,7 +347,7 @@ export function writeSystemPnpmLauncher(root: string, entry: string): string {
   return launcher
 }
 
-/** Build-only inputs shared by Desktop and SDK carriers. */
+/** Resource preparation inputs shared by builds and explicit SDK downloads. */
 export interface PreparePrimaryRuntimeOptions {
   /** Target whose archives and wheels are downloaded. */
   readonly target: PrimaryRuntimeTarget
@@ -283,6 +357,10 @@ export interface PreparePrimaryRuntimeOptions {
   readonly cache: string
   /** Carrier release recorded in the legacy desktopVersion manifest field. */
   readonly version: string
+  /** Locked npm pnpm tarball for installed carriers; build hosts otherwise copy their installed pnpm. */
+  readonly pnpmArchive?: RuntimeNpmArchive
+  /** Ordinary filesystem Office assets; build hosts otherwise resolve the workspace package. */
+  readonly skillSource?: string
   /** Omit Node.js and pnpm for carriers providing only Python. */
   readonly pythonOnly?: boolean
 }
@@ -295,7 +373,6 @@ export interface PreparePrimaryRuntimeOptions {
 export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOptions): Promise<void> {
   const { target } = options
   const paths = { runtime: resolve(options.output), downloads: resolve(options.cache) }
-  const artifact = lock.targets[target]
   mkdirSync(paths.runtime, { recursive: true })
   mkdirSync(paths.downloads, { recursive: true })
   const staging = mkdtempSync(join(tmpdir(), 'dsh-primary-'))
@@ -305,25 +382,18 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
     mkdirSync(dependencies, { recursive: true })
     let pnpmVersion: string | undefined
     if (!options.pythonOnly) {
-      const nodeFilename = `node-v${lock.nodeVersion}-${artifact.nodeArchive}`
-      const nodeUrl = `https://nodejs.org/dist/v${lock.nodeVersion}/${nodeFilename}`
-      const nodeArchive = await downloadPrimaryRuntimeAsset(nodeUrl, artifact.nodeSha256, paths.downloads,
-        [`${NODE_DIST_MIRROR}/v${lock.nodeVersion}/${nodeFilename}`])
-      const unpackedNode = join(staging, 'node')
-      mkdirSync(unpackedNode)
-      if (target === 'win-x64') await extractZip(nodeArchive, { dir: unpackedNode })
-      else await extractTar({ file: nodeArchive, cwd: unpackedNode })
-      const nodeSource = join(unpackedNode, nodeFilename.replace(/\.(?:zip|tar\.gz)$/u, ''))
-      mkdirSync(join(dependencies, 'node', 'bin'), { recursive: true })
-      mkdirSync(join(dependencies, 'node', 'node_modules'))
-      writeFileSync(join(dependencies, 'node', 'node_modules', 'README.txt'), 'Reserved for bundled Node packages. pnpm uses its default installation directories.\n')
-      cpSync(join(nodeSource, ...(target === 'win-x64' ? ['node.exe'] : ['bin', 'node'])),
-        join(dependencies, 'node', 'bin', target === 'win-x64' ? 'node.exe' : 'node'))
-      cpSync(join(nodeSource, 'LICENSE'), join(dependencies, 'node', 'LICENSE'))
-      const require = createRequire(import.meta.url)
-      const pnpmManifest = require.resolve('pnpm')
-      pnpmVersion = (JSON.parse(readFileSync(pnpmManifest, 'utf8')) as { version: string }).version
-      await cp(dirname(pnpmManifest), join(dependencies, 'pnpm'), { recursive: true, dereference: true })
+      const node = join(dependencies, 'node')
+      await downloadNodeRuntime(target, node, paths.downloads)
+      mkdirSync(join(node, 'node_modules'))
+      writeFileSync(join(node, 'node_modules', 'README.txt'), 'Reserved for bundled Node packages. pnpm uses its default installation directories.\n')
+      if (options.pnpmArchive !== undefined) {
+        pnpmVersion = options.pnpmArchive.version
+        await downloadRuntimeNpmPackage(options.pnpmArchive, join(dependencies, 'pnpm'), paths.downloads)
+      } else {
+        const pnpmManifest = createRequire(import.meta.url).resolve('pnpm')
+        pnpmVersion = (JSON.parse(readFileSync(pnpmManifest, 'utf8')) as { version: string }).version
+        await cp(dirname(pnpmManifest), join(dependencies, 'pnpm'), { recursive: true, dereference: true })
+      }
     }
     await extractTar({ file: await pythonArchive(target, paths.downloads), cwd: dependencies })
     const manifest: PrimaryRuntimeManifest = {
@@ -335,9 +405,10 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
       pythonPackages: lock.pythonPackages,
     }
     const entries = workspaceDependencyPaths(output, manifest)
-    for (const wheel of [...artifact.wheels, ...lock.wheels]) {
+    for (const wheel of [...lock.targets[target].wheels, ...lock.wheels]) {
       await unpackPrimaryRuntimeWheel(await downloadPrimaryRuntimeAsset(wheel.url, wheel.sha256, paths.downloads), entries.pythonPackages)
     }
+    prunePrimaryRuntimePythonTests(entries.pythonPackages)
     writeFileSync(join(output, 'runtime.json'), `${JSON.stringify(manifest, undefined, 2)}\n`)
     const destination = join(paths.runtime, 'primary-runtime')
     rmSync(destination, { recursive: true, force: true })
@@ -345,8 +416,8 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
   } finally {
     rmSync(staging, { recursive: true, force: true })
   }
-  const require = createRequire(import.meta.url)
-  await prepareOfficeSkillAssets(join(dirname(require.resolve('@deepseek-ai/dsh-skill-office/package.json')), 'assets'),
+  const assets = options.skillSource ?? join(dirname(createRequire(import.meta.url).resolve('@deepseek-ai/dsh-skill-office/package.json')), 'assets')
+  await prepareOfficeSkillAssets(assets,
     join(paths.runtime, 'office-skills'))
 }
 

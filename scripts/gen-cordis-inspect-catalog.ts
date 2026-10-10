@@ -14,7 +14,7 @@ const CLIENT_SERVICES: Readonly<Record<string, readonly string[]>> = {
   locale: ['getLocale', 'getSnapshot', 'subscribe', 'setLocale', 'addLanguage', 'register', 'bind'],
   sessions: ['retain', 'using', 'retainInfo', 'refreshProjections', 'search', 'fork', 'scope', 'binding'],
   slots: ['register', 'registerFactory', 'inject'],
-  theme: ['getTheme', 'setTheme', 'setFontSize', 'setVariantFont', 'setMonoFont', 'register', 'overrideTokens'],
+  theme: ['getTheme', 'setTheme', 'setFontSize', 'register', 'overrideTokens'],
   uiWorkspace: [
     'openSession', 'openWorkspace', 'forkSession', 'connectWorkspace', 'startSession', 'archiveSession', 'unarchiveSession',
     'pickDirectory', 'listDirectory', 'createDirectory',
