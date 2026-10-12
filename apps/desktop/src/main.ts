@@ -18,6 +18,7 @@ import {
   net,
   Notification,
   protocol,
+  screen,
   session,
   shell,
   type IpcMainInvokeEvent,
@@ -723,8 +724,11 @@ async function main(): Promise<void> {
   const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
     : join(resources.root, 'icon.png')
   // The application artwork is 1024 px for installers and the About panel. A notification service
-  // draws the image it is given, so the shell hands it a 256 px copy.
-  const notificationIcon = nativeImage.createFromPath(applicationIconPath).resize({ width: 256, height: 256 })
+  // draws the bitmap at the size it is given, so the shell hands over a 48 px copy in device
+  // pixels: one that matches the output scale draws 1:1, while a smaller copy is stretched.
+  const notificationIconEdge = Math.round(48 * screen.getPrimaryDisplay().scaleFactor)
+  const notificationIcon = nativeImage.createFromPath(applicationIconPath)
+    .resize({ width: notificationIconEdge, height: notificationIconEdge })
 
   /**
    * Raise a native notification for one Web UI attention kind. A window already

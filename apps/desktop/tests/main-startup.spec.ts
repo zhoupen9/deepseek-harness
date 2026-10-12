@@ -303,6 +303,9 @@ vi.mock('electron', () => ({
   dialog: harness.dialog,
   shell: { openExternal: harness.openExternal },
   nativeTheme: harness.nativeTheme,
+  // The notification icon is sized in device pixels; a 2x display keeps that assertion distinct
+  // from the logical size on the 1x displays that run this spec.
+  screen: { getPrimaryDisplay: () => ({ scaleFactor: 2 }) },
   net: { fetch: vi.fn() },
   ipcMain: {
     on: harness.ipcOn,
@@ -1030,7 +1033,7 @@ describe('desktop main startup', () => {
     expect(harness.notifications).toHaveLength(1)
     expect(harness.notifications[0]).toEqual({
       title: 'Approval requested', body: 'DeepSeek Harness needs your approval to continue.',
-      icon: { path: join(dirname(harness.app.getAppPath()), 'icon.png'), size: { width: 256, height: 256 } },
+      icon: { path: join(dirname(harness.app.getAppPath()), 'icon.png'), size: { width: 96, height: 96 } },
     })
   })
 
