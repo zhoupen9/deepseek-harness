@@ -93,6 +93,8 @@ describe('installed-update application inputs and builder configuration', () => 
           { from: join(dsh, 'node_modules'), to: 'dsh/node_modules' },
         ])
         expect(config.files.filter(entry => typeof entry !== 'string' && entry.to.startsWith('dsh'))).toEqual([])
+        expect(config.files).toContain('!node_modules/**/*.{js,cjs,mjs,ts,cts,mts,css}.map')
+        expect(config.files).toContain('!node_modules/**/*.tsbuildinfo')
         expect(config.win.forceCodeSigning).toBe(true)
         expect(config.win.signtoolOptions.publisherName).toBe('CN=Fixture,O=Fixture,C=CN')
         expect(typeof config.win.signtoolOptions.sign).toBe('function')

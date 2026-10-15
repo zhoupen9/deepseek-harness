@@ -37,6 +37,10 @@ function emptyWorkspaces() {
 // Every session-scope fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
 const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
+// Access hooks the session, workspace, and remote-access plugins merge into GlobalStandardProps.
+const useSessionAccess: GlobalStandardProps['useSessionAccess'] = () => false
+const useWorkspaceAccess: GlobalStandardProps['useWorkspaceAccess'] = () => false
+const useRemoteAccess: GlobalStandardProps['useRemoteAccess'] = () => false
 
 type StatusSnapshot = Parameters<Parameters<FontColorRowComponentProps['useSessionStatus']>[0]>[0]
 const noStatus: StatusSnapshot = new Map()
@@ -52,6 +56,9 @@ function mount(light = '', dark = '') {
     useResource,
     usePanelInfo,
     useSessions: emptySessions(),
+    useSessionAccess,
+    useWorkspaceAccess,
+    useRemoteAccess,
     useSessionStatus,
     useSessionRetainInfo: () => undefined,
     useWorkspaces: emptyWorkspaces(),

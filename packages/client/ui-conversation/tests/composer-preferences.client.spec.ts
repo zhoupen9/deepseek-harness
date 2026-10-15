@@ -57,7 +57,7 @@ describe('ComposerPreferences', () => {
 
   it('shows statistics where the Host serves no settings scope at all', () => {
     const host = stubConfigForm<ChatPreferenceSettings>()
-    host.publish({ mode: 'memory', status: 'unavailable' })
+    host.publish({ status: 'unavailable' })
     const preferences = new ComposerPreferences(host.scope)
     // The pills read the same absent section and keep their default rendering,
     // so the ring must not diverge from them on a read-only page.

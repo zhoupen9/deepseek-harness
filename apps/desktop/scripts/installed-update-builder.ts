@@ -31,6 +31,7 @@ export async function createInstalledUpdateBuilderConfig(manifest: string, versi
     files: [
       { from: application, to: '.', filter: ['lib/*.js', 'lib/*.cjs', 'renderer/**/*', 'qualification-bootstrap.mjs', 'installed-update-identity.mjs'] },
       'package.json',
+      ...config.files.filter((file): file is string => typeof file === 'string' && file.startsWith('!')),
     ],
     // Qualification replaces the ordinary payload with the private runtime it prepared.
     extraResources: [

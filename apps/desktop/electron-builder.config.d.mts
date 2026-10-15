@@ -7,6 +7,11 @@ export interface DesktopElectronBuilderFileSet {
   readonly filter?: readonly string[]
 }
 
+/** One file set inside `files`, which always carries the patterns the release tests copy by value. */
+export interface DesktopElectronBuilderFilesEntry extends DesktopElectronBuilderFileSet {
+  readonly filter: readonly string[]
+}
+
 /** Electron-builder fields asserted by the Desktop release tests. */
 export interface DesktopElectronBuilderConfig {
   readonly appId: string
@@ -15,7 +20,7 @@ export interface DesktopElectronBuilderConfig {
   readonly directories: {
     readonly output: string
   }
-  readonly files: readonly (string | DesktopElectronBuilderFileSet)[]
+  readonly files: readonly (string | DesktopElectronBuilderFilesEntry)[]
   readonly extraMetadata: { readonly dshDesktopAppId: string }
   readonly asarUnpack: readonly string[]
   /** Resource directory contents, including the unpacked Harness payload beside the archive. */
@@ -30,6 +35,7 @@ export interface DesktopElectronBuilderConfig {
     readonly signIgnore: readonly string[]
   }
   readonly dmg: {
+    readonly format: 'ULMO'
     readonly sign: boolean
     readonly writeUpdateInfo: boolean
   }
