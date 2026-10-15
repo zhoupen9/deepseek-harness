@@ -1,11 +1,12 @@
-import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { readFileSync, realpathSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { zipSync } from 'fflate'
 import { expect, it } from 'vitest'
-import { downloadPrimaryRuntimeAsset, prepareOfficeSkillAssets, primaryRuntimePayloadDigest, smokePrimaryRuntime, unpackPrimaryRuntimeWheel } from './prepare.ts'
+import { downloadPrimaryRuntimeAsset, prepareOfficeSkillAssets, primaryRuntimePayloadDigest, resolveSystemPnpm, smokePrimaryRuntime, unpackPrimaryRuntimeWheel, writeSystemPnpmLauncher } from './prepare.ts'
 import lock from './lock.json' with { type: 'json' }
 
 it('covers every SDK wheel target with the shared interpreter lock', () => {
@@ -188,4 +189,48 @@ it('keeps carrier pnpm versions aligned with the shared payload build', () => {
   }
   expect(desktop.devDependencies.pnpm).toBe(root.devDependencies.pnpm)
   expect(root.packageManager).toBe(`pnpm@${root.devDependencies.pnpm}`)
+})
+
+it('resolves a script pnpm through the supplied Node and validates its output', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'primary-pnpm-script-'))
+  try {
+    const entry = join(root, 'pnpm.cjs')
+    await writeFile(entry, 'console.log("12.13.0")\n')
+    expect(resolveSystemPnpm(process.execPath, entry)).toEqual({ entry: realpathSync(entry), version: '12.13.0' })
+    await writeFile(entry, 'console.log("beta")\n')
+    expect(() => resolveSystemPnpm(process.execPath, entry)).toThrow('reported an unsupported version "beta"')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('executes a standalone binary pnpm directly rather than loading it as JavaScript', () => {
+  // process.execPath is a native image and its --version output keeps the leading v the resolver
+  // rejects; loading it under Node would die on the image bytes before printing any version.
+  expect(() => resolveSystemPnpm(process.execPath, process.execPath)).toThrow(/reported an unsupported version "v/u)
+})
+
+it('imports a script pnpm entry with the arguments the payload forwarded', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'primary-pnpm-launcher-'))
+  try {
+    const entry = join(root, 'pnpm.mjs')
+    await writeFile(entry, 'console.log(process.argv.slice(2).join(" "))\n')
+    const launcher = writeSystemPnpmLauncher(join(root, 'dependencies'), entry)
+    expect(launcher).toBe(join(root, 'dependencies', 'pnpm', 'bin', 'pnpm.mjs'))
+    expect(execFileSync(process.execPath, [launcher, '--version', '--store-dir', 'x'], { encoding: 'utf8' }).trim())
+      .toBe('--version --store-dir x')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('launches a standalone binary pnpm and forwards its exit status', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'primary-pnpm-binary-'))
+  try {
+    const launcher = writeSystemPnpmLauncher(root, process.execPath)
+    expect(execFileSync(process.execPath, [launcher, '-p', '40 + 2'], { encoding: 'utf8' }).trim()).toBe('42')
+    let status: number | undefined
+    try {
+      execFileSync(process.execPath, [launcher, '-e', 'process.exit(7)'])
+    } catch (error) {
+      status = (error as { status?: number }).status
+    }
+    expect(status).toBe(7)
+  } finally { await rm(root, { recursive: true, force: true }) }
 })

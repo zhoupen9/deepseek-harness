@@ -2,7 +2,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { accessSync, constants, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { accessSync, closeSync, constants, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -273,16 +273,40 @@ function systemNodeVersion(node: string): string {
   return version
 }
 
+/** Leading magic numbers of native images, which Node executes but cannot import. */
+const NATIVE_EXECUTABLE_MAGICS = new Set([
+  0x7f454c46, // ELF
+  0xfeedface, 0xcefaedfe, 0xfeedfacf, 0xcffaedfe, 0xcafebabe, // Mach-O, thin and universal
+])
+
 /**
- * Resolve the system pnpm entry script and its version.
- * @param node - System Node.js executable that runs the script.
- * @param pnpm - System pnpm executable, which may be a symlink to its entry script.
- * @returns Absolute entry script and its version.
+ * Whether pnpm was installed as a standalone binary rather than a JavaScript entry script.
+ * @param path - Absolute pnpm executable.
+ * @returns True for an ELF, Mach-O, or PE image; a script of any kind is not one.
+ */
+function isNativePnpmBinary(path: string): boolean {
+  const descriptor = openSync(path, 'r')
+  try {
+    const header = Buffer.alloc(4)
+    if (readSync(descriptor, header, 0, header.length, 0) < 2) return false
+    return header.subarray(0, 2).toString('latin1') === 'MZ' || NATIVE_EXECUTABLE_MAGICS.has(header.readUInt32BE(0))
+  } finally {
+    closeSync(descriptor)
+  }
+}
+
+/**
+ * Resolve the system pnpm executable and its version.
+ * @param node - System Node.js executable that runs a JavaScript entry script.
+ * @param pnpm - System pnpm executable: a JavaScript entry script or a standalone binary.
+ * @returns Absolute executable and its version.
  */
 export function resolveSystemPnpm(node: string, pnpm: string): { entry: string; version: string } {
   const entry = realpathSync(pnpm)
+  // A distribution that packages pnpm as a standalone binary never runs it under another Node.
+  const native = isNativePnpmBinary(entry)
   // A project package.json with a packageManager field makes pnpm switch to that version; ask outside one.
-  const version = execFileSync(node, [entry, '--version'], { encoding: 'utf8', cwd: tmpdir() }).trim()
+  const version = execFileSync(native ? entry : node, native ? ['--version'] : [entry, '--version'], { encoding: 'utf8', cwd: tmpdir() }).trim()
   if (!/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/u.test(version)) throw new Error(`primary runtime: ${pnpm} reported an unsupported version ${JSON.stringify(version)}`)
   return { entry, version }
 }
@@ -311,8 +335,15 @@ export interface SystemPrimaryRuntimeOptions {
 export async function prepareSystemPrimaryRuntime(options: SystemPrimaryRuntimeOptions): Promise<void> {
   const python = resolveSystemExecutable('python3', options.python)
   const node = resolveSystemExecutable('node', options.node)
-  const { entry: pnpm, version: pnpmVersion } = resolveSystemPnpm(node, resolveSystemExecutable('pnpm', options.pnpm))
+  const { entry: pnpmEntry, version: pnpmVersion } = resolveSystemPnpm(node, resolveSystemExecutable('pnpm', options.pnpm))
   const identity = targetIdentity(options.target)
+  const runtime = resolve(options.output)
+  const destination = join(runtime, 'primary-runtime')
+  rmSync(destination, { recursive: true, force: true })
+  mkdirSync(destination, { recursive: true })
+  // Consumers run pnpm through the payload's own Node.js, which cannot always execute the host's
+  // pnpm, so the manifest records the launcher that adapts whichever shape the host installed.
+  const pnpm = writeSystemPnpmLauncher(join(destination, 'dependencies'), pnpmEntry)
   const manifest: PrimaryRuntimeManifest = {
     desktopVersion: options.version,
     ...identity,
@@ -322,10 +353,6 @@ export async function prepareSystemPrimaryRuntime(options: SystemPrimaryRuntimeO
     pythonPackages: systemPythonDistributions(python),
     external: { python, pythonPackages: systemPythonPackages(python), node, pnpm },
   }
-  const runtime = resolve(options.output)
-  const destination = join(runtime, 'primary-runtime')
-  rmSync(destination, { recursive: true, force: true })
-  mkdirSync(destination, { recursive: true })
   writeFileSync(join(destination, 'runtime.json'), `${JSON.stringify(manifest, undefined, 2)}\n`)
   const require = createRequire(import.meta.url)
   await prepareOfficeSkillAssets(join(dirname(require.resolve('@deepseek-ai/dsh-skill-office/package.json')), 'assets'),
@@ -336,14 +363,17 @@ export async function prepareSystemPrimaryRuntime(options: SystemPrimaryRuntimeO
  * Write the pnpm launcher that a system payload executes under its own Node.js.
  * @param root - Directory receiving `pnpm/bin/pnpm.mjs`; callers pass the
  * primary-runtime dependencies directory so both runtime modes share one pnpm location.
- * @param entry - Absolute system pnpm entry script.
+ * @param entry - Absolute system pnpm executable: a JavaScript entry script or a standalone binary.
  * @returns Absolute launcher path.
  */
 export function writeSystemPnpmLauncher(root: string, entry: string): string {
   const launcher = join(root, 'pnpm', 'bin', 'pnpm.mjs')
   rmSync(join(root, 'pnpm'), { recursive: true, force: true })
   mkdirSync(dirname(launcher), { recursive: true })
-  writeFileSync(launcher, `process.argv[1] = ${JSON.stringify(entry)}\nawait import(${JSON.stringify(pathToFileURL(entry).href)})\n`)
+  // A standalone binary cannot be imported, so its launcher starts it and forwards the exit status.
+  writeFileSync(launcher, isNativePnpmBinary(entry)
+    ? `import { spawnSync } from 'node:child_process'\nconst result = spawnSync(${JSON.stringify(entry)}, process.argv.slice(2), { stdio: 'inherit' })\nif (result.error !== undefined) throw result.error\nprocess.exit(result.status ?? 1)\n`
+    : `process.argv[1] = ${JSON.stringify(entry)}\nawait import(${JSON.stringify(pathToFileURL(entry).href)})\n`)
   return launcher
 }
 
