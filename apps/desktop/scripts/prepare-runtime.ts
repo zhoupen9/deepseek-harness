@@ -9,7 +9,6 @@ import { parseArgs } from 'node:util'
 import { downloadArtifact } from '@electron/get'
 import extractZip from 'extract-zip'
 import { readPrimaryRuntime } from '../../../packages/skill/tool-workspace-dependencies/src/index.ts'
-import { writeSystemPnpmLauncher } from '../../../scripts/primary-runtime/prepare.ts'
 import { desktopTargetPlatform, resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
 import { packagingStep } from './packaging-step.mjs'
 import { preparePrimaryRuntime } from './prepare-primary-runtime.ts'
@@ -90,13 +89,10 @@ async function main(): Promise<void> {
   const primaryRuntime = await readPrimaryRuntime(join(RUNTIME_ROOT, 'primary-runtime'))
   if (primaryRuntime.pnpm === undefined) throw new Error('desktop runtime: primary-runtime manifest has no pnpm version')
   if (primaryRuntime.node === undefined) throw new Error('desktop runtime: the prepared primary runtime declares no Node.js runtime')
-  if (systemRuntime) {
-    const pnpm = primaryRuntime.external?.pnpm
-    if (pnpm === undefined) throw new Error('desktop runtime: the system payload declares no system pnpm entry')
-    // A system payload carries no package manager of its own, so the primary runtime's single
-    // pnpm location holds a launcher for the host's pnpm instead of a distribution copy.
-    await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:system-pnpm',
-      async () => { writeSystemPnpmLauncher(join(RUNTIME_ROOT, 'primary-runtime', 'dependencies'), pnpm) })
+  // The system primary-runtime preparation materializes the payload's pnpm launcher and records
+  // it as the external pnpm entry, so packaging needs no separate pnpm step here.
+  if (systemRuntime && primaryRuntime.external?.pnpm === undefined) {
+    throw new Error('desktop runtime: the system payload declares no system pnpm entry')
   }
   if (target.platform !== 'linux') {
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:cli', async () => { prepareCli(target) })
