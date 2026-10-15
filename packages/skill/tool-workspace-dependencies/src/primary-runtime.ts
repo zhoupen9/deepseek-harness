@@ -35,7 +35,7 @@ export interface ExternalPrimaryRuntime {
   readonly node?: string
   /** System Node.js global package directory. */
   readonly nodePackages?: string
-  /** System pnpm entry script run by the declared Node.js executable. */
+  /** Host pnpm executable the payload's pnpm launcher starts, a script or a native image. */
   readonly pnpm?: string
 }
 
@@ -160,7 +160,9 @@ export function workspaceDependencyPaths(root: string, manifest: PrimaryRuntimeM
     return {
       python, pythonPackages,
       ...(node === undefined ? {} : { node }),
-      ...(pnpm === undefined ? {} : { pnpm }),
+      // A system payload ships a launcher for the host pnpm, which may be a native image the
+      // declared Node.js executable cannot import.
+      ...(pnpm === undefined ? {} : { pnpm: join(root, 'dependencies', 'pnpm', 'bin', 'pnpm.mjs') }),
       ...(nodePackages === undefined ? {} : { nodePackages }),
       pythonDistributions: manifest.pythonPackages,
     }

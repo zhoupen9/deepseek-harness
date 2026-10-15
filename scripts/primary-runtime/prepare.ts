@@ -341,9 +341,9 @@ export async function prepareSystemPrimaryRuntime(options: SystemPrimaryRuntimeO
   const destination = join(runtime, 'primary-runtime')
   rmSync(destination, { recursive: true, force: true })
   mkdirSync(destination, { recursive: true })
-  // Consumers run pnpm through the payload's own Node.js, which cannot always execute the host's
-  // pnpm, so the manifest records the launcher that adapts whichever shape the host installed.
-  const pnpm = writeSystemPnpmLauncher(join(destination, 'dependencies'), pnpmEntry)
+  // The payload's Node.js cannot import a native pnpm image, so the payload carries a launcher
+  // adapting whichever shape the host installed; the manifest records the wrapped host entry.
+  writeSystemPnpmLauncher(join(destination, 'dependencies'), pnpmEntry)
   const manifest: PrimaryRuntimeManifest = {
     desktopVersion: options.version,
     ...identity,
@@ -351,7 +351,7 @@ export async function prepareSystemPrimaryRuntime(options: SystemPrimaryRuntimeO
     node: systemNodeVersion(node),
     pnpm: pnpmVersion,
     pythonPackages: systemPythonDistributions(python),
-    external: { python, pythonPackages: systemPythonPackages(python), node, pnpm },
+    external: { python, pythonPackages: systemPythonPackages(python), node, pnpm: pnpmEntry },
   }
   writeFileSync(join(destination, 'runtime.json'), `${JSON.stringify(manifest, undefined, 2)}\n`)
   const require = createRequire(import.meta.url)

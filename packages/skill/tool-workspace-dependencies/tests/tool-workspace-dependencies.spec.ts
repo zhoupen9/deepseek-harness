@@ -13,7 +13,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import * as workspaceDependencies from '../src/index.ts'
-import { copyPrimaryRuntime, installPrimaryRuntime, parsePrimaryRuntime, readPrimaryRuntime, resolvePrimaryRuntime, workspaceDependencyPaths, type PrimaryRuntimeManifest } from '../src/index.ts'
+import { copyPrimaryRuntime, installPrimaryRuntime, parsePrimaryRuntime, readPrimaryRuntime, resolvePrimaryRuntime, workspaceDependencyPaths, type ExternalPrimaryRuntime, type PrimaryRuntimeManifest } from '../src/index.ts'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()
@@ -70,7 +70,7 @@ async function externalFixture() {
       pythonPackages: join(directory, 'usr', 'lib', 'python3.14', 'site-packages'),
       node: join(directory, 'usr', 'bin', 'node'),
       nodePackages: join(directory, 'usr', 'lib', 'node_modules'),
-      pnpm: join(directory, 'usr', 'lib', 'node_modules', 'pnpm', 'bin', 'pnpm.mjs'),
+      pnpm: join(directory, 'usr', 'bin', 'pnpm'),
     },
   }
   const paths = workspaceDependencyPaths(source, manifest)
@@ -86,14 +86,20 @@ async function externalFixture() {
   return { directory, source, root, manifest }
 }
 
-it.each([
+const externalCases: readonly (readonly [name: string, external: ExternalPrimaryRuntime])[] = [
   ['python only', { python: '/usr/bin/python3', pythonPackages: '/usr/lib/python3.14/site-packages' }],
-  ['node and pnpm', { python: '/usr/bin/python3', pythonPackages: '/usr/lib/python3.14/site-packages', node: '/usr/bin/node', pnpm: '/usr/lib/node_modules/pnpm/bin/pnpm.mjs' }],
+  ['node and pnpm', { python: '/usr/bin/python3', pythonPackages: '/usr/lib/python3.14/site-packages', node: '/usr/bin/node', pnpm: '/usr/bin/pnpm' }],
   ['node packages', { python: '/usr/bin/python3', pythonPackages: '/usr/lib/python3.14/site-packages', node: '/usr/bin/node', nodePackages: '/usr/lib/node_modules' }],
-] as const)('returns declared system paths for %s without deriving a bundled tree', (_name, external) => {
+]
+it.each(externalCases)('returns declared system paths for %s with the payload pnpm launcher', (_name, external) => {
   const manifest: PrimaryRuntimeManifest = { desktopVersion: '1', platform: 'linux', arch: 'x64', python: '3.14.7',
     pythonPackages: { numpy: '2.5.3' }, external }
-  expect(workspaceDependencyPaths('/runtime', manifest)).toEqual({ ...external, pythonDistributions: { numpy: '2.5.3' } })
+  const { pnpm, ...system } = external
+  expect(workspaceDependencyPaths('/runtime', manifest)).toEqual({
+    ...system,
+    ...(pnpm === undefined ? {} : { pnpm: join('/runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs') }),
+    pythonDistributions: { numpy: '2.5.3' },
+  })
 })
 
 it('round-trips external manifests without bundled components', () => {
