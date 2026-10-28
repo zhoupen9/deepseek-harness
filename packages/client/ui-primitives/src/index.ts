@@ -52,7 +52,12 @@ export { RiskConfirmation } from './RiskConfirmation.tsx'
 export type { RiskConfirmationProps } from './RiskConfirmation.tsx'
 export { ConnectionIndicator } from './ConnectionIndicator.tsx'
 export type { ConnectionIndicatorState } from './ConnectionIndicator.tsx'
-export { FishLogo, FISH_LOGO_PATH, FISH_LOGO_VIEWBOX } from './FishLogo.tsx'
+export { FishLogo } from './FishLogo.tsx'
+export {
+  BRAND_NAME_BADGE, BRAND_NAME_GLYPH_CLIP, BRAND_NAME_GLYPH_FILL, BRAND_NAME_GLYPH_PATHS,
+  BRAND_NAME_LETTER_PATHS, BRAND_NAME_MARKUP, BRAND_NAME_VIEWBOX, FISH_LOGO_MARKUP,
+  FISH_LOGO_PATH, FISH_LOGO_VIEWBOX,
+} from './brand-artwork.ts'
 export { BrandWordmark } from './BrandWordmark.tsx'
 export type { BrandWordmarkProps } from './BrandWordmark.tsx'
 export {

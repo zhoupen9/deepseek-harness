@@ -1,8 +1,11 @@
 /**
  * Framework-free boot page and failure report. It remains available when a
- * client plugin fails because React arrives only with the UI renderer.
+ * client plugin fails because React arrives only with the UI renderer, so the
+ * brand banner is serialized artwork from `ui-primitives` rather than a React
+ * mark.
  * @module @deepseek-ai/dsh-client-web/src/boot-page
  */
+import { BRAND_NAME_MARKUP, FISH_LOGO_MARKUP } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { LoaderEntryState } from './loader-status.ts'
 import css from './boot-page.module.css'
 
@@ -12,6 +15,9 @@ export type BootPhase = 'starting' | 'loading'
 const STARTING_HINT = 'Starting…'
 const LOADING_HINT = 'Loading plugins…'
 
+/** Brand name the banner carries as text for assistive technology. */
+const BRAND_NAME = 'DeepSeek Harness'
+
 /** Create a div with one module class and optional text. */
 function div(className: string | undefined, text?: string): HTMLDivElement {
   const el = document.createElement('div')
@@ -20,11 +26,26 @@ function div(className: string | undefined, text?: string): HTMLDivElement {
   return el
 }
 
+/** Create a div holding one piece of the build-time brand artwork. */
+function artwork(className: string | undefined, markup: string): HTMLDivElement {
+  const el = div(className)
+  el.innerHTML = markup
+  return el
+}
+
+/** Create the visually hidden text that names the artwork for assistive technology. */
+function srOnly(className: string | undefined, text: string): HTMLSpanElement {
+  const el = document.createElement('span')
+  el.className = className ?? ''
+  el.textContent = text
+  return el
+}
+
 /** Kernel-owned page mounted below the application's root element. */
 export class BootPage {
   private readonly root: HTMLDivElement
   private readonly card: HTMLDivElement
-  private readonly wordmark: HTMLDivElement
+  private readonly brand: HTMLDivElement
   private readonly spinner: HTMLDivElement
   private readonly hint: HTMLDivElement
   private readonly states = new Map<string, LoaderEntryState>()
@@ -40,11 +61,17 @@ export class BootPage {
     this.root = div(css.boot)
     this.root.dataset.dshBoot = ''
     this.card = div(css.card)
-    this.wordmark = div(css.wordmark, 'DEEPSEEK HARNESS')
+    this.brand = div(css.brand)
+    this.brand.dataset.dshBootBrand = ''
+    this.brand.append(
+      artwork(css.brandMark, FISH_LOGO_MARKUP),
+      artwork(css.brandName, BRAND_NAME_MARKUP),
+      srOnly(css.srOnly, BRAND_NAME),
+    )
     this.spinner = div(css.spinner)
     this.spinner.dataset.dshBootSpinner = ''
     this.hint = div(css.hint, STARTING_HINT)
-    this.card.append(this.wordmark, this.spinner, this.hint)
+    this.card.append(this.brand, this.spinner, this.hint)
     this.root.append(this.card)
     container.append(this.root)
     this.updateProgress()
@@ -98,7 +125,7 @@ export class BootPage {
     const failed = [...this.states].filter(([, state]) => state === 'failed').map(([id]) => id)
     if (this.failure === undefined && failed.length === 0) {
       if (this.spinner.parentElement !== this.card) {
-        this.card.replaceChildren(this.wordmark, this.spinner, this.hint)
+        this.card.replaceChildren(this.brand, this.spinner, this.hint)
       }
       return
     }
@@ -106,7 +133,7 @@ export class BootPage {
     report.append(div(css.failedTitle, 'Failed to load plugins'))
     for (const id of failed) report.append(div(css.failedItem, id))
     if (this.failure !== undefined) report.append(div(css.failedItem, this.failure))
-    this.card.replaceChildren(this.wordmark, report)
+    this.card.replaceChildren(this.brand, report)
   }
 
   /** Grow the rotating arc monotonically as loader entries activate. */
