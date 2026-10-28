@@ -117,7 +117,7 @@ export function AccountMenu({
       { id: 'quit', label: t('quitApplication'), icon: <IconCloseOutlineMedium size={16} /> },
     ],
   ]
-  return <div ref={anchor} className={css.root}>
+  return <div ref={anchor} className={css.root} data-inset={signedIn && wide}>
     {signInNotice > 0 && <Toast key={signInNotice} text={t('modelSignInRequired')} onDone={() => { setSignInNotice(0) }} />}
     {expiryNotice && <Toast text={t('sessionExpired')} onDone={() => { setExpiryNotice(false) }} />}
     {signedIn && !account.desktopOnboardingVisible && !account.onboarding && account.notices && <AccountNoticeStack

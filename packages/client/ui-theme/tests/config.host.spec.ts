@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
+import type { IndexInjection, WebServer } from '@deepseek-ai/dsh-host-webserver'
 import * as HostPlugin from '../src/index.ts'
 import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
 import { plainConfig } from '../../../settings/settings/src/schema.ts'
@@ -9,11 +9,14 @@ import {
 } from '@deepseek-ai/dsh-client-ui-theme'
 import { FONT_COLOR_DARK_FIELD, FONT_COLOR_LIGHT_FIELD, isFontColor } from '../src/theme-settings.ts'
 
+/** The Peer an index render speaks for; this listener reads no field of it. */
+const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['renderIndex']>[1]
+
 
 /** Collect the injection table the way an index render or boot payload does. */
 function collect(ctx: Context): IndexInjection[] {
   const table: IndexInjection[] = []
-  ctx.emit('webserver/index-inject', table)
+  ctx.emit('webserver/index-inject', table, PAGE_PEER)
   return table
 }
 
@@ -28,14 +31,14 @@ describe('ui-theme host', () => {
     const ctx = new Context()
     const configuration = await liveConfig(ctx, { Config, apply })
     const { fiber } = configuration
-    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: DEFAULT_PREFERENCE, fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '', fontColorLight: '', fontColorDark: '' })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({ preference: DEFAULT_PREFERENCE, fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '', fontColorLight: '', fontColorDark: '' })
     await configuration.update({ preference: 'dark', fontSize: 10, codeFontSize: 16, codeFontFamily: '"Iosevka"' })
-    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: 'dark', fontSize: 10, codeFontSize: 16, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '"Iosevka"', terminalFontFamily: '', fontColorLight: '', fontColorDark: '' })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({ preference: 'dark', fontSize: 10, codeFontSize: 16, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '"Iosevka"', terminalFontFamily: '', fontColorLight: '', fontColorDark: '' })
     await configuration.update({ fontSize: 22 })
-    expect(plainConfig(configuration.fiber.config)).toMatchObject({ preference: 'dark', fontSize: 22 })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toMatchObject({ preference: 'dark', fontSize: 22 })
     // Solid colors persist per mode; invalid or alpha-bearing values reject.
     await configuration.update({ [FONT_COLOR_LIGHT_FIELD]: '#0f1115', [FONT_COLOR_DARK_FIELD]: 'hsl(210, 50%, 40%)' })
-    expect(plainConfig(configuration.fiber.config)).toMatchObject({ fontColorLight: '#0f1115', fontColorDark: 'hsl(210, 50%, 40%)' })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toMatchObject({ fontColorLight: '#0f1115', fontColorDark: 'hsl(210, 50%, 40%)' })
     await expect(configuration.update({ [FONT_COLOR_LIGHT_FIELD]: 'red' })).rejects.toThrow()
     await expect(configuration.update({ [FONT_COLOR_DARK_FIELD]: 'rgba(0, 0, 0, 0.5)' })).rejects.toThrow()
     await expect(configuration.update({ preference: 'sepia' })).rejects.toThrow()

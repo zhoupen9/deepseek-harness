@@ -81,9 +81,16 @@ async function main(): Promise<void> {
   const systemRuntime = process.env[SYSTEM_RUNTIME_ENV] === '1'
   rmSync(RUNTIME_ROOT, { recursive: true, force: true })
   mkdirSync(RUNTIME_ROOT, { recursive: true })
-  await prepareElectron(target)
-  await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:primary-runtime',
+  const preparePrimary = () => packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:primary-runtime',
     () => preparePrimaryRuntime({ deferSmoke: values['defer-primary-runtime-smoke'] }))
+  if (target.platform === 'win32') {
+    const [electron, primary] = await Promise.allSettled([prepareElectron(target), preparePrimary()])
+    if (electron.status === 'rejected') throw electron.reason
+    if (primary.status === 'rejected') throw primary.reason
+  } else {
+    await prepareElectron(target)
+    await preparePrimary()
+  }
   // The Host and the tools it starts run on this Node, not on Electron's, so the payload records
   // the runtime's version; the payload checks assert it against the process that runs them.
   const primaryRuntime = await readPrimaryRuntime(join(RUNTIME_ROOT, 'primary-runtime'))
