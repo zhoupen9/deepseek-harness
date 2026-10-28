@@ -22,6 +22,7 @@ afterEach(() => {
   delete win.__DSH_BOOT__
   delete win.__ModuleLoader__
   delete transportGlobal.__DSH_TRANSPORT__
+  delete (globalThis as { __DSH_BOOT_READY__?: unknown }).__DSH_BOOT_READY__
   document.body.innerHTML = ''
 })
 
@@ -56,6 +57,25 @@ async function expectBootFailure(setup: () => void, message: string): Promise<vo
 }
 
 describe('bootstrap failure rendering', () => {
+  it('reports startup while waiting for boot data, then client plugin loading', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const container = document.createElement('div')
+    document.body.append(container)
+    const gate = Promise.withResolvers<undefined>()
+    ;(globalThis as { __DSH_BOOT_READY__?: { promise: Promise<undefined> } }).__DSH_BOOT_READY__ = gate
+    const entry = new AppWebEntry(container)
+    const report = vi.fn()
+    const running = entry.run(report)
+    expect(container.textContent).toContain('DeepSeek Harness is starting…')
+    expect(container.textContent).not.toContain('Loading plugins…')
+    gate.resolve(undefined)
+    await running
+    expect(container.textContent).toContain('Loading plugins…')
+    expect(container.textContent).not.toContain('DeepSeek Harness is starting…')
+    expect(report).toHaveBeenCalledWith(new Error('web boot: window.__ModuleLoader__ bootstrap facade is missing'))
+    await entry.dispose()
+  })
+
   it('leaves the loading page visible when a carrier owns fatal presentation', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const container = document.createElement('div')

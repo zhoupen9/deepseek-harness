@@ -57,6 +57,7 @@ import { desktopClientMetadata, desktopClientVersion } from './client-metadata.t
 import { DesktopMandatoryUpdateWindow } from './mandatory-update-window.ts'
 import { DesktopPolicyTestAuth } from './policy-test-auth.ts'
 import { readDesktopSettings } from './settings.ts'
+import { readThemeSourceHint, startupThemeMarkup, themeBackground, writeThemeSourceHint } from './startup-appearance.ts'
 import { DesktopUpdateDialog, type UpdateDialogOptions } from './update-dialog.ts'
 import { readDesktopRuntime } from './runtime-tree.ts'
 import { DesktopBrowserGuests } from './browser-guests.ts'
@@ -262,7 +263,10 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
       // 'followWindow' washes the sidebar out behind an unfocused window.
       visualEffectState: 'active' as const,
       backgroundColor: '#00000000',
-    } : {}),
+    } : {
+      // Match the loading page canvas before its first paint; the Web UI's own palette takes over after boot.
+      backgroundColor: themeBackground(nativeTheme.shouldUseDarkColors),
+    }),
     webPreferences: {
       preload,
       // Only the primary document requests application commands; a packaged
@@ -353,7 +357,11 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
 }
 
 async function main(): Promise<void> {
-  const desktopSettings = readDesktopSettings(app.getPath('userData'))
+  const userData = app.getPath('userData')
+  const desktopSettings = readDesktopSettings(userData)
+  // The Web UI owns the durable theme preference; its last reported source themes the
+  // window and loading page before the Host can supply its index injections.
+  nativeTheme.themeSource = readThemeSourceHint(userData)
   void pruneCrashReports(app.getPath('logs'))
   const journalDirectory = process.env.DSH_DESKTOP_UPDATE_JOURNAL_DIR
   const updateJournal = journalDirectory === undefined ? undefined : new DesktopUpdateJournal(journalDirectory, app.getVersion())
@@ -380,6 +388,8 @@ async function main(): Promise<void> {
   let mainWindow: BrowserWindow | undefined
   let welcomeWindow: BrowserWindow | undefined
   let enteredWorkspace = false
+  /** Whether the main window currently shows the startup boot page instead of a chosen surface. */
+  let bootPagePresented = false
   // NSIS passes --updated when it launches the application after installation.
   let raiseAfterUpdate = process.platform === 'win32' && process.argv.includes('--updated')
   let shellInstallerOwnsQuit = false
@@ -602,9 +612,23 @@ async function main(): Promise<void> {
   }
   stopForRecovery = () => backend.close()
 
+  /**
+   * Present the loaded boot page while the Host starts. The welcome window or
+   * workspace replaces it once the first visible window is known.
+   */
+  const presentBootWindow = (): void => {
+    const window = mainWindow
+    if (quitting || window === undefined || window.isDestroyed()) return
+    // Welcome owns the screen once it opens; the workspace must not appear behind it.
+    if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) return
+    bootPagePresented = true
+    window.show()
+  }
+
   const reconcileBackend = (): Promise<void> => {
     startup ??= (async () => {
       await navigateMain(applicationUrl)
+      presentBootWindow()
       await backend.start(async () => {
         await Promise.all([manager.applyRelease(), prepareHostEnvironment()])
       })
@@ -704,9 +728,13 @@ async function main(): Promise<void> {
     // Shell-owned documents live in the application bundle and never pass through the Host.
     if (url.hostname === 'shell') return serveWebDocument(request, join(app.getAppPath(), 'renderer'))
     if (url.hostname === 'app') {
-      if (url.pathname === '/' || url.pathname === '/index.html' || url.pathname.startsWith('/assets/')
-        || ['/favicon.svg', '/manifest.webmanifest'].includes(url.pathname)) {
-        return serveWebDocument(request, join(resources.dsh, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist'))
+      const webRoot = join(resources.dsh, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist')
+      // The packaged index has no Host-rendered rows; the last reported source colors it until boot injections arrive.
+      if (url.pathname === '/' || url.pathname === '/index.html') {
+        return serveWebDocument(request, webRoot, startupThemeMarkup(nativeTheme.themeSource))
+      }
+      if (url.pathname.startsWith('/assets/') || ['/favicon.svg', '/manifest.webmanifest'].includes(url.pathname)) {
+        return serveWebDocument(request, webRoot)
       }
       if (backend.host === undefined || hostUrl === undefined || hostCookie === undefined) {
         return Promise.resolve(new Response(null, { status: 503 }))
@@ -822,7 +850,10 @@ async function main(): Promise<void> {
   // Only the main window may synchronize its palette with the native material.
   ipcMain.on(DESKTOP_IPC.nativeThemeSet, (event, source: unknown) => {
     if (mainWindow === undefined || event.sender !== mainWindow.webContents) return
-    if (source === 'light' || source === 'dark' || source === 'system') nativeTheme.themeSource = source
+    if (source !== 'light' && source !== 'dark' && source !== 'system') return
+    nativeTheme.themeSource = source
+    // Retain the Web UI's choice so the next launch paints its loading page in the same palette.
+    writeThemeSourceHint(userData, source)
   })
   ipcMain.handle(DESKTOP_IPC.localeBootstrap, async (event) => {
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame
@@ -1237,6 +1268,7 @@ async function main(): Promise<void> {
     const window = mainWindow ?? createMainWindow()
     await navigateMain(applicationUrl)
     if (isQuitting() || recovery.active || window.isDestroyed()) return
+    bootPagePresented = false
     if (activate) window.show()
     else window.showInactive()
     enteredWorkspace = true
@@ -1312,7 +1344,10 @@ async function main(): Promise<void> {
         else app.quit()
       })
       if (isQuitting() || recovery.active || enteredWorkspace) window.close()
-      else mainWindow?.hide()
+      else {
+        bootPagePresented = false
+        mainWindow?.hide()
+      }
     })().finally(() => { openingWelcome = undefined })
     return openingWelcome
   }
@@ -1337,11 +1372,13 @@ async function main(): Promise<void> {
     const window = welcomeWindow ?? mainWindow
     if (window === undefined || window.isDestroyed()) {
       try { createMainWindow() } catch (error) { reportFatal(error, 'main'); return }
-      void (backend.state.phase === 'ready' ? openInitialWindow() : navigateMain(applicationUrl)).catch((error: unknown) => { reportFatal(error, 'main') })
+      void (backend.state.phase === 'ready'
+        ? openInitialWindow()
+        : navigateMain(applicationUrl).then(presentBootWindow)).catch((error: unknown) => { reportFatal(error, 'main') })
       return
     }
-    // Startup and sign-out select the visible window before activation may reveal the workspace.
-    if (window === mainWindow && !enteredWorkspace) return
+    // A main window that has not presented the boot page waits for the startup or sign-out decision.
+    if (window === mainWindow && !enteredWorkspace && !bootPagePresented) return
     if (window.isMinimized()) window.restore()
     window.show()
     window.focus()

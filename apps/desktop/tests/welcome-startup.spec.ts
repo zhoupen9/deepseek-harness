@@ -86,6 +86,7 @@ vi.mock('electron', () => ({
     async loadURL(url: string) { state.contents = this.webContents; await state.loadWorkspace(url); this.ready?.() }
   },
   net: { fetch: vi.fn() },
+  screen: { getPrimaryDisplay: () => ({ scaleFactor: 1 }) },
   nativeTheme: state.nativeTheme,
   session: { defaultSession: {
     setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn(), webRequest: { onBeforeSendHeaders: vi.fn() },
@@ -204,13 +205,28 @@ it.each([false, true])('starts welcome onboarding without carrying update focus 
   }
   await import('../src/main.ts')
   await vi.waitFor(() => { expect(state.beforeRead).toHaveBeenCalledOnce() })
+  // The boot page is presented while the Host starts; no workspace is revealed.
+  expect(state.loadWorkspace).toHaveBeenCalledExactlyOnceWith('dsh-app://app/')
+  expect(state.showWorkspace).toHaveBeenCalledOnce()
+  expect(state.moveTopWorkspace).not.toHaveBeenCalled()
+  expect(state.focusWorkspace).not.toHaveBeenCalled()
+  state.showWorkspace.mockClear()
+  state.focusWorkspace.mockClear()
   try {
     activate()
-    expect(state.showWorkspace).not.toHaveBeenCalled()
+    // Activation focuses the presented boot page instead of revealing a workspace.
+    expect(state.showWorkspace).toHaveBeenCalledTimes(2)
+    expect(state.focusWorkspace).toHaveBeenCalledTimes(2)
+    expect(state.moveTopWorkspace).not.toHaveBeenCalled()
+    state.showWorkspace.mockClear()
+    state.focusWorkspace.mockClear()
     reading.resolve(undefined)
     await vi.waitFor(() => { expect(state.beforeWelcome).toHaveBeenCalledOnce() })
     activate()
-    expect(state.showWorkspace).not.toHaveBeenCalled()
+    expect(state.showWorkspace).toHaveBeenCalledTimes(2)
+    expect(state.moveTopWorkspace).not.toHaveBeenCalled()
+    state.showWorkspace.mockClear()
+    state.focusWorkspace.mockClear()
   } finally {
     reading.resolve(undefined)
     loading.resolve(undefined)
@@ -237,6 +253,8 @@ it.each([false, true])('starts welcome onboarding without carrying update focus 
   state.accountState.mockResolvedValue({ ...account, attempt: { id: attemptId, phase: 'expired' } })
   await expect(state.operations!.copySignInLink(attemptId)).rejects.toThrow('login link is unavailable')
   expect(state.copy).toHaveBeenCalledTimes(2)
+  state.showWorkspace.mockClear()
+  state.focusWorkspace.mockClear()
   await state.operations!.skip()
   expect(state.loadWorkspace).not.toHaveBeenCalled()
   expect(state.showWorkspace).toHaveBeenCalledOnce()

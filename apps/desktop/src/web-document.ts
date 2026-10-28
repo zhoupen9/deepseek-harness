@@ -9,13 +9,30 @@ const MIME: Readonly<Record<string, string>> = {
 }
 const BOOT = '<script>globalThis.__DSH_BOOT_READY__ = Promise.withResolvers()</script>'
 
+/** Markup added to the packaged index before its client bundles run. */
+export interface WebDocumentAppearance {
+  /** Inserted immediately after the opening head tag. */
+  readonly head: string
+  /** Inserted immediately after the opening body tag. */
+  readonly body: string
+}
+
+/** Insert boot readiness and the appearance rows into one packaged index. */
+function injectIndex(html: string, appearance: WebDocumentAppearance | undefined): string {
+  const booted = html.replace(/<head(?:\s[^>]*)?>/i, tag => `${tag}${BOOT}${appearance?.head ?? ''}`)
+  return appearance === undefined
+    ? booted
+    : booted.replace(/<body(?:\s[^>]*)?>/i, tag => `${tag}${appearance.body}`)
+}
+
 /**
  * Read an application-owned static asset; the index waits for asynchronous Host injections.
  * @param request - Local application request.
  * @param root - Packaged Web dist directory.
+ * @param appearance - Rows that paint the packaged index before the Host answers.
  * @returns Static response, or a missing/invalid path response.
  */
-export async function serveWebDocument(request: Request, root: string): Promise<Response> {
+export async function serveWebDocument(request: Request, root: string, appearance?: WebDocumentAppearance): Promise<Response> {
   if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 })
   const url = new URL(request.url)
   let pathname: string
@@ -29,7 +46,7 @@ export async function serveWebDocument(request: Request, root: string): Promise<
     throw error
   }
   const content = pathname === '/' || pathname === '/index.html'
-    ? body.toString().replace('<head>', '<head>' + BOOT) : new Uint8Array(body)
+    ? injectIndex(body.toString(), appearance) : new Uint8Array(body)
   return new Response(request.method === 'HEAD' ? null : content, {
     headers: { 'content-type': MIME[extname(target)] ?? 'application/octet-stream' },
   })

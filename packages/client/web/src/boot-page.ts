@@ -6,6 +6,12 @@
 import type { LoaderEntryState } from './loader-status.ts'
 import css from './boot-page.module.css'
 
+/** Boot phases the page reports before the UI renderer mounts. */
+export type BootPhase = 'starting' | 'loading'
+
+const STARTING_HINT = 'DeepSeek Harness is starting…'
+const LOADING_HINT = 'Loading plugins…'
+
 /** Create a div with one module class and optional text. */
 function div(className: string | undefined, text?: string): HTMLDivElement {
   const el = document.createElement('div')
@@ -37,11 +43,19 @@ export class BootPage {
     this.wordmark = div(css.wordmark, 'HARNESS')
     this.spinner = div(css.spinner)
     this.spinner.dataset.dshBootSpinner = ''
-    this.hint = div(css.hint, 'Loading plugins…')
+    this.hint = div(css.hint, STARTING_HINT)
     this.card.append(this.wordmark, this.spinner, this.hint)
     this.root.append(this.card)
     container.append(this.root)
     this.updateProgress()
+  }
+
+  /**
+   * Switch the hint between carrier startup and client plugin loading.
+   * @param phase - Current phase before the UI renderer mounts.
+   */
+  setPhase(phase: BootPhase): void {
+    this.hint.textContent = phase === 'starting' ? STARTING_HINT : LOADING_HINT
   }
 
   /**

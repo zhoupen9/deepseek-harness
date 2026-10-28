@@ -11,15 +11,26 @@ function mount() {
 }
 
 describe('BootPage', () => {
-  it('draws the loading skeleton before any plugin state arrives', () => {
+  it('draws the startup skeleton before any boot data arrives', () => {
     const { el } = mount()
     expect(el.firstElementChild?.getAttribute('data-dsh-boot')).toBe('')
     expect(el.textContent).toContain('HARNESS')
+    expect(el.textContent).toContain('DeepSeek Harness is starting…')
+    expect(el.textContent).not.toContain('Loading plugins…')
+  })
+
+  it('reports the client plugin phase once boot data settles', () => {
+    const { el, page } = mount()
+    page.setPhase('loading')
     expect(el.textContent).toContain('Loading plugins…')
+    expect(el.textContent).not.toContain('DeepSeek Harness is starting…')
+    page.setPhase('starting')
+    expect(el.textContent).toContain('DeepSeek Harness is starting…')
   })
 
   it('keeps loading while entries are active or loading', () => {
     const { el, page } = mount()
+    page.setPhase('loading')
     page.setTotal(2)
     const spinner = el.querySelector<HTMLElement>('[data-dsh-boot-spinner]')
     expect(spinner?.style.getPropertyValue('--dsh-boot-arc')).toBe('72deg')

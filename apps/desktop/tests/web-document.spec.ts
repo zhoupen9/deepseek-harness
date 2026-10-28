@@ -27,6 +27,26 @@ it('serves the Web entry and assets without starting or contacting a Host', asyn
   expect((await serveWebDocument(new Request('dsh-app://app/missing.js'), root)).status).toBe(404)
 })
 
+it('applies appearance rows to an attributed index ahead of its client bundles', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-web-'))
+  roots.push(root)
+  await mkdir(join(root, 'assets'))
+  await writeFile(join(root, 'index.html'), '<html><head data-shell="desktop"><link rel="stylesheet" href="assets/app.css"></head><body class="app"><div id="root"></div><script src="assets/entry.js"></script></body></html>')
+  await writeFile(join(root, 'assets/entry.js'), 'globalThis.entryLoaded = true')
+  const html = await (await serveWebDocument(new Request('dsh-app://app/'), root, {
+    head: '<style>HEAD</style>', body: '<script>BODY</script>',
+  })).text()
+  expect(html).toContain('<head data-shell="desktop"><script>globalThis.__DSH_BOOT_READY__')
+  expect(html.indexOf('HEAD')).toBeGreaterThan(html.indexOf('<head data-shell="desktop">'))
+  expect(html.indexOf('HEAD')).toBeLessThan(html.indexOf('assets/app.css'))
+  expect(html).toContain('<body class="app"><script>BODY</script>')
+  expect(html.indexOf('BODY')).toBeLessThan(html.indexOf('assets/entry.js'))
+  // Assets never receive index rows.
+  expect(await (await serveWebDocument(new Request('dsh-app://app/assets/entry.js'), root, {
+    head: '<style>HEAD</style>', body: '<script>BODY</script>',
+  })).text()).toBe('globalThis.entryLoaded = true')
+})
+
 it('requires the Host authentication exchange and retains only its cookie value', async () => {
   const fetch = vi.fn().mockResolvedValueOnce(new Response(null, { status: 303, headers: { 'set-cookie': 'session=owned; HttpOnly; SameSite=Strict' } }))
     .mockResolvedValueOnce(new Response('unauthorized', { status: 401 }))

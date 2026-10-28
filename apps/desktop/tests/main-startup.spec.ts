@@ -3,10 +3,10 @@ import { WINDOWS_TITLEBAR_HEIGHT } from '../src/windows-layout.ts'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { IpcMainInvokeEvent } from 'electron'
 import { dirname, join } from 'node:path'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type { MenuItemConstructorOptions, MessageBoxOptions } from 'electron'
-import { DESKTOP_DEVELOPMENT_ARGUMENT, DESKTOP_IPC, type DesktopUpdateState } from '../src/ipc.ts'
+import { DESKTOP_DEVELOPMENT_ARGUMENT, DESKTOP_IPC, SCHEME, type DesktopUpdateState } from '../src/ipc.ts'
 import { MANDATORY_IPC } from '../src/mandatory-update-ipc.ts'
 import { DesktopHostFatalError, DesktopHostUncleanExitError } from '../src/host-process.ts'
 import { en, zh } from '../src/locale.ts'
@@ -1065,6 +1065,58 @@ describe('desktop main startup', () => {
     expect(harness.menu.setApplicationMenu).toHaveBeenCalledOnce()
   })
 
+  it.each([
+    ['dark', true, '#151517'],
+    ['light', false, '#fff'],
+  ] as const)('paints the loading window from the stored %s theme source', async (source, dark, background) => {
+    const userData = harness.app.getPath('userData')
+    mkdirSync(join(userData, 'desktop'), { recursive: true })
+    writeFileSync(join(userData, 'desktop', 'theme.json'), JSON.stringify({ themeSource: source }))
+    // Electron resolves shouldUseDarkColors from themeSource; the fake keeps them separate.
+    harness.nativeTheme.shouldUseDarkColors = dark
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    expect(harness.nativeTheme.themeSource).toBe(source)
+    expect(harness.windows[0]!.options.backgroundColor).toBe(background)
+  })
+
+  it('stores the Web UI theme source for the next launch', async () => {
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const window = harness.windows[0]!
+    const listener = harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.nativeThemeSet)![1]
+    const stored = join(harness.app.getPath('userData'), 'desktop', 'theme.json')
+    listener({ sender: {}, senderFrame: {} }, 'dark')
+    expect(harness.nativeTheme.themeSource).toBe('system')
+    expect(existsSync(stored)).toBe(false)
+    listener({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, 'dark')
+    expect(harness.nativeTheme.themeSource).toBe('dark')
+    expect(readFileSync(stored, 'utf8')).toBe('{\n  "themeSource": "dark"\n}\n')
+    listener({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, 'sepia')
+    expect(harness.nativeTheme.themeSource).toBe('dark')
+    expect(readFileSync(stored, 'utf8')).toBe('{\n  "themeSource": "dark"\n}\n')
+  })
+
+  it('serves the packaged index with the current theme source', async () => {
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const web = await import('../src/web-document.ts')
+    const handler = harness.protocolHandle.mock.calls.find(([scheme]) => scheme === SCHEME)![1]
+    const window = harness.windows[0]!
+    const listener = harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.nativeThemeSet)![1]
+    await handler(new Request('dsh-app://app/'))
+    const initial = vi.mocked(web.serveWebDocument).mock.lastCall?.[2]
+    expect(initial?.head).toContain(':root{color-scheme:light}')
+    expect(initial?.body).toContain('document.documentElement.dataset.dsThemeSource = "system"')
+    listener({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, 'dark')
+    await handler(new Request('dsh-app://app/'))
+    const updated = vi.mocked(web.serveWebDocument).mock.lastCall?.[2]
+    expect(updated?.head).toContain(':root{color-scheme:dark}')
+    expect(updated?.body).toContain('document.documentElement.dataset.dsThemeSource = "dark"')
+    await handler(new Request('dsh-app://app/assets/index.js'))
+    expect(vi.mocked(web.serveWebDocument).mock.lastCall?.[2]).toBeUndefined()
+  })
+
   it('maps Windows caption menus to localized native commands and rejects foreign popup requests', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     await import('../src/main.ts')
@@ -1301,17 +1353,19 @@ describe('desktop main startup', () => {
     await import('../src/main.ts')
     await harness.preparing.promise
     const window = harness.windows[0]!
+    // The loaded boot page is presented before the Host answers.
+    expect(window.show).toHaveBeenCalledOnce()
     expect(window.moveTop).not.toHaveBeenCalled()
     harness.prepared.resolve()
     await harness.hostStarted.promise
     harness.hosts[0]!.ready.resolve()
-    await window.shown.promise
-    expect(window.show).toHaveBeenCalledOnce()
+    await Promise.resolve(invoke(DESKTOP_IPC.boot))
+    expect(window.show).toHaveBeenCalledTimes(2)
     expect(window.moveTop).toHaveBeenCalledTimes(raises ? 1 : 0)
     expect(window.focus).toHaveBeenCalledTimes(raises ? 1 : 0)
     expect(window.setAlwaysOnTop).not.toHaveBeenCalled()
     if (raises) {
-      expect(window.show.mock.invocationCallOrder[0]).toBeLessThan(window.moveTop.mock.invocationCallOrder[0]!)
+      expect(window.show.mock.invocationCallOrder.at(-1)!).toBeLessThan(window.moveTop.mock.invocationCallOrder[0]!)
     }
     window.destroy()
     harness.app.emit('second-instance')
@@ -2336,13 +2390,13 @@ describe('desktop main startup', () => {
     expect(signal?.aborted).toBe(true)
   })
 
-  it('prepares recovery offscreen and starts one Host before choosing the first visible window', async () => {
+  it('presents the loading page before starting one Host and chooses the first visible window later', async () => {
     await import('../src/main.ts')
     await harness.preparing.promise
     expect(harness.windows).toHaveLength(1)
     const window = harness.windows[0]!
     expect(window.options.show).toBe(false)
-    expect(window.show).not.toHaveBeenCalled()
+    expect(window.show).toHaveBeenCalledOnce()
     expect(window.urls).toEqual(['dsh-app://app/'])
     expect(harness.hosts).toHaveLength(0)
     const retry = invoke(DESKTOP_IPC.boot)
@@ -2368,6 +2422,8 @@ describe('desktop main startup', () => {
     expect(harness.hosts[0]!.start).toHaveBeenCalledTimes(1)
     expect(harness.windows).toHaveLength(1)
     expect(window.urls).toEqual(['dsh-app://app/'])
+    // The workspace reveal is the second presentation; the first showed the boot page.
+    expect(window.show).toHaveBeenCalledTimes(2)
   })
 
   it('runs the Host on the Node the payload declares', async () => {
@@ -2420,10 +2476,12 @@ describe('desktop main startup', () => {
     expect(harness.hosts).toHaveLength(1)
   })
 
-  it('keeps recovery visible when the backend fails during the welcome preference read', async () => {
+  it('keeps the loading page and recovery visible when the backend fails during the welcome preference read', async () => {
     const preferences = Promise.withResolvers<Response>()
     await import('../src/main.ts')
     await harness.preparing.promise
+    // The boot page is already presented and stays behind the native failure dialog.
+    expect(harness.windows[0]!.show).toHaveBeenCalledOnce()
     harness.prepared.resolve()
     await harness.hostStarted.promise
     const host = harness.hosts[0]!
@@ -2439,7 +2497,7 @@ describe('desktop main startup', () => {
     expect(harness.windows[0]!.urls).not.toContain('http://127.0.0.1:3080/?token=test')
     const failureDialog = harness.dialog.showMessageBox.mock.calls[0]![0] as { detail: string }
     expect(failureDialog.detail).toContain('backend exited during startup preferences')
-    expect(harness.windows[0]!.show).not.toHaveBeenCalled()
+    expect(harness.windows[0]!.show).toHaveBeenCalledOnce()
   })
 
   it('waits for a pending child to exit on quit without late window navigation', async () => {
