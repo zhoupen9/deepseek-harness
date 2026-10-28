@@ -14,8 +14,8 @@ describe('BootPage', () => {
   it('draws the startup skeleton before any boot data arrives', () => {
     const { el } = mount()
     expect(el.firstElementChild?.getAttribute('data-dsh-boot')).toBe('')
-    expect(el.textContent).toContain('HARNESS')
-    expect(el.textContent).toContain('DeepSeek Harness is starting…')
+    expect(el.textContent).toContain('DEEPSEEK HARNESS')
+    expect(el.textContent).toContain('Starting…')
     expect(el.textContent).not.toContain('Loading plugins…')
   })
 
@@ -23,9 +23,9 @@ describe('BootPage', () => {
     const { el, page } = mount()
     page.setPhase('loading')
     expect(el.textContent).toContain('Loading plugins…')
-    expect(el.textContent).not.toContain('DeepSeek Harness is starting…')
+    expect(el.textContent).not.toContain('Starting…')
     page.setPhase('starting')
-    expect(el.textContent).toContain('DeepSeek Harness is starting…')
+    expect(el.textContent).toContain('Starting…')
   })
 
   it('keeps loading while entries are active or loading', () => {

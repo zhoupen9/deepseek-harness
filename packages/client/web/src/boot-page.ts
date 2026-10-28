@@ -9,7 +9,7 @@ import css from './boot-page.module.css'
 /** Boot phases the page reports before the UI renderer mounts. */
 export type BootPhase = 'starting' | 'loading'
 
-const STARTING_HINT = 'DeepSeek Harness is starting…'
+const STARTING_HINT = 'Starting…'
 const LOADING_HINT = 'Loading plugins…'
 
 /** Create a div with one module class and optional text. */
@@ -40,7 +40,7 @@ export class BootPage {
     this.root = div(css.boot)
     this.root.dataset.dshBoot = ''
     this.card = div(css.card)
-    this.wordmark = div(css.wordmark, 'HARNESS')
+    this.wordmark = div(css.wordmark, 'DEEPSEEK HARNESS')
     this.spinner = div(css.spinner)
     this.spinner.dataset.dshBootSpinner = ''
     this.hint = div(css.hint, STARTING_HINT)
