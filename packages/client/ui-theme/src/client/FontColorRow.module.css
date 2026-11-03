@@ -85,6 +85,8 @@
   cursor: pointer;
 }
 
-.reset:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .reset:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }

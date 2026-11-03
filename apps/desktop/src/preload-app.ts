@@ -1,4 +1,5 @@
-/** Origin-scoped boot, application commands, directory selection, composer file paths, and update presentation with native confirmation. */
+import type { FileSaveResult } from '@deepseek-ai/dsh-client-ui-file-actions/types'
+/** Origin-scoped boot, application commands, directory picking, file saves, and update presentation with native confirmation. */
 
 import type { DesktopShortcutInput, ShortcutConfigSnapshot, ShortcutSaveResult } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
@@ -18,6 +19,11 @@ import type { FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
 function createProductApi(): DshDesktopProductApi {
   return {
     protocolVersion: 1,
+    fileActions: {
+      save: request => ipcRenderer.invoke(DESKTOP_IPC.fileSave, request) as Promise<FileSaveResult>,
+      readClipboardImage: url => ipcRenderer.invoke(DESKTOP_IPC.clipboardImageRead, url) as
+        Promise<{ bytes: Uint8Array; mediaType: string }>,
+    },
     browser: createDesktopBrowserBridge(),
     application: {
       development: process.argv.includes(DESKTOP_DEVELOPMENT_ARGUMENT),

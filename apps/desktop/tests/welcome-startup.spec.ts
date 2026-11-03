@@ -89,6 +89,7 @@ vi.mock('electron', () => ({
   screen: { getPrimaryDisplay: () => ({ scaleFactor: 1 }) },
   nativeTheme: state.nativeTheme,
   session: { defaultSession: {
+    on: vi.fn(),
     setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn(), webRequest: { onBeforeSendHeaders: vi.fn() },
   } },
   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },

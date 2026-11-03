@@ -6,7 +6,7 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector, contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { FontColorRow } from '../src/client/FontColorRow.tsx'
 import type { FontColorRowComponentProps } from '../src/client/FontColorRow.tsx'
 import { createFontColorRowStore } from '../src/client/settings-store.ts'
@@ -54,6 +54,7 @@ function mount(light = '', dark = '') {
   const setFontColorDark = vi.fn()
   const props: FontColorRowComponentProps = {
     useResource,
+    useContextMenu: contextMenuHook(),
     usePanelInfo,
     useSessions: emptySessions(),
     useSessionAccess,

@@ -1,3 +1,4 @@
+import type { DesktopFileActions } from '@deepseek-ai/dsh-client-ui-file-actions/types'
 /** Typed preload operations exposed only by the Electron shell. */
 
 import type { DesktopKeyboardApi, DesktopShortcutsApi } from '@deepseek-ai/dsh-client-shortcuts/protocol'
@@ -11,6 +12,8 @@ export const DESKTOP_IPC = {
   applicationQuit: 'dsh-desktop:application-quit',
   applicationReload: 'dsh-desktop:application-reload',
   applicationRestart: 'dsh-desktop:application-restart',
+  fileSave: 'dsh-desktop:file-save',
+  clipboardImageRead: 'dsh-desktop:clipboard-image-read',
   shortcutsInput: 'dsh-desktop:shortcuts-input',
   shortcutsCloseWindow: 'dsh-desktop:shortcuts-close-window',
   shortcutsGet: 'dsh-desktop:shortcuts-get',
@@ -108,6 +111,7 @@ export interface DshDesktopApplicationApi {
 
 /** Product documents cannot supply update versions, package URLs, or installation authorization. */
 export interface DshDesktopProductApi {
+  readonly fileActions: DesktopFileActions
   readonly protocolVersion: 1
   readonly browser: DesktopBrowserBridge
   readonly application: DshDesktopApplicationApi
