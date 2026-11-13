@@ -175,7 +175,7 @@ const FONT_COLOR_PATTERN = new RegExp(
  * A validated default-text-color field: '' (no override) or a solid CSS color.
  * @returns the schema field for one palette mode's default text color.
  */
-export const fontColorField = () => z.string().pattern(FONT_COLOR_PATTERN).default('')
+export const fontColorField = (): z<string> => z.string().pattern(FONT_COLOR_PATTERN).default('')
 
 /** Durable theme schema; also the wire envelope the browser scope validates against. */
 export const ThemeSettingsSchema: z<ThemeSettings> = z.object({

@@ -202,17 +202,6 @@ export function prunePnpmForeignNativePackages(pnpm: string, platform: NodeJS.Pl
   }
 }
 
-/**
- * Copy the skill package's complete asset tree to ordinary filesystem resources.
- * @param source - The package's assets directory.
- * @param destination - External Office skill resource directory.
- * @returns Resolves after replacing the external assets with the complete package tree.
- */
-export async function prepareOfficeSkillAssets(source: string, destination: string): Promise<void> {
-  rmSync(destination, { recursive: true, force: true })
-  await cp(source, destination, { recursive: true, dereference: true })
-}
-
 /** A locked interpreter and wheel target. */
 export type PrimaryRuntimeTarget = keyof typeof lock.targets
 
@@ -339,7 +328,7 @@ export function resolveSystemPnpm(node: string, pnpm: string): { entry: string; 
 export interface SystemPrimaryRuntimeOptions {
   /** Target whose platform and architecture the manifest records. */
   readonly target: PrimaryRuntimeTarget
-  /** Resource directory receiving primary-runtime/ and office-skills/. */
+  /** Resource directory receiving primary-runtime/. */
   readonly output: string
   /** Carrier release recorded in the legacy desktopVersion manifest field. */
   readonly version: string
@@ -354,9 +343,9 @@ export interface SystemPrimaryRuntimeOptions {
 /**
  * Write a manifest that references the host's own Python, Node.js, and pnpm instead of a closed payload.
  * @param options - Target, output directory, carrier version, and interpreter overrides.
- * @returns Resolves after the manifest and Office skills reach the output directory; nothing is downloaded.
+ * @returns Nothing; the manifest reaches the output directory and nothing is downloaded.
  */
-export async function prepareSystemPrimaryRuntime(options: SystemPrimaryRuntimeOptions): Promise<void> {
+export function prepareSystemPrimaryRuntime(options: SystemPrimaryRuntimeOptions): void {
   const python = resolveSystemExecutable('python3', options.python)
   const node = resolveSystemExecutable('node', options.node)
   const { entry: pnpmEntry, version: pnpmVersion } = resolveSystemPnpm(node, resolveSystemExecutable('pnpm', options.pnpm))
@@ -378,9 +367,6 @@ export async function prepareSystemPrimaryRuntime(options: SystemPrimaryRuntimeO
     external: { python, pythonPackages: systemPythonPackages(python), node, pnpm: pnpmEntry },
   }
   writeFileSync(join(destination, 'runtime.json'), `${JSON.stringify(manifest, undefined, 2)}\n`)
-  const require = createRequire(import.meta.url)
-  await prepareOfficeSkillAssets(join(dirname(require.resolve('@deepseek-ai/dsh-skill-office/package.json')), 'assets'),
-    join(runtime, 'office-skills'))
 }
 
 /**
@@ -405,7 +391,7 @@ export function writeSystemPnpmLauncher(root: string, entry: string): string {
 export interface PreparePrimaryRuntimeOptions {
   /** Target whose archives and wheels are downloaded. */
   readonly target: PrimaryRuntimeTarget
-  /** Resource directory receiving primary-runtime/ and office-skills/. */
+  /** Resource directory receiving primary-runtime/. */
   readonly output: string
   /** SHA-256-addressed archive cache. */
   readonly cache: string
@@ -413,16 +399,14 @@ export interface PreparePrimaryRuntimeOptions {
   readonly version: string
   /** Locked npm pnpm tarball for installed carriers; build hosts otherwise copy their installed pnpm. */
   readonly pnpmArchive?: RuntimeNpmArchive
-  /** Ordinary filesystem Office assets; build hosts otherwise resolve the workspace package. */
-  readonly skillSource?: string
   /** Omit Node.js and pnpm for carriers providing only Python. */
   readonly pythonOnly?: boolean
 }
 
 /**
- * Materialize locked interpreters, libraries and Office resources without executing target code.
+ * Materialize locked interpreters and libraries without executing target code.
  * @param options - Explicit target and carrier-owned output locations.
- * @returns Resolves after the complete payload and skills have been copied to the output directory.
+ * @returns Resolves after the complete payload has been copied to the output directory.
  */
 export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOptions): Promise<void> {
   const { target } = options
@@ -473,9 +457,6 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
   } finally {
     rmSync(staging, { recursive: true, force: true })
   }
-  const assets = options.skillSource ?? join(dirname(createRequire(import.meta.url).resolve('@deepseek-ai/dsh-skill-office/package.json')), 'assets')
-  await prepareOfficeSkillAssets(assets,
-    join(paths.runtime, 'office-skills'))
 }
 
 /**
@@ -524,7 +505,7 @@ if (import.meta.main) {
   const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }
   const output = resolve(values.output)
   if (values.system) {
-    await prepareSystemPrimaryRuntime({
+    prepareSystemPrimaryRuntime({
       target: values.target as PrimaryRuntimeTarget, output, version,
       python: values.python, node: values.node, pnpm: values.pnpm,
     })

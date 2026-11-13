@@ -20,7 +20,7 @@ export async function preparePrimaryRuntime(options: { deferSmoke?: boolean } = 
   const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
   const target = resolveDesktopBuildTarget()
   if (process.env[SYSTEM_RUNTIME_ENV] === '1') {
-    await prepareSystemPrimaryRuntime({ target, output: paths.runtime, version,
+    prepareSystemPrimaryRuntime({ target, output: paths.runtime, version,
       python: process.env.DSH_DESKTOP_SYSTEM_PYTHON, node: process.env.DSH_DESKTOP_SYSTEM_NODE, pnpm: process.env.DSH_DESKTOP_SYSTEM_PNPM })
   } else {
     await preparePayload({ target, output: paths.runtime, cache: paths.downloads, version })
