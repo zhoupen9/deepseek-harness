@@ -11,7 +11,7 @@ export type OnboardingPurpose = 'office' | 'development' | 'both'
 /** Work-detail mode applied to Chat when onboarding completes. */
 export type OnboardingProcess = 'compact' | 'standard' | 'detailed'
 /** Performance and usage display applied to Chat when onboarding completes; mirrors the Chat setting. */
-export type OnboardingUsage = 'compact' | 'detailed' | 'hidden'
+export type OnboardingUsage = 'compact' | 'detailed'
 /** One installation's resumable choices and terminal outcome. */
 export interface OnboardingProgress {
   version: 1
@@ -37,7 +37,7 @@ export const OnboardingSettingsFields = {
   purpose: z.union(['office', 'development', 'both', z.const(null)]),
   process: z.union(['compact', 'standard', 'detailed', z.const(null)]),
   completion: z.union(['completed', 'skipped', 'api-key', z.const(null)]),
-  usage: z.union(['compact', 'detailed', 'hidden']).default('compact'),
+  usage: z.union(['compact', 'detailed']).default('compact'),
   developerTools: z.boolean().default(false),
 }
 

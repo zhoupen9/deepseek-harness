@@ -43,7 +43,7 @@ export class DesktopOnboardingController {
     private readonly progress: ConfigForm<OnboardingSettings>,
     private readonly chat: ConfigForm<{
       transcriptView?: TranscriptViewMode | null
-      performanceUsage: 'compact' | 'detailed' | 'hidden'
+      performanceUsage: 'compact' | 'detailed'
     }>,
     private readonly setDeveloperTools: (enabled: boolean) => Promise<void>,
     private readonly account: HostObservable<AccountSnapshot>,

@@ -56,13 +56,16 @@ const TRANSCRIPT_VIEW_SETTING_VALUES = [
 export const DEFAULT_TRANSCRIPT_VIEW_MODE: TranscriptViewMode = 'detailed'
 
 /** Performance and usage detail levels accepted by user settings. */
-export const PERFORMANCE_USAGE_MODES = ['compact', 'detailed', 'hidden'] as const
+export const PERFORMANCE_USAGE_MODES = ['compact', 'detailed'] as const
 
 /** Performance and usage presentation. */
 export type PerformanceUsageMode = typeof PERFORMANCE_USAGE_MODES[number]
 
 /** Preserve detailed accounting for users without an explicit preference. */
 export const DEFAULT_PERFORMANCE_USAGE: PerformanceUsageMode = 'detailed'
+
+/** Keep the built-in pills for users without an explicit preference. */
+export const DEFAULT_COMPOSER_PILLS_VISIBLE = true
 
 /** Destinations for ordinary clicks on Chat HTTP(S) links. */
 export type LinkOpening = 'sidebar' | 'new-tab'
@@ -78,8 +81,10 @@ export interface ChatSettings {
   collapseTiming?: CollapseTiming
   /** Replies kept visible in a folded Turn; absence keeps every reply. */
   foldedReplies?: FoldedReplies
-  /** Detail level for composer statistics and completed-Turn usage; `hidden` shows none of them. */
+  /** Detail level for composer statistics and completed-Turn usage. */
   performanceUsage: PerformanceUsageMode
+  /** Whether the built-in composer pills render below the input; absence preserves them. */
+  composerPills: boolean
   /** Default destination for Chat HTTP(S) links. */
   linkOpening: LinkOpening
 }
@@ -87,6 +92,7 @@ export interface ChatSettings {
 /** Durable Chat schema; also the wire envelope the browser scope validates against. */
 export const ChatSettingsFields = {
   [COLLAPSE_TIMING_FIELD]: z.union([...COLLAPSE_TIMINGS]).default(DEFAULT_COLLAPSE_TIMING),
+  composerPills: z.boolean().default(DEFAULT_COMPOSER_PILLS_VISIBLE),
   [FOLDED_REPLIES_FIELD]: z.union([...FOLDED_REPLIES]).default(DEFAULT_FOLDED_REPLIES),
   linkOpening: z.union(['sidebar', 'new-tab']).default(DEFAULT_LINK_OPENING),
   performanceUsage: z.union([...PERFORMANCE_USAGE_MODES]).default(DEFAULT_PERFORMANCE_USAGE),

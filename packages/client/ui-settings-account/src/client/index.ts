@@ -264,7 +264,7 @@ export function apply(ctx: Context): void {
       ctx.configForms.get<OnboardingSettings>(DESKTOP_ONBOARDING_NAMESPACE),
       ctx.configForms.get<{
         transcriptView?: TranscriptViewMode | null
-        performanceUsage: 'compact' | 'detailed' | 'hidden'
+        performanceUsage: 'compact' | 'detailed'
       }>('ui-chat'),
       enabled => ctx.configForms.developerTools.setEnabled(enabled),
       operations.hooks.account,

@@ -24,6 +24,8 @@ export interface Config {
   foldedReplies: Volatile<FoldedReplies>
   /** Performance and usage detail level. */
   performanceUsage: Volatile<PerformanceUsageMode>
+  /** Whether the built-in composer pills render below the input. */
+  composerPills: Volatile<ChatSettings['composerPills']>
   /** Default destination for Chat HTTP(S) links. */
   linkOpening: Volatile<LinkOpening>
 }
@@ -34,6 +36,7 @@ export const Config = z.object({
   collapseTiming: ChatSettingsFields.collapseTiming.volatile(),
   foldedReplies: ChatSettingsFields.foldedReplies.volatile(),
   performanceUsage: ChatSettingsFields['performanceUsage'].volatile(),
+  composerPills: ChatSettingsFields.composerPills.volatile(),
   linkOpening: ChatSettingsFields.linkOpening.volatile(),
 })
 

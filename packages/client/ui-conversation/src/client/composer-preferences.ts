@@ -20,7 +20,7 @@ function parsePerformanceMode(value: unknown): PerformanceMode {
 /**
  * Composer statistics preference. The accepted value is owned by the Chat
  * settings namespace, whose row labels every mode; this reader follows it so
- * the context meter, which is not a composer dock entry, hides with the pills.
+ * the context meter, which is not a composer dock entry, appears with the pills.
  * The mode contract is declared in `contract/composer-preferences.ts` rather
  * than imported from the owning plugin: a client feature plugin crosses to a
  * sibling only through Cordis services and slots.
@@ -42,16 +42,16 @@ export class ComposerPreferences {
 
   /**
    * Whether composer statistics are shown. Nothing is shown before the first
-   * accepted section, so a page that already hid them never paints them once
-   * while the settings mirror loads; a scope that serves no settings at all
-   * shows them, as the pills, which read the same absent section, do.
+   * accepted section, so a host-backed page withholds them while the mirror
+   * loads; a scope that serves no settings at all shows them, as the pills,
+   * which read the same absent section, do.
    * @returns the current visibility.
    */
   get visible(): boolean {
     const { status } = this.host.getSnapshot()
-    if (status === 'unavailable') return true
-    if (status === 'loading') return false
-    return this.mode.getSnapshot() !== 'hidden'
+    // A scope that serves no settings at all shows them, as the pills do; a
+    // host-backed page withholds them until the accepted section arrives.
+    return status === 'unavailable' || status !== 'loading'
   }
 
   /** Release the accepted-value subscription. */

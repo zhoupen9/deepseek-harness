@@ -22,34 +22,36 @@ describe('ComposerPreferences', () => {
     host.publish({ value: { performanceUsage: 'compact' } })
     const preferences = new ComposerPreferences(host.scope)
     expect(preferences.mode.getSnapshot()).toBe('compact')
-    for (const mode of ['detailed', 'hidden', 'compact'] as const) {
+    for (const mode of ['detailed', 'compact'] as const) {
       host.publish({ value: { performanceUsage: mode } })
       expect(preferences.mode.getSnapshot()).toBe(mode)
     }
     preferences.dispose()
   })
 
-  it('treats a mode outside this composer contract as the ordinary level', () => {
+  it('treats a retired or unknown mode as the ordinary level', () => {
     const host = stubConfigForm<ChatPreferenceSettings>()
-    host.publish({ value: { performanceUsage: 'hidden' } })
+    // A settings document written before the mode was retired still names it.
+    host.publish({ value: { performanceUsage: 'hidden' as never } })
     const preferences = new ComposerPreferences(host.scope)
-    // A composer that met a future value would blank its statistics instead of
-    // showing them, so only a recognized hiding mode hides anything.
+    expect(preferences.mode.getSnapshot()).toBe('detailed')
     host.publish({ value: { performanceUsage: 'silent' as never } })
     expect(preferences.mode.getSnapshot()).toBe('detailed')
     preferences.dispose()
   })
 
-  it('hides only once a served preference says so, and shows them while none arrives', () => {
+  it('shows statistics once the served section is ready, whatever level it names', () => {
     const host = stubConfigForm<ChatPreferenceSettings>()
     const preferences = new ComposerPreferences(host.scope)
     // Host-backed page, mirror still loading: the composer must not paint
-    // statistics a hidden preference would remove in the next frame.
+    // statistics before the accepted section arrives.
     expect(preferences.visible).toBe(false)
     host.publish({ status: 'ready', value: { performanceUsage: 'detailed' } })
     expect(preferences.visible).toBe(true)
-    host.publish({ value: { performanceUsage: 'hidden' } })
-    expect(preferences.visible).toBe(false)
+    // A retired `hidden` value adopts the ordinary level and keeps them shown.
+    host.publish({ value: { performanceUsage: 'hidden' as never } })
+    expect(preferences.mode.getSnapshot()).toBe('detailed')
+    expect(preferences.visible).toBe(true)
     host.publish({ value: { performanceUsage: 'compact' } })
     expect(preferences.visible).toBe(true)
     preferences.dispose()
@@ -71,10 +73,10 @@ describe('ComposerPreferences', () => {
     const visible = composerStatisticsVisible(preferences)
     const seen: boolean[] = []
     const unsubscribe = visible.subscribe(() => { seen.push(visible.getSnapshot()) })
-    host.publish({ status: 'ready', value: { performanceUsage: 'hidden' } })
+    host.publish({ status: 'ready', value: { performanceUsage: 'compact' } })
     host.publish({ value: { performanceUsage: 'detailed' } })
     unsubscribe()
-    expect(seen).toEqual([false, true])
+    expect(seen).toEqual([true, true])
     expect(visible.getSnapshot()).toBe(true)
     preferences.dispose()
   })

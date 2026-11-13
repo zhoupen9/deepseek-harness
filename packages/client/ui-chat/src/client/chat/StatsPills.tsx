@@ -253,7 +253,6 @@ export const ActivityPill = memo(function ActivityPill({ useChat, useProjection,
   const stats = useSessionStats(useChat, useProjection)
   const speed = stats.decodeMs > 0 ? decodeSpeed(stats, t) : null
   const icon = <IconGaugeOutlineRegular />
-  if (mode === 'hidden') return null
   if (mode === 'compact') return speed === null ? null : <PlainPill stat="activity" icon={icon} {...reading(speed, null)} />
   if (stats.steps === 0) return null
   const counts = t('stats.counts', { turns: stats.turns, steps: stats.steps })
@@ -297,7 +296,6 @@ export const ActivityPill = memo(function ActivityPill({ useChat, useProjection,
 /** Whole-log token total and cache hit; Compact keeps only the cache hit. */
 export const UsagePill = memo(function UsagePill({ useProjection, usePerformanceUsage, t }: StatPillProps) {
   const mode = usePerformanceUsage(value => value)
-  if (mode === 'hidden') return null
   const usage = useProjection('tokenUsage')
   // Gated on actual token activity: a session whose steps all settled without
   // billing (e.g. every request failed) shows no usage pill.

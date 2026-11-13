@@ -285,7 +285,7 @@ describe('PerformanceUsageRow', () => {
     expect(b.setTranscriptView).not.toHaveBeenCalled()
   })
 
-  it('offers hiding the composer statistics and reads the saved choice back', () => {
+  it('offers the compact detail level and reads the saved choice back', () => {
     const b = mount()
     const source = createSnapshotStore<PerformanceUsageMode>('detailed')
     const setPerformanceUsage = vi.fn((mode: PerformanceUsageMode) => { source.set(mode) })
@@ -295,8 +295,8 @@ describe('PerformanceUsageRow', () => {
       setPerformanceUsage={setPerformanceUsage}
     />)
     fireEvent.click(screen.getByRole('button', { name: 'Detailed' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Hidden' }))
-    expect(setPerformanceUsage).toHaveBeenCalledWith('hidden')
-    expect(screen.getAllByRole('button', { name: 'Hidden' })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Compact' }))
+    expect(setPerformanceUsage).toHaveBeenCalledWith('compact')
+    expect(screen.getAllByRole('button', { name: 'Compact' })).toHaveLength(1)
   })
 })

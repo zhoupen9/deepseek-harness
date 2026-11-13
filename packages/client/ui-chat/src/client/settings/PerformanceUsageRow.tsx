@@ -21,7 +21,6 @@ export type PerformanceUsageRowProps =
 const OPTIONS = [
   { id: 'compact', label: 'settings.performance.compact' },
   { id: 'detailed', label: 'settings.performance.detailed' },
-  { id: 'hidden', label: 'settings.performance.hidden' },
 ] as const satisfies readonly { id: PerformanceUsageMode; label: ChatKey }[]
 
 /** Menu-order label of one mode; the closed union keeps the selection total. */
@@ -29,7 +28,6 @@ function labelOf(mode: PerformanceUsageMode): ChatKey {
   switch (mode) {
     case 'compact': return 'settings.performance.compact'
     case 'detailed': return 'settings.performance.detailed'
-    case 'hidden': return 'settings.performance.hidden'
   }
 }
 

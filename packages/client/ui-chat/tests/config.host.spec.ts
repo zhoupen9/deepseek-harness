@@ -15,11 +15,11 @@ describe('ui-chat Host settings', () => {
     const { fiber } = configuration
 
     expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({
-      performanceUsage: 'detailed', linkOpening: 'sidebar', collapseTiming: 'completion', foldedReplies: 'all',
+      performanceUsage: 'detailed', linkOpening: 'sidebar', collapseTiming: 'completion', foldedReplies: 'all', composerPills: true,
     })
     await configuration.update({ transcriptView: 'normal' })
     expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({
-      transcriptView: 'normal', performanceUsage: 'detailed', linkOpening: 'sidebar', collapseTiming: 'completion', foldedReplies: 'all',
+      transcriptView: 'normal', performanceUsage: 'detailed', linkOpening: 'sidebar', collapseTiming: 'completion', foldedReplies: 'all', composerPills: true,
     })
     for (const mode of ['expanded', 'compact', 'standard', 'detailed', 'verbose']) {
       await configuration.update({ transcriptView: mode })
@@ -29,10 +29,12 @@ describe('ui-chat Host settings', () => {
       await configuration.update({ transcriptView: mode })
       expect(plainConfig(configuration.fiber.effectiveConfig)).toMatchObject({ transcriptView: mode === null ? null : undefined })
     }
-    for (const mode of ['compact', 'detailed', 'hidden']) {
+    for (const mode of ['compact', 'detailed']) {
       await configuration.update({ performanceUsage: mode })
       expect(plainConfig(configuration.fiber.effectiveConfig)).toMatchObject({ performanceUsage: mode })
     }
+    // The retired hidden level is refused by the Host schema, not read as a level.
+    await expect(configuration.update({ performanceUsage: 'hidden' })).rejects.toThrow()
     await expect(configuration.update({ performanceUsage: 'silent' })).rejects.toThrow()
     await configuration.update({ linkOpening: 'new-tab' })
     expect(plainConfig(configuration.fiber.effectiveConfig)).toMatchObject({ linkOpening: 'new-tab' })
@@ -53,6 +55,23 @@ describe('ui-chat Host settings', () => {
     await configuration.fiber.dispose()
     const restored = await liveConfig(ctx, { Config, apply }, saved)
     expect(plainConfig(restored.fiber.effectiveConfig)).toMatchObject({ transcriptView: 'compact', collapseTiming: 'next-input' })
+    await restored.fiber.dispose()
+  })
+
+  it('validates the built-in composer pill preference and restores the saved choice', async () => {
+    const ctx = new Context()
+    const configuration = await liveConfig(ctx, { Config, apply })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toMatchObject({ composerPills: true })
+    await configuration.update({ composerPills: false })
+    const saved = plainConfig(configuration.fiber.effectiveConfig)
+    if (typeof saved !== 'object' || saved === null) throw new Error('expected saved configuration object')
+    expect(saved).toMatchObject({ composerPills: false })
+    for (const invalid of ['yes', 0, 1, {}, []]) {
+      await expect(configuration.update({ composerPills: invalid })).rejects.toThrow()
+    }
+    await configuration.fiber.dispose()
+    const restored = await liveConfig(ctx, { Config, apply }, saved)
+    expect(plainConfig(restored.fiber.effectiveConfig)).toMatchObject({ composerPills: false })
     await restored.fiber.dispose()
   })
 
