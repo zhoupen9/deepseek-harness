@@ -14,6 +14,7 @@ export const DESKTOP_IPC = {
   applicationQuit: 'dsh-desktop:application-quit',
   applicationReload: 'dsh-desktop:application-reload',
   applicationRestart: 'dsh-desktop:application-restart',
+  remoteConnect: 'dsh-desktop:remote-connect',
   fileSave: 'dsh-desktop:file-save',
   clipboardImageRead: 'dsh-desktop:clipboard-image-read',
   shortcutsInput: 'dsh-desktop:shortcuts-input',
@@ -107,6 +108,23 @@ export interface DesktopUpdatePresentation {
   readonly configurationError?: DesktopChannelState['error']
 }
 
+/** Failure codes for preparing a remote Harness connection; the UI localizes each. */
+export type RemoteConnectionFailure =
+  | 'invalid-url'
+  | 'missing-token'
+  | 'unreachable'
+  | 'authentication'
+  | 'no-injections'
+  | 'version-mismatch'
+
+/** Failure codes for one remote Harness connection attempt; the UI localizes each. */
+export type DesktopRemoteFailure = RemoteConnectionFailure | 'local-host' | 'local-stop' | 'internal'
+
+/** Settlement of one remote Harness connection request. */
+export type DesktopRemoteConnectionResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly failure: DesktopRemoteFailure }
+
 /** Application commands the Web UI requests; the shell performs every effect. */
 export interface DshDesktopApplicationApi {
   /** Whether the shell exposes the development-only reload and restart commands. */
@@ -119,6 +137,12 @@ export interface DshDesktopApplicationApi {
   reload(): Promise<void>
   /** Relaunch the application. */
   restart(): Promise<void>
+  /**
+   * Replace the local Harness with a remote Web Host for this run.
+   * @param url - complete URL printed by the remote `dsh --profile web`, including its token.
+   * @returns success, or the failure code the connect dialog localizes.
+   */
+  connectRemote(url: string): Promise<DesktopRemoteConnectionResult>
 }
 
 /** Product documents cannot supply update versions, package URLs, or installation authorization. */

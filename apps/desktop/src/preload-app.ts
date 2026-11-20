@@ -6,7 +6,7 @@ import type { DesktopShortcutInput, ShortcutConfigSnapshot, ShortcutSaveResult }
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   DESKTOP_IPC, DESKTOP_DEVELOPMENT_ARGUMENT, SCHEME,
-  type DshDesktopProductApi, type DesktopUpdatePresentation,
+  type DshDesktopProductApi, type DesktopRemoteConnectionResult, type DesktopUpdatePresentation,
 } from './ipc.ts'
 import { PLATFORM_IPC } from './platform-ipc.ts'
 import { markDocumentPlatform, syncWindowFullscreen } from './preload-platform.ts'
@@ -32,6 +32,7 @@ function createProductApi(): DshDesktopProductApi {
       quit: () => ipcRenderer.invoke(DESKTOP_IPC.applicationQuit) as Promise<void>,
       reload: () => ipcRenderer.invoke(DESKTOP_IPC.applicationReload) as Promise<void>,
       restart: () => ipcRenderer.invoke(DESKTOP_IPC.applicationRestart) as Promise<void>,
+      connectRemote: url => ipcRenderer.invoke(DESKTOP_IPC.remoteConnect, url) as Promise<DesktopRemoteConnectionResult>,
     },
     fileDrag: {
       prepare: (source, requestId) => ipcRenderer.invoke(DESKTOP_IPC.fileDragPrepare, source, requestId) as

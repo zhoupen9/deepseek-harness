@@ -38,7 +38,7 @@ import { installDesktopFileDrag } from './file-drag.ts'
 import { installDesktopDirectoryPicker } from './directory-picker.ts'
 import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { DesktopBackendController } from './backend-controller.ts'
-import { DESKTOP_DEVELOPMENT_ARGUMENT, DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
+import { DESKTOP_DEVELOPMENT_ARGUMENT, DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopRemoteConnectionResult, type DesktopUpdateState } from './ipc.ts'
 import { readDeviceInfo } from './device-info.ts'
 import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
 import type { DesktopMessages } from './locale.ts'
@@ -48,6 +48,7 @@ import { DesktopUpdateCoordinator } from './update-coordinator.ts'
 import { prepareDesktopUpdateWindow } from './update-window.ts'
 import { DesktopCommandManager } from './command-management.ts'
 import { serveWebDocument, authenticateWebHost, forwardWebRequest, removeLegacyHostCookies } from './web-document.ts'
+import { prepareRemoteConnection, remoteDocumentInjections, RemoteConnectionError, type RemoteConnection } from './remote-connection.ts'
 import { DesktopFatalRecovery } from './fatal-recovery.ts'
 import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
 import { OperationJournal } from './operation-journal.ts'
@@ -534,6 +535,7 @@ async function main(): Promise<void> {
   const applicationUrl = `${SCHEME}://app/`
   let hostUrl: string | undefined
   let hostCookie: string | undefined
+  let remoteConnection: RemoteConnection | undefined
   const browserGuests = new DesktopBrowserGuests(() => hostUrl)
   let injections: readonly unknown[] = []
   let welcomeBackend: DesktopWelcomeBackend | undefined
@@ -593,6 +595,7 @@ async function main(): Promise<void> {
         const cookie = await authenticateWebHost(ready.url)
         hostCookie = cookie
         hostUrl = ready.url
+        registerWebSocketForwarding(hostUrl)
         void removeLegacyHostCookies(session.defaultSession.cookies, ready.url)
           .catch((error: unknown) => { console.error('desktop: legacy Host cookie cleanup failed', error) })
         if (ready.injections === undefined) throw new Error('Desktop Host did not provide boot injections')
@@ -862,11 +865,14 @@ async function main(): Promise<void> {
       const webRoot = join(resources.dsh, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist')
       // The packaged index has no Host-rendered rows; the last reported source colors it until boot injections arrive.
       if (url.pathname === '/' || url.pathname === '/index.html') {
-        return serveWebDocument(request, webRoot, startupThemeMarkup(nativeTheme.themeSource))
+        // A remote Harness contributes its boot rows; the packaged index keeps this app's client build.
+        return serveWebDocument(request, webRoot, startupThemeMarkup(nativeTheme.themeSource),
+          remoteConnection === undefined ? undefined : remoteDocumentInjections(remoteConnection))
       }
       if (url.pathname.startsWith('/assets/') || ['/favicon.svg', '/manifest.webmanifest'].includes(url.pathname)) {
         return serveWebDocument(request, webRoot)
       }
+      if (remoteConnection !== undefined) return forwardWebRequest(request, remoteConnection.base.href, remoteConnection.cookie)
       if (backend.host === undefined || hostUrl === undefined || hostCookie === undefined) {
         return Promise.resolve(new Response(null, { status: 503 }))
       }
@@ -922,6 +928,10 @@ async function main(): Promise<void> {
 
   ipcMain.handle(DESKTOP_IPC.boot, async (event) => {
     assertDesktopSender(event, ['app'])
+    if (remoteConnection !== undefined) {
+      // The remote document already carries its boot rows; only the stream base is shell-owned.
+      return { injections: [], streamBaseUrl: remoteConnection.base.href }
+    }
     await startup
     if (backend.host === undefined || hostUrl === undefined) throw new Error('Desktop Host is unavailable')
     return { injections, streamBaseUrl: new URL(hostUrl).origin }
@@ -945,7 +955,8 @@ async function main(): Promise<void> {
     return browserGuests.release(event.sender, lease)
   })
 
-  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['ws://127.0.0.1/*', 'wss://127.0.0.1/*'] }, (details, callback) => {
+  const forwardWebSocketHeaders = (details: Electron.OnBeforeSendHeadersListenerDetails,
+    callback: (response: Electron.BeforeSendResponse) => void): void => {
     if (hostUrl === undefined || hostCookie === undefined || details.webContentsId !== mainWindow?.webContents.id) {
       callback({})
       return
@@ -956,7 +967,24 @@ async function main(): Promise<void> {
     const headers = Object.fromEntries(Object.entries(details.requestHeaders).map(([name, value]) => [name.toLowerCase(), value]))
     if (headers.origin !== 'dsh-app://app') { callback({ cancel: true }); return }
     callback({ requestHeaders: { ...headers, origin: target.origin, cookie: hostCookie, 'sec-fetch-site': 'same-origin' } })
-  })
+  }
+  let webSocketFilter: readonly string[] | undefined
+  /**
+   * Move the WebSocket credential filter to the authority the page currently talks to.
+   * @param target - authenticated Host URL, or undefined before any Host reports ready.
+   */
+  const registerWebSocketForwarding = (target: string | undefined): void => {
+    if (webSocketFilter !== undefined) {
+      session.defaultSession.webRequest.onBeforeSendHeaders({ urls: [...webSocketFilter] }, null)
+    }
+    const urls = target === undefined
+      ? ['ws://127.0.0.1/*', 'wss://127.0.0.1/*']
+      // Electron match patterns do not carry a port; the handler still compares the full authority.
+      : [`${new URL(target).protocol === 'https:' ? 'wss' : 'ws'}://${new URL(target).hostname}/*`]
+    webSocketFilter = urls
+    session.defaultSession.webRequest.onBeforeSendHeaders({ urls }, forwardWebSocketHeaders)
+  }
+  registerWebSocketForwarding(undefined)
 
   const assertMainApplication = (event: IpcMainInvokeEvent): BrowserWindow => {
     const owner = mainWindow
@@ -993,6 +1021,11 @@ async function main(): Promise<void> {
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame
       || new URL(event.senderFrame.url).origin !== new URL(applicationUrl).origin) {
       throw new Error('desktop welcome: rejected locale request from an unowned frame')
+    }
+    if (remoteConnection !== undefined) {
+      // The remote Host owns its language setting. This window's language seeds the page until the
+      // Host settings mirror adopts that selection; there is no local welcome preference to read.
+      return { languages: [locale.id, ...systemLanguages], preference: null }
     }
     if (welcomeBackend === undefined) throw new Error('desktop welcome: backend unavailable')
     return { languages: systemLanguages, preference: await welcomeBackend.readLocalePreference() }
@@ -1049,6 +1082,8 @@ async function main(): Promise<void> {
   })
   ipcMain.handle(DESKTOP_IPC.onboardingApiKey, async (event) => {
     assertProductSender(event)
+    // A remote Harness owns its credentials; this shell has no local onboarding state to report.
+    if (remoteConnection !== undefined) return false
     return (await readWelcomeState()).hasApiKey
   })
   ipcMain.on(DESKTOP_IPC.onboardingActive, (event, active: unknown) => {
@@ -1092,6 +1127,47 @@ async function main(): Promise<void> {
     if (quitting) return
     app.relaunch()
     app.quit()
+  })
+  ipcMain.handle(DESKTOP_IPC.remoteConnect, async (event, url: unknown): Promise<DesktopRemoteConnectionResult> => {
+    assertProductSender(event)
+    if (typeof url !== 'string') return { ok: false, failure: 'invalid-url' }
+    let connection: RemoteConnection
+    try {
+      connection = await prepareRemoteConnection(url, app.getVersion())
+    } catch (error) {
+      if (error instanceof RemoteConnectionError) return { ok: false, failure: error.failure }
+      console.error('desktop remote: connection preparation failed', error)
+      return { ok: false, failure: 'internal' }
+    }
+    // Connecting to this run's own child would stop the Host the page is about to use.
+    if (hostUrl !== undefined && connection.base.origin === new URL(hostUrl).origin) {
+      return { ok: false, failure: 'local-host' }
+    }
+    try {
+      await backend.stop()
+    } catch (error) {
+      console.error('desktop remote: local Harness stop failed', error)
+      return { ok: false, failure: 'local-stop' }
+    }
+    // The local profile keeps its data on disk; this run continues against the remote instead.
+    stopAccount?.()
+    stopAccount = undefined
+    welcomeBackend = undefined
+    analyticsEnabled = false
+    remoteConnection = connection
+    hostUrl = connection.base.href
+    hostCookie = connection.cookie
+    injections = []
+    backendReady = true
+    registerWebSocketForwarding(hostUrl)
+    // Reload once this reply settles: the running document still holds the local Host's render state.
+    navigation = undefined
+    setImmediate(() => {
+      const window = mainWindow
+      if (quitting || window === undefined || window.isDestroyed()) return
+      window.webContents.reload()
+    })
+    return { ok: true }
   })
 
   let configurationPrompt: Promise<void> | undefined

@@ -12,11 +12,14 @@
   en: 7bc8bf30de693222
   zh: e85993d8852b6cab
 /deepseek-harness-desktop/table-of-contents:
-  en: 127ea90553cb6af7
-  zh: 7b1c5aec8558c684
+  en: c3be8a4e4f6ec31d
+  zh: 1543ffc630a758f6
 /deepseek-harness-desktop/application-overview:
-  en: 97666bf55d239d8f
-  zh: eed204896a16b259
+  en: 8b8ec066e673258f
+  zh: 15ca55e2a0beacc6
+/deepseek-harness-desktop/remote-harness-connection:
+  en: 7650d115a1f31e54
+  zh: 577415c2e69f91eb
 /deepseek-harness-desktop/terminal-command:
   en: 5f2d25a1d8472647
   zh: 2acb5c5d7d1917e2
@@ -75,8 +78,8 @@
   en: 50003750d2c0b116
   zh: e907c233621fd36c
 /deepseek-harness-desktop/known-limitations:
-  en: b1eeadfefb338056
-  zh: 28683fbdf1e98685
+  en: b6b002d48c003713
+  zh: 94fa764d1f63c328
 /deepseek-harness-desktop/dev-note:
   en: 8e26b460ba31f21b
   zh: fbcd0307b3867125

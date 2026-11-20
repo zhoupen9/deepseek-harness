@@ -22,7 +22,8 @@ type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
 const fileDrag = vi.hoisted(() => ({ dispose: vi.fn<() => Promise<void>>(), install: vi.fn() }))
 vi.mock('../src/file-drag.ts', () => ({ installDesktopFileDrag: () => { fileDrag.install(); return fileDrag.dispose } }))
 
-vi.mock('../src/web-document.ts', () => ({
+vi.mock('../src/web-document.ts', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/web-document.ts')>(),
   authenticateWebHost: async () => 'test-cookie', serveWebDocument: vi.fn(), forwardWebRequest: vi.fn(),
   removeLegacyHostCookies: harness.removeLegacyHostCookies,
 }))
@@ -566,6 +567,34 @@ describe('desktop main startup', () => {
         : 'test-pnpm',
       nodeBin: packaged ? join(resources, 'runtime', 'bin') : join('desktop-test-app', 'scripts', 'node-bin'),
     })
+  })
+
+  it('switches to a remote Harness and reloads the packaged client against it', async () => {
+    await readyForUpdate()
+    const remoteIndex = '<html><head><base href="./"><script>globalThis["__DSH_BOOT__"] = {"rev":"r","release":{"version":"1.0.0"},"entries":[],"batches":[]}</script></head><body><script>(globalThis.__DSH_BOOT_READY__ ??= Promise.withResolvers()).resolve()</script><div id="root"></div></body></html>'
+    const request = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 303, headers: { 'set-cookie': 'dsh-session=owned' } }))
+      .mockResolvedValueOnce(new Response(remoteIndex, { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 303, headers: { 'set-cookie': 'dsh-session=owned' } }))
+      .mockResolvedValueOnce(new Response(remoteIndex, { status: 200 }))
+    vi.stubGlobal('fetch', request)
+    const host = harness.hosts[0]!
+    // This run's own child answers the same rows, but stopping it would kill the Host the page uses.
+    expect(await invoke(DESKTOP_IPC.remoteConnect, 'app', 'http://127.0.0.1:3080/?token=local')).toEqual({ ok: false, failure: 'local-host' })
+    expect(host.stop).not.toHaveBeenCalled()
+    const connecting = invoke(DESKTOP_IPC.remoteConnect, 'app', 'https://app.example/ui/?token=owned')
+    // The shell waits for the local child to exit before it points the window at the remote Host.
+    host.exited.resolve()
+    expect(await connecting).toEqual({ ok: true })
+    expect(request.mock.calls.at(-1)?.[0]).toBe('https://app.example/ui/index.html')
+    expect(host.stop).toHaveBeenCalledOnce()
+    expect(await invoke(DESKTOP_IPC.boot, 'app')).toEqual({ injections: [], streamBaseUrl: 'https://app.example/ui/' })
+    // The locale bridge must answer without the local welcome backend the switch cleared.
+    expect(await invoke(DESKTOP_IPC.localeBootstrap, 'app')).toEqual({ languages: ['en', 'en-US'], preference: null })
+    expect(harness.socketHeaders.mock.calls.at(-2)?.[1]).toBeNull()
+    expect(harness.socketHeaders.mock.calls.at(-1)?.[0]).toEqual({ urls: ['wss://app.example/*'] })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.windows[0]!.webContents.reload).toHaveBeenCalledOnce()
   })
 
   it('persists a channel through product IPC and ignores external edits during the process', async () => {

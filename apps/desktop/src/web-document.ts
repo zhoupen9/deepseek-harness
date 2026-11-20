@@ -17,12 +17,24 @@ export interface WebDocumentAppearance {
   readonly body: string
 }
 
-/** Insert boot readiness and the appearance rows into one packaged index. */
-function injectIndex(html: string, appearance: WebDocumentAppearance | undefined): string {
-  const booted = html.replace(/<head(?:\s[^>]*)?>/i, tag => `${tag}${BOOT}${appearance?.head ?? ''}`)
-  return appearance === undefined
-    ? booted
-    : booted.replace(/<body(?:\s[^>]*)?>/i, tag => `${tag}${appearance.body}`)
+/** Additional rows inserted after the appearance rows, in table order. */
+export interface WebDocumentInjections {
+  /** Head rows; they run before the packaged index's own module script. */
+  readonly head?: string
+  /** Body rows. */
+  readonly body?: string
+}
+
+/** Insert boot readiness, the appearance rows, and extra rows into one packaged index. */
+function injectIndex(
+  html: string,
+  appearance: WebDocumentAppearance | undefined,
+  extra: WebDocumentInjections | undefined,
+): string {
+  const head = `${BOOT}${appearance?.head ?? ''}${extra?.head ?? ''}`
+  const booted = html.replace(/<head(?:\s[^>]*)?>/i, tag => `${tag}${head}`)
+  const body = `${appearance?.body ?? ''}${extra?.body ?? ''}`
+  return body === '' ? booted : booted.replace(/<body(?:\s[^>]*)?>/i, tag => `${tag}${body}`)
 }
 
 /**
@@ -30,9 +42,15 @@ function injectIndex(html: string, appearance: WebDocumentAppearance | undefined
  * @param request - Local application request.
  * @param root - Packaged Web dist directory.
  * @param appearance - Rows that paint the packaged index before the Host answers.
+ * @param extra - Boot rows supplied by a remote Harness the shell connected to.
  * @returns Static response, or a missing/invalid path response.
  */
-export async function serveWebDocument(request: Request, root: string, appearance?: WebDocumentAppearance): Promise<Response> {
+export async function serveWebDocument(
+  request: Request,
+  root: string,
+  appearance?: WebDocumentAppearance,
+  extra?: WebDocumentInjections,
+): Promise<Response> {
   if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 })
   const url = new URL(request.url)
   let pathname: string
@@ -46,10 +64,22 @@ export async function serveWebDocument(request: Request, root: string, appearanc
     throw error
   }
   const content = pathname === '/' || pathname === '/index.html'
-    ? injectIndex(body.toString(), appearance) : new Uint8Array(body)
+    ? injectIndex(body.toString(), appearance, extra) : new Uint8Array(body)
   return new Response(request.method === 'HEAD' ? null : content, {
     headers: { 'content-type': MIME[extname(target)] ?? 'application/octet-stream' },
   })
+}
+
+/**
+ * Read the session cookie from one authenticated index exchange.
+ * @param response - Response to the URL carrying the process token.
+ * @returns the `name=value` cookie pair, or undefined when the exchange did not authenticate.
+ */
+export function readSessionCookie(response: Response): string | undefined {
+  const cookie = response.headers.get('set-cookie')
+  if (response.status !== 303 || cookie === null) return undefined
+  const end = cookie.indexOf(';')
+  return end < 0 ? cookie : cookie.slice(0, end)
 }
 
 /**
@@ -59,11 +89,10 @@ export async function serveWebDocument(request: Request, root: string, appearanc
  */
 export async function authenticateWebHost(url: string): Promise<string> {
   const response = await fetch(url, { redirect: 'manual' })
-  const cookie = response.headers.get('set-cookie')
+  const cookie = readSessionCookie(response)
   await response.body?.cancel()
-  if (response.status !== 303 || cookie === null) throw new Error('Desktop Host authentication failed')
-  const end = cookie.indexOf(';')
-  return end < 0 ? cookie : cookie.slice(0, end)
+  if (cookie === undefined) throw new Error('Desktop Host authentication failed')
+  return cookie
 }
 
 /** Cookie store operations used to remove legacy Host authentication cookies. */
@@ -102,12 +131,22 @@ const WITHHELD_RESPONSE_HEADERS = [
 const PLUGIN_BUNDLE_PATH = /^\/plugins\//u
 
 /**
+ * Resolve one application pathname beneath a Host mount.
+ * @param mount - Host base pathname, ending in `/`; `/` names the origin root.
+ * @param pathname - Application pathname starting with `/`.
+ * @returns the pathname to request from that Host.
+ */
+function mountPathname(mount: string, pathname: string): string {
+  return mount === '/' ? pathname : `${mount.slice(0, -1)}${pathname}`
+}
+
+/**
  * Forward local application requests to its authenticated Host, preserving streaming and cancellation.
  * Plugin bundle responses lose their `cache-control` for `no-store`: the Host marks them immutable
  * under a revision that changes every launch, so Chromium's disk cache would only accumulate bundles
  * no later launch can reuse.
  * @param request - Request from the application origin.
- * @param host - Owned Host URL.
+ * @param host - Authenticated Host URL; a path prefix mounts the application behind a reverse proxy.
  * @param cookie - Host-issued authentication cookie.
  * @returns Host response without connection-level headers.
  */
@@ -116,7 +155,7 @@ export async function forwardWebRequest(request: Request, host: string, cookie: 
   const origin = request.headers.get('origin')
   if (origin !== null && origin !== 'dsh-app://app') return new Response(null, { status: 403 })
   const target = new URL(host)
-  target.pathname = source.pathname
+  target.pathname = mountPathname(target.pathname, source.pathname)
   target.search = source.search
   const headers = new Headers(request.headers)
   for (const name of ['host', 'origin', 'cookie', 'sec-fetch-site']) headers.delete(name)

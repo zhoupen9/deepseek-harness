@@ -117,3 +117,31 @@ it('removes only legacy Host authentication cookies for the Host hostname', asyn
   expect(cookies.get).toHaveBeenCalledExactlyOnceWith({ url: 'http://127.0.0.1:1234' })
   expect(removed).toEqual([['http://127.0.0.1:1234', 'dsh-auth-old'], ['http://127.0.0.1:1234', 'dsh-auth-older']])
 })
+
+it('puts remote boot rows after the boot gate and ahead of the packaged client bundle', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-web-'))
+  roots.push(root)
+  await mkdir(join(root, 'assets'))
+  await writeFile(join(root, 'index.html'), '<html><head></head><body><div id="root"></div><script src="assets/entry.js"></script></body></html>')
+  await writeFile(join(root, 'assets/entry.js'), 'globalThis.entryLoaded = true')
+  const html = await (await serveWebDocument(new Request('dsh-app://app/'), root,
+    { head: '<style>APPEARANCE</style>', body: '<script>APPEARANCE_BODY</script>' },
+    { head: '<script>REMOTE</script>', body: '<script>REMOTE_BODY</script>' })).text()
+  expect(html.indexOf('__DSH_BOOT_READY__')).toBeLessThan(html.indexOf('<script>REMOTE</script>'))
+  expect(html.indexOf('APPEARANCE</style>')).toBeLessThan(html.indexOf('<script>REMOTE</script>'))
+  expect(html.indexOf('<script>REMOTE</script>')).toBeLessThan(html.indexOf('assets/entry.js'))
+  expect(html).toContain('<script>APPEARANCE_BODY</script><script>REMOTE_BODY</script>')
+  // Rows never reach a static asset.
+  expect(await (await serveWebDocument(new Request('dsh-app://app/assets/entry.js'), root, undefined, {
+    head: '<script>REMOTE</script>', body: '<script>REMOTE_BODY</script>',
+  })).text()).toBe('globalThis.entryLoaded = true')
+})
+
+it('forwards beneath a mounted Host base', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response('ok'))
+  vi.stubGlobal('fetch', request)
+  await forwardWebRequest(new Request('dsh-app://app/api/list?x=1'), 'https://app.example/ui/', 'session=owned')
+  await forwardWebRequest(new Request('dsh-app://app/'), 'https://app.example/ui/', 'session=owned')
+  expect((request.mock.calls[0]?.[0] as URL).href).toBe('https://app.example/ui/api/list?x=1')
+  expect((request.mock.calls[1]?.[0] as URL).href).toBe('https://app.example/ui/')
+})

@@ -13,6 +13,7 @@ Desktop 在原生应用中运行 Harness 工作区。本参考文档说明应用
 ## 目录
 
 - [应用概览](#application-overview)
+- [远程 Harness 连接](#remote-harness)
 - [终端命令](#terminal-command)
 - [关闭窗口与退出](#closing-the-window-and-quitting)
 - [关键技术决策](#key-technical-decisions)
@@ -56,6 +57,16 @@ Desktop Host 的 Platform API 请求与更新策略请求用相同的 Platform �
 桌面麦克风访问仅允许主 `dsh-app://app` 页面发起的音频请求。macOS 使用系统麦克风授权、随包用途说明，以及主应用与 Helper 签名中的 `com.apple.security.device.audio-input` 权限。
 
 按 F12（多媒体功能键键盘上为 Fn+F12）、macOS 的 Command+Option+I 或 Windows 的 Ctrl+Shift+I，可切换当前获得焦点的应用页面的 DevTools，打包版本同样支持。应用菜单在隐藏和退出命令之前的独立分组中显示本地化的“开发者工具”命令。Windows 在标题栏的应用弹出菜单中显示开关，通过隐藏的原生应用菜单注册快捷键；macOS 的应用菜单保留隐藏的 F12 快捷键别名，Linux 窗口无边框、不显示菜单栏，其隐藏的 Ctrl+Shift+I 与 F12 项直接切换停靠面板。更新遮罩和打包版本的内嵌浏览器禁用 DevTools。
+
+<a id="remote-harness"></a>
+
+## 远程 Harness 连接
+
+当壳提供该命令时，侧边栏账号菜单会显示 **连接到远程 Harness…**。对话框接收远程机器上 `dsh --profile web` 输出的完整 URL（包含 `?token=` 参数）；壳用该 token 换取远程 Host 的签名 Cookie，从远程索引读取启动注入行，并让打包客户端连接远程 HTTP 与 WebSocket 端点重新加载。打包前端、窗口外观、托盘、更新与壳自有的设置行仍保留在本地；会话、模型、凭据、工作区、插件及其余设置则属于远程 Host。
+
+该切换不持久化。重启后照常启动本地 Harness 与本地 profile；远程连接期间本地 profile 不会被修改。远程 Harness 必须与本应用为同一发行版本：打包客户端会加载远程的插件行，版本不同时以本地化消息拒绝连接。URL 缺少 token、token 被拒绝、Host 不可达、文档不含启动行会分别显示对应消息；连接失败时本地 Harness 继续运行。退出桌面端不会中断远程工作，因为远程 Host 不是本进程。
+
+绑定回环地址的远程服务可通过 SSH 本地转发访问，例如 `ssh -N -L 3080:127.0.0.1:3080 user@remote`，然后粘贴输出的 `http://127.0.0.1:3080/?token=…`。此时回环权威满足 Host/Origin 栅栏与 WebSocket 凭据过滤器，签名 Cookie 也绑定到该权威。经由 TLS 发布的部署则改用其公告根地址，壳会把该地址前缀拼接到每个转发路径上。
 
 <a id="terminal-command"></a>
 
@@ -400,6 +411,10 @@ node apps/desktop/node_modules/pnpm/bin/pnpm.mjs --dir apps/desktop run test:upd
 <a id="known-limitations"></a>
 
 ## 已知限制
+
+- 远程 Harness 只在本次运行内有效；返回本地 Harness 需要重启应用。
+
+- 远程连接保留打包客户端与壳自有的设置行，但客户端插件行由所连接的 Host 提供，因此侧边栏浏览器标签等仅桌面端提供的行只有远程 profile 挂载时才会出现。欢迎页、账号引导与埋点仍留在本地。
 
 - 账号登录尚未接入；登录按钮禁用。Windows 材质效果仍需平台验证。
 

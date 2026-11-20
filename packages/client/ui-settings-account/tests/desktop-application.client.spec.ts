@@ -10,6 +10,7 @@ function applicationOf() {
     quit: vi.fn(() => Promise.resolve()),
     reload: vi.fn(() => Promise.resolve()),
     restart: vi.fn(() => Promise.resolve()),
+    connectRemote: vi.fn(() => Promise.resolve({ ok: true as const })),
   }
 }
 
@@ -23,11 +24,19 @@ it('projects the shell carrier onto the launcher commands', async () => {
   await commands!.reload()
   await commands!.restart()
   await commands!.quit()
+  await commands!.connectRemote!('http://127.0.0.1:3080/?token=t')
   expect(application.about).toHaveBeenCalledOnce()
   expect(application.quit).toHaveBeenCalledOnce()
   expect(application.reload).toHaveBeenCalledOnce()
   expect(application.restart).toHaveBeenCalledOnce()
+  expect(application.connectRemote).toHaveBeenCalledExactlyOnceWith('http://127.0.0.1:3080/?token=t')
   expect(open).toHaveBeenCalledOnce()
+})
+
+it('omits the remote command when this shell cannot reach a remote Harness', () => {
+  const { connectRemote: _connectRemote, ...application } = applicationOf()
+  const commands = desktopApplicationCommands({ protocolVersion: 1, application, updates: { open: () => Promise.resolve() } })
+  expect(commands?.connectRemote).toBeUndefined()
 })
 
 it('exposes no commands outside this shell contract', () => {

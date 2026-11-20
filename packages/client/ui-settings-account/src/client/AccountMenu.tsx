@@ -1,15 +1,16 @@
 /** Sidebar account launcher, its shell-owned application commands, and the locally authoritative sign-out action. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Toast, Menu, IconCloseOutlineMedium, IconDownloadOutlineMedium, IconEllipsisOutlineMedium, IconInfoOutlineMedium,
-  IconPaperPlaneOutlineMedium, IconPlayOutlineMedium, IconRefreshOutlineMedium, IconSettingsOutlineMedium,
-  IconUserOutlineMedium,
+  Toast, Menu, IconCloseOutlineMedium, IconDownloadOutlineMedium, IconEllipsisOutlineMedium, IconGlobeOutlineMedium,
+  IconInfoOutlineMedium, IconPaperPlaneOutlineMedium, IconPlayOutlineMedium, IconRefreshOutlineMedium,
+  IconSettingsOutlineMedium, IconUserOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AccountSectionInjected } from './AccountSection.tsx'
 import { SignOutDialog } from './SignOutDialog.tsx'
 import { SignInDialog } from './SignInDialog.tsx'
+import { ConnectRemoteDialog } from './ConnectRemoteDialog.tsx'
 import { LogoutIcon } from './LogoutIcon.tsx'
 import { AccountAvatar } from './AccountAvatar.tsx'
 import type {} from './account-ui.ts'
@@ -59,6 +60,7 @@ export function AccountMenu({
   const label = profile === undefined ? null : profile.status === 'ready'
     ? profile.value.name ?? profile.value.contact ?? t('signedIn') : t('signedIn')
   const [open, setOpen] = useState(false)
+  const [connectRemoteOpen, setConnectRemoteOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const [busy, setBusy] = useState(false)
   const [signOutImpact, setSignOutImpact] = useState<boolean | 'unknown'>()
@@ -93,6 +95,9 @@ export function AccountMenu({
     )
     applicationCommands.set('about', application.about)
     applicationCommands.set('updates', application.openUpdates)
+    if (application.connectRemote !== undefined) {
+      applicationItems.push({ id: 'remote', label: t('connectRemoteHarness'), icon: <IconGlobeOutlineMedium size={16} /> })
+    }
     if (application.development) {
       applicationItems.push(
         { id: 'reload', label: t('reloadPage'), icon: <IconRefreshOutlineMedium size={16} /> },
@@ -140,6 +145,7 @@ export function AccountMenu({
         else if (id === 'contact') { setOpen(false); contactUs() }
         else if (id === 'signin') beginSignIn()
         else if (id === 'signout') void requestSignOut()
+        else if (id === 'remote') { setOpen(false); setConnectRemoteOpen(true) }
         else {
           setOpen(false)
           const command = applicationCommands.get(id)
@@ -155,5 +161,7 @@ export function AccountMenu({
       close={() => { showLogin(false) }} useApiKey={() => { showLogin(false); openOnboarding('deepseek-official') }} />}
     {signedIn && signOutImpact !== undefined && <SignOutDialog running={signOutImpact} signOut={signOut}
       close={() => { setSignOutImpact(undefined) }} t={t} />}
+    {connectRemoteOpen && application?.connectRemote !== undefined && <ConnectRemoteDialog
+      connectRemote={application.connectRemote} close={() => { setConnectRemoteOpen(false) }} t={t} />}
   </div>
 }

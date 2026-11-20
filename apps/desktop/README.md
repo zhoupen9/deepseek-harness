@@ -13,6 +13,7 @@ Desktop runs the Harness workspace in a native application. This reference cover
 ## Table of Contents
 
 - [Application overview](#application-overview)
+- [Remote Harness connection](#remote-harness)
 - [Terminal command](#terminal-command)
 - [Closing the window and quitting](#closing-the-window-and-quitting)
 - [Key technical decisions](#key-technical-decisions)
@@ -56,6 +57,16 @@ A server-expired account credential returns to Welcome when no official API key 
 Desktop microphone access is restricted to audio requests from the primary `dsh-app://app` frame. macOS uses system microphone authorization, a packaged usage description, and `com.apple.security.device.audio-input` in the main application and Helper signatures.
 
 Press F12 (Fn+F12 on media-key keyboards), Command+Option+I on macOS, or Ctrl+Shift+I on Windows to toggle DevTools for the focused application page, including in packaged builds. The application menu shows a localized “Developer tools” command in a separate group before Hide and Quit (before Exit on Windows). Windows exposes it in the titlebar application popup; its hidden native application menu registers the shortcuts. macOS keeps a hidden F12 shortcut alias in its application menu; the frameless Linux window draws no menu bar, so its hidden Ctrl+Shift+I and F12 items toggle the docked panel directly. Update overlays and packaged embedded browser guests disable DevTools.
+
+<a id="remote-harness"></a>
+
+## Remote Harness connection
+
+The sidebar account menu offers **Connect to Remote Harness…** when the shell exposes the command. The dialog takes the complete URL printed by `dsh --profile web` on the remote machine, including its `?token=` parameter, and the shell exchanges that token for the remote Host's signed cookie, reads the boot rows from the remote index, and reloads the packaged client against the remote HTTP and WebSocket endpoints. The packaged frontend, window chrome, tray, updates, and shell-owned Settings rows stay local; Sessions, models, credentials, workspaces, plugins, and the rest of Settings become the remote Host's.
+
+The switch is not persisted. A restart spawns the local Harness and the local profile as usual, and the local profile is untouched while the remote connection is active. The remote Harness must run the same release as this application: the packaged client renders the remote plugin rows, and a different release is refused with a localized message. A URL without a token, a rejected token, an unreachable Host, and a document without boot rows each report their own message, and a failed attempt leaves the local Harness running. Quitting the desktop does not interrupt remote work, because the remote Host is not this process.
+
+A loopback-bound remote is reachable through an SSH local forward, for example `ssh -N -L 3080:127.0.0.1:3080 user@remote`; paste the printed `http://127.0.0.1:3080/?token=…` URL. The loopback authority then satisfies the Host/Origin fence and the WebSocket credential filter, and the signed cookie binds to that authority. A published deployment behind TLS uses its advertised root instead, which the shell joins to every forwarded path.
 
 <a id="terminal-command"></a>
 
@@ -401,6 +412,8 @@ An unpackaged Electron process uses `.desktop-build/development/project` under i
 
 ## Known limitations
 
+- The remote Harness is a per-run choice; returning to the local Harness requires an application restart.
+- A remote connection keeps the packaged client and shell-owned Settings rows, but the connected Host supplies the client plugin rows, so desktop-only rows such as the sidebar Browser tab appear only when the remote profile mounts them. Welcome, account onboarding, and analytics remain local.
 - Account sign-in is not connected; the Sign in button is disabled. Windows material rendering still requires platform QA.
 
 - Release signing, notarization, update hosting, and previous-version installed-artifact qualification require the production release environment.

@@ -82,9 +82,11 @@ it('exposes application commands with the renderer development marker', async ()
   await api.application.quit()
   await api.application.reload()
   await api.application.restart()
+  await api.application.connectRemote('http://127.0.0.1:3080/?token=t')
   expect(electron.ipcRenderer.invoke.mock.calls).toEqual([
     [DESKTOP_IPC.applicationAbout], [DESKTOP_IPC.applicationQuit],
     [DESKTOP_IPC.applicationReload], [DESKTOP_IPC.applicationRestart],
+    [DESKTOP_IPC.remoteConnect, 'http://127.0.0.1:3080/?token=t'],
   ])
 })
 
