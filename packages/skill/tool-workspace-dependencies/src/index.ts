@@ -7,11 +7,14 @@ import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parsePrimaryRuntime, readPrimaryRuntime, workspaceDependencyPaths } from './primary-runtime.ts'
 import type { ExternalPrimaryRuntime, PrimaryRuntimeManifest, WorkspaceDependencies } from './primary-runtime.ts'
+import { WorkspaceDependencyError } from './error.ts'
 
 // Consumers that must not load this Cordis plugin, such as the Desktop launcher and the payload
 // build scripts, import the payload metadata from `./primary-runtime` instead.
 export { parsePrimaryRuntime, readPrimaryRuntime, workspaceDependencyPaths }
 export type { ExternalPrimaryRuntime, PrimaryRuntimeManifest, WorkspaceDependencies }
+
+export { WorkspaceDependencyError, type WorkspaceDependencyErrorCode } from './error.ts'
 
 /** Cordis plugin identity. */
 export const name = 'tool-workspace-dependencies'
@@ -36,12 +39,16 @@ export const Config: z<Config> = z.object({
   root: z.string().min(1),
 })
 
+function invalidPayload(message: string, cause?: unknown): WorkspaceDependencyError {
+  return new WorkspaceDependencyError(message, 'WORKSPACE_DEPENDENCY_INVALID_PAYLOAD', cause === undefined ? undefined : { cause })
+}
 /**
  * Identify POSIX interpreter aliases that can survive payload relocation.
  * @param root - Payload directory.
  * @param manifest - Validated payload metadata.
  * @returns Relative alias paths mapped to their sibling interpreter filename; regular command files are omitted.
- * @throws When an interpreter alias does not point directly to the versioned regular file.
+ * @throws {WorkspaceDependencyError} `WORKSPACE_DEPENDENCY_INVALID_PAYLOAD` when an interpreter alias
+ *   does not point directly to the versioned regular file.
  */
 export async function primaryRuntimePythonAliases(root: string, manifest: PrimaryRuntimeManifest): Promise<ReadonlyMap<string, string>> {
   const aliases = new Map<string, string>()
@@ -57,7 +64,7 @@ export async function primaryRuntimePythonAliases(root: string, manifest: Primar
     if (!entry.isSymbolicLink()) continue
     if (await readlink(join(root, path)) !== interpreter
       || !(await lstat(join(root, 'dependencies/python/bin', interpreter))).isFile()) {
-      throw new Error(`primary runtime: invalid Python alias ${path}`)
+      throw invalidPayload(`primary runtime: invalid Python alias ${path}`)
     }
     aliases.set(path, interpreter)
   }
@@ -83,9 +90,13 @@ async function validatePayloadEntries(paths: WorkspaceDependencies): Promise<voi
     [paths.pythonPackages, 'directory'], [paths.nodePackages, 'directory'],
   ] as const) {
     if (path === undefined) continue
-    const entry = await stat(path)
+    let entry
+    try { entry = await stat(path) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      throw invalidPayload(`primary runtime: expected ${kind} at ${path}`, error)
+    }
     if (!(kind === 'file' ? entry.isFile() : entry.isDirectory())) {
-      throw new Error(`primary runtime: expected ${kind} at ${path}`)
+      throw invalidPayload(`primary runtime: expected ${kind} at ${path}`)
     }
   }
 }
@@ -102,7 +113,7 @@ async function exists(path: string): Promise<boolean> {
 
 async function compatibleManifest(source: string): Promise<PrimaryRuntimeManifest> {
   const manifest = await readPrimaryRuntime(source)
-  if (manifest.platform !== process.platform || manifest.arch !== process.arch) throw new Error('primary runtime: incompatible platform or architecture')
+  if (manifest.platform !== process.platform || manifest.arch !== process.arch) throw new WorkspaceDependencyError('primary runtime: incompatible platform or architecture', 'WORKSPACE_DEPENDENCY_UNSUPPORTED_PLATFORM')
   return manifest
 }
 
@@ -198,7 +209,12 @@ export function apply(ctx: Context, config: Config): void {
       preparation ??= (config.root === undefined ? resolvePrimaryRuntime(config.source) : installPrimaryRuntime(config.source, config.root))
         .catch((error: unknown) => {
           preparation = undefined
-          throw error
+          if (error instanceof WorkspaceDependencyError) throw error
+          // Preparation runs only filesystem calls and local checks, which reject with Error instances.
+          throw new WorkspaceDependencyError(
+            `primary runtime: preparation failed: ${(error as Error).message}`,
+            'WORKSPACE_DEPENDENCY_PREPARATION_FAILED', { cause: error },
+          )
         })
       return preparation
     },

@@ -2,6 +2,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
+import { WorkspaceDependencyError } from './error.ts'
 
 /** Canonical build metadata, independent of user-installed packages; legacy files are normalized on read. */
 export interface PrimaryRuntimeManifest {
@@ -70,14 +71,18 @@ function isAbsolutePath(value: unknown): value is string {
   return typeof value === 'string' && isAbsolute(value)
 }
 
+function invalidPayload(message: string, cause?: unknown): WorkspaceDependencyError {
+  return new WorkspaceDependencyError(message, 'WORKSPACE_DEPENDENCY_INVALID_PAYLOAD', cause === undefined ? undefined : { cause })
+}
+
 function parseExternalPrimaryRuntime(value: unknown): ExternalPrimaryRuntime {
-  if (!isRecord(value)) throw new Error('primary runtime: invalid metadata')
+  if (!isRecord(value)) throw invalidPayload('primary runtime: invalid metadata')
   const { python, pythonPackages, node, nodePackages, pnpm } = value
   if (!isAbsolutePath(python) || !isAbsolutePath(pythonPackages)
     || (node !== undefined && !isAbsolutePath(node))
     || (nodePackages !== undefined && (node === undefined || !isAbsolutePath(nodePackages)))
     || (pnpm !== undefined && (node === undefined || !isAbsolutePath(pnpm)))) {
-    throw new Error('primary runtime: invalid metadata')
+    throw invalidPayload('primary runtime: invalid metadata')
   }
   return {
     python, pythonPackages,
@@ -91,14 +96,15 @@ function parseExternalPrimaryRuntime(value: unknown): ExternalPrimaryRuntime {
  * Validate payload JSON and normalize legacy component fields to top-level versions.
  * @param value - Untrusted decoded runtime.json contents.
  * @returns Canonical metadata with one Python distribution map and no components field.
- * @throws For malformed or mixed formats, duplicate distribution names, or inconsistent legacy metadata.
+ * @throws {WorkspaceDependencyError} `WORKSPACE_DEPENDENCY_INVALID_PAYLOAD` for malformed or mixed formats,
+ *   duplicate distribution names, or inconsistent legacy metadata.
  */
 export function parsePrimaryRuntime(value: unknown): PrimaryRuntimeManifest {
-  if (!isRecord(value)) throw new Error('primary runtime: invalid metadata')
+  if (!isRecord(value)) throw invalidPayload('primary runtime: invalid metadata')
   const legacy = value.components !== undefined
   const versions = legacy ? value.components : value
   if (!isRecord(versions) || (legacy && ['python', 'node', 'pnpm'].some(key => value[key] !== undefined))) {
-    throw new Error('primary runtime: invalid metadata')
+    throw invalidPayload('primary runtime: invalid metadata')
   }
   const { desktopVersion, platform, arch, payloadDigest } = value
   const external = value.external === undefined ? undefined : parseExternalPrimaryRuntime(value.external)
@@ -112,18 +118,18 @@ export function parsePrimaryRuntime(value: unknown): PrimaryRuntimeManifest {
     || (pnpm !== undefined && (!isVersion(pnpm) || node === undefined))
     || (payloadDigest !== undefined && (typeof payloadDigest !== 'string' || !/^[a-f0-9]{64}$/u.test(payloadDigest)))
     || !isDistributionMap(pythonPackages)) {
-    throw new Error('primary runtime: invalid metadata')
+    throw invalidPayload('primary runtime: invalid metadata')
   }
   const entries = Object.entries(pythonPackages)
   const distributions = new Map(entries.map(([name, version]) => [name.toLowerCase().replace(/[-_.]+/gu, '-'), version]))
-  if (distributions.size !== entries.length) throw new Error('primary runtime: invalid metadata')
+  if (distributions.size !== entries.length) throw invalidPayload('primary runtime: invalid metadata')
   // Only the old on-disk format duplicates these versions. New manifests use the distribution map alone.
   if (legacy) {
     for (const name of ['numpy', 'pandas'] as const) {
-      if (!isVersion(versions[name])) throw new Error('primary runtime: invalid metadata')
+      if (!isVersion(versions[name])) throw invalidPayload('primary runtime: invalid metadata')
       const version = distributions.get(name)
       if (version !== undefined && version !== versions[name]) {
-        throw new Error(`primary runtime: conflicting ${name} distribution version`)
+        throw invalidPayload(`primary runtime: conflicting ${name} distribution version`)
       }
     }
   }
@@ -142,9 +148,23 @@ export function parsePrimaryRuntime(value: unknown): PrimaryRuntimeManifest {
  * Read and normalize build metadata without rewriting the source file.
  * @param root - Installed or bundled primary runtime directory.
  * @returns Validated top-level versions and target identifiers, including for legacy components manifests.
+ * @throws {WorkspaceDependencyError} `WORKSPACE_DEPENDENCY_INVALID_PAYLOAD` when `runtime.json` is missing or
+ *   invalid; other read failures, such as `EACCES`, propagate unchanged.
  */
 export async function readPrimaryRuntime(root: string): Promise<PrimaryRuntimeManifest> {
-  const value: unknown = JSON.parse(await readFile(join(root, 'runtime.json'), 'utf8'))
+  let text: string
+  try {
+    text = await readFile(join(root, 'runtime.json'), 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    throw invalidPayload('primary runtime: runtime.json is missing', error)
+  }
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch (error) {
+    throw invalidPayload(`primary runtime: runtime.json is not valid JSON: ${(error as SyntaxError).message}`, error)
+  }
   return parsePrimaryRuntime(value)
 }
 

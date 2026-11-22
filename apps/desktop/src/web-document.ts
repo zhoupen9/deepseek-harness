@@ -82,19 +82,6 @@ export function readSessionCookie(response: Response): string | undefined {
   return end < 0 ? cookie : cookie.slice(0, end)
 }
 
-/**
- * Exchange the Host launch URL for an authority-bound browser cookie.
- * @param url - Authenticated URL reported by the owned Host process.
- * @returns Cookie header for requests forwarded to that Host.
- */
-export async function authenticateWebHost(url: string): Promise<string> {
-  const response = await fetch(url, { redirect: 'manual' })
-  const cookie = readSessionCookie(response)
-  await response.body?.cancel()
-  if (cookie === undefined) throw new Error('Desktop Host authentication failed')
-  return cookie
-}
-
 /** Cookie store operations used to remove legacy Host authentication cookies. */
 export interface HostCookieStore {
   get(filter: { url: string }): Promise<readonly { readonly name: string }[]>
@@ -146,8 +133,9 @@ function mountPathname(mount: string, pathname: string): string {
  * under a revision that changes every launch, so Chromium's disk cache would only accumulate bundles
  * no later launch can reuse.
  * @param request - Request from the application origin.
- * @param host - Authenticated Host URL; a path prefix mounts the application behind a reverse proxy.
- * @param cookie - Host-issued authentication cookie.
+ * @param host - Host URL; a path prefix mounts the application behind a reverse proxy.
+ * @param cookie - Host-issued authentication cookie: the Desktop-private credential for the owned Host,
+ * or the remote Host's browser-session cookie when the shell drives a remote Harness.
  * @returns Host response without connection-level headers.
  */
 export async function forwardWebRequest(request: Request, host: string, cookie: string): Promise<Response> {

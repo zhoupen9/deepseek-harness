@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { authenticateWebHost, forwardWebRequest, removeLegacyHostCookies, serveWebDocument } from '../src/web-document.ts'
+import { forwardWebRequest, readSessionCookie, removeLegacyHostCookies, serveWebDocument } from '../src/web-document.ts'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -47,26 +47,27 @@ it('applies appearance rows to an attributed index ahead of its client bundles',
   })).text()).toBe('globalThis.entryLoaded = true')
 })
 
-it('requires the Host authentication exchange and retains only its cookie value', async () => {
-  const fetch = vi.fn().mockResolvedValueOnce(new Response(null, { status: 303, headers: { 'set-cookie': 'session=owned; HttpOnly; SameSite=Strict' } }))
-    .mockResolvedValueOnce(new Response('unauthorized', { status: 401 }))
-  vi.stubGlobal('fetch', fetch)
-  expect(await authenticateWebHost('http://127.0.0.1:1234/?token=owned')).toBe('session=owned')
-  await expect(authenticateWebHost('http://127.0.0.1:1234/')).rejects.toThrow('authentication failed')
+it('reads the cookie only from an authenticated index exchange', async () => {
+  const authenticated = new Response(null, { status: 303, headers: { 'set-cookie': 'session=owned; HttpOnly; SameSite=Strict' } })
+  expect(readSessionCookie(authenticated)).toBe('session=owned')
+  expect(readSessionCookie(new Response('unauthorized', { status: 401 }))).toBeUndefined()
+  expect(readSessionCookie(new Response(null, { status: 303 }))).toBeUndefined()
 })
-
 it('forwards upload bytes and cancellation with Host credentials while keeping the response streaming', async () => {
   const body = new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('stream')); controller.close() } })
   const fetch = vi.fn().mockResolvedValue(new Response(body, { headers: { 'content-encoding': 'gzip', 'set-cookie': 'private' } }))
   vi.stubGlobal('fetch', fetch)
   const request = new Request('dsh-app://app/api/upload?name=file', {
-    method: 'POST', body: 'upload bytes', headers: { origin: 'dsh-app://app', cookie: 'untrusted' },
+    method: 'POST', body: 'upload bytes',
+    headers: { origin: 'dsh-app://app', cookie: 'untrusted', host: 'untrusted', 'sec-fetch-site': 'cross-site', accept: 'text/plain' },
   })
-  const response = await forwardWebRequest(request, 'http://127.0.0.1:1234/?token=secret', 'session=owned')
+  const response = await forwardWebRequest(request, 'http://127.0.0.1:1234/', 'dsh-desktop-session=owned')
   const [target, init] = fetch.mock.calls[0] as [URL, RequestInit]
   expect(target.href).toBe('http://127.0.0.1:1234/api/upload?name=file')
-  expect(new Headers(init.headers).get('cookie')).toBe('session=owned')
-  expect(new Headers(init.headers).get('origin')).toBeNull()
+  expect(new Headers(init.headers).get('cookie')).toBe('dsh-desktop-session=owned')
+  for (const name of ['origin', 'host', 'sec-fetch-site']) expect(new Headers(init.headers).get(name)).toBeNull()
+  expect(new Headers(init.headers).get('accept')).toBe('text/plain')
+  expect(request.headers.get('cookie')).toBe('untrusted')
   expect(init.signal).toBe(request.signal)
   expect(init.body).toBe(request.body)
   expect(response.headers.get('set-cookie')).toBeNull()

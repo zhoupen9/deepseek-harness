@@ -11,6 +11,7 @@ import { developmentRuntimeDirectory, resolveDesktopBuildTarget } from './deskto
 import { prepareDevelopmentProject } from './development-project.ts'
 import { prepareDevelopmentApp } from './development-app.ts'
 import { declaredElectronRange, resolveSystemElectron } from './system-electron.ts'
+import { prepareDevelopmentState } from './development-state.ts'
 import { preparePrimaryRuntime } from './prepare-primary-runtime.ts'
 
 const APP_ROOT = resolve(import.meta.dirname, '..')
@@ -87,8 +88,7 @@ async function launchElectron(): Promise<void> {
   const mainPort = debugPort('DSH_DESKTOP_MAIN_INSPECT_PORT', 9229)
   const rendererPort = debugPort('DSH_DESKTOP_RENDERER_DEBUG_PORT', 9222)
   const hostPort = debugPort('DSH_DESKTOP_HOST_INSPECT_PORT', 9230)
-  const home = resolve(process.env.DSH_HOME ?? join(DEVELOPMENT_ROOT, 'home'))
-  const userData = resolve(process.env.DSH_DESKTOP_USER_DATA_DIR ?? join(DEVELOPMENT_ROOT, 'electron-user-data'))
+  const { home, userData } = prepareDevelopmentState(APP_ROOT)
   // The Desktop host sets this for the Node subprocesses it spawns; an Electron
   // that inherits it runs as plain Node and never draws the shell window.
   const { ELECTRON_RUN_AS_NODE: _runAsNode, ...parentEnvironment } = process.env
