@@ -5,7 +5,9 @@
   display: block;
 }
 
-/* The preview remains hit-testable so pointer entry cancels the grace close. */
+/* The preview remains hit-testable so pointer entry cancels the grace close.
+ * The compact card is a floating layer, so it takes the theme's layer-2
+ * surface and the shared elevation hairline like every other popover. */
 .card {
   position: fixed;
   z-index: 100;
@@ -14,7 +16,7 @@
   padding: 12px 16px;
   border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-hovercard-bg);
-  box-shadow: var(--dsw-shadow-lv3);
+  box-shadow: var(--dsw-elevation-prominent);
 }
 
 /* A compact card sits beside its anchor's end edge with its top on the

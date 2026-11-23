@@ -8,7 +8,7 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Hover card section: the card keeps one dark surface in both themes, so it
+/* Hover card section: the card follows the theme's floating surface, so it
  * uses the hover card label and state tokens. */
 .hover {
   display: flex;

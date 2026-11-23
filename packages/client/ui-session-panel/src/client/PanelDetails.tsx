@@ -15,10 +15,9 @@ const factIcons = {
 } satisfies Record<PanelDetailsFact['kind'], typeof IconClockOutlineRegular>
 
 /**
- * Render a row's details on the HoverCard's dark surface in both themes: the
- * title, secondary lines, the state after its dot, and the measures on one
- * line, each after the 14px icon of its kind. Absent or empty parts render
- * nothing.
+ * Render a row's details on the HoverCard surface: the title, secondary lines,
+ * the state after its dot, and the measures on one line, each after the 14px
+ * icon of its kind. Absent or empty parts render nothing.
  * @param props - title, lines, state, and measures.
  * @returns the card body.
  */

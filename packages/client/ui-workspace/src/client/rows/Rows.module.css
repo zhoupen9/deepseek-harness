@@ -393,7 +393,8 @@
   bottom: -7px;
 }
 
-/* Hover-card body (figma 169:16903): dark surface in both themes. */
+/* Hover-card body (figma 169:16903): full title, then the secondary and
+   tertiary detail lines on the card's floating surface. */
 .hoverContent {
   display: flex;
   flex-direction: column;

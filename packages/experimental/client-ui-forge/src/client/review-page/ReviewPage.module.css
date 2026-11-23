@@ -312,7 +312,7 @@
   font-size: 10px;
 }
 
-/* The hover card of a compact item uses the hover card's own colors over its dark fill. */
+/* The hover card of a compact item uses the hover card's own colors on its surface. */
 .compactCard {
   display: flex;
   flex-direction: column;
