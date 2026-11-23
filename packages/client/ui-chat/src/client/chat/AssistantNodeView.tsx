@@ -16,7 +16,7 @@ type AssistantNodeViewProps = ChatNodeViewProps<'assistant-step'> & InjectFace<A
 
 /** Streaming, settled, and interrupted Assistant states share one keyed renderer instance. */
 export const AssistantNodeView = memo(function AssistantNodeView({
-  node, groupPart, useDisclosure, useGroupAction, useTurnData, turnProcess, openFile, loadImage, fileMentions,
+  node, groupPart, useDisclosure, useGroupAction, useTurnData, turnProcess, openFile, openView, loadImage, fileMentions,
   usePresentation, renderSlot, t, sessionId, useContextMenu, resolveFilePath,
 }: AssistantNodeViewProps) {
   const { getTriggerProps } = useContextMenu()
@@ -31,8 +31,8 @@ export const AssistantNodeView = memo(function AssistantNodeView({
   const owner = useMemo<TurnTailOwnerProps | undefined>(() => {
     if (turn?.status !== 'closed' || data.finalNode === undefined) return undefined
     if (tail?.closing?.finalNode.seq !== data.finalNode.seq) return undefined
-    return { turn, seq: data.finalNode.seq, openFile }
-  }, [data.finalNode, openFile, tail, turn])
+    return { turn, seq: data.finalNode.seq, openFile, openView }
+  }, [data.finalNode, openFile, openView, tail, turn])
   const mentions = useMemo(
     () => owner === undefined ? undefined : fileMentions(owner, getFileTriggerProps),
     [fileMentions, owner, getFileTriggerProps],

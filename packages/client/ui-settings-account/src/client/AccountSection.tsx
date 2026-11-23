@@ -5,6 +5,7 @@ import { Button, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-pr
 import type { AccountDetails, AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { PropsRuntime, PropsLocale, InjectFace, HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
+import type { DesktopApplicationCommands } from '../types.ts'
 import type { PlatformPage, PlatformPages } from './platform-pages.ts'
 import { formatBalance } from './formatBalance.ts'
 import { AccountAvatar } from './AccountAvatar.tsx'
@@ -50,6 +51,8 @@ export interface AccountSectionInjected {
   subscribeModelSignInRequired?: (listener: () => void) => () => void
   /** Desktop-only: show one page in the account feature's shared native host; absent in ordinary browsers. */
   openPlatformPage?: PlatformPages['open']
+  /** Desktop-only application commands for the sidebar launcher; absent in ordinary browsers. */
+  application?: DesktopApplicationCommands
 
   /** Account stream owned by the Host and theme snapshots published by the renderer, observed through framework hooks. */
   hooks: {

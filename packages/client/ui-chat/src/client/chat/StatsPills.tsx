@@ -1,8 +1,8 @@
 // Composer statistics pills, each its own 'conversation.composer.dock' list
 // entry (activity, usage) so a plugin can replace or add one pill by id.
 // Compact keeps speed and cache hit as plain readings; Detailed adds counts,
-// token totals, and click-open dialogs. Settled-node identity prevents
-// stream-delta updates from rerendering the pills.
+// token totals, and click-open dialogs; Hidden renders nothing. Settled-node
+// identity prevents stream-delta updates from rerendering the pills.
 
 import { memo, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'

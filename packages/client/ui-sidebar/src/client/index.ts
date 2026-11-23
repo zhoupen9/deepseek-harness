@@ -85,6 +85,9 @@ export function apply(ctx: ClientContext): void {
     trackEntryClick: (attributes) => { ctx.get('productAnalytics')?.track('sidebar_menu_click', attributes) },
     hooks: { panels, shortcuts: ctx.shortcuts.catalog, entryPins: panelPins.unpinned, entryActions },
   })
+  // The shell owns geometry; ui-workspace registers the whole browsing
+  // region (header, search, session list, workspace dialogs), ui-settings
+  // registers the foot trigger + settings panel.
   ctx.slots.inject('sidebar', function* () {
     yield ctx.slots.registerFactory({
       name: 'sidebar.panel.icon', scope: 'root',

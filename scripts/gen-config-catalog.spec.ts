@@ -30,6 +30,19 @@ export const Shared = Schema.union([
 ])
 `
 
+/** Runtime schema whose object keys come from string-literal const identities. */
+const computedSchema = (): string => `
+import Schema from '@deepseek-ai/schemastery'
+export interface BrowserConfig {
+  /** Browser ownership mode. */
+  mode: 'launch'
+  /** Hide the launched browser. */
+  headless: boolean
+}
+const HEADLESS_FIELD = 'headless'
+export const Shared = Schema.object({ mode: Schema.const('launch'), [HEADLESS_FIELD]: Schema.boolean() })
+`
+
 function fixture(schema = sharedSchema) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-config-catalog-'))
   roots.push(root)
@@ -178,6 +191,17 @@ export const Shared = Schema.object({ ...Shared.dict, mode: Schema.string() })
     const { root } = fixture(sharedSchema.replace('export const Shared = Schema.union', 'export const Shared = Base\nconst Base = Schema.union'))
     const provider = collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')
     expect(new Set(provider?.schemaKeys)).toEqual(new Set(['mode', 'headless', 'endpoint']))
+  })
+
+  it('resolves a computed key that names a string-literal const', () => {
+    const { root } = fixture(computedSchema())
+    const provider = collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')
+    expect(new Set(provider?.schemaKeys)).toEqual(new Set(['mode', 'headless']))
+  })
+
+  it('rejects a computed key that does not name a string-literal const', () => {
+    const { root } = fixture(computedSchema().replace("const HEADLESS_FIELD = 'headless'", 'const HEADLESS_FIELD = String(1)'))
+    expect(() => collectConfigCatalog(root)).toThrow("schema object key 'HEADLESS_FIELD' does not resolve to a string-literal const")
   })
 
   it.each([false, true])('checks a class Config imported from a sibling module (invalid field: %s)', (invalid) => {

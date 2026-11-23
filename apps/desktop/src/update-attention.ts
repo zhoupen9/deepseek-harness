@@ -1,18 +1,28 @@
 /** Best-effort background attention never grants update or task-stop authorization. */
-import { app, type BrowserWindow, Notification } from 'electron'
+import { app, type BrowserWindow, type NativeImage, Notification } from 'electron'
 import type { DesktopLocale } from './locale.ts'
+
+/** Copy, artwork, and native attention implementation for one background reminder. */
+export interface DesktopUpdateAttentionOptions {
+  /** Shell-owned notification copy. */
+  readonly locale: DesktopLocale
+  /** Application image shown by the platform notification. */
+  readonly notificationIcon: NativeImage
+  /** Native attention implementation, replaceable for platform tests. */
+  readonly platform?: string
+}
 
 /** Owns one reminder per downloaded version until reset for a new download. */
 export class DesktopUpdateAttention {
   private version: string | undefined
   private notification: Notification | undefined
   private stop: (() => void) | undefined
+  private readonly platform: string
 
-  /**
-   * @param locale - Shell-owned notification copy.
-   * @param platform - Native attention implementation, replaceable for platform tests.
-   */
-  constructor(private readonly locale: DesktopLocale, private readonly platform: string = process.platform) {}
+  /** @param options - Notification copy, notification image, and platform override. */
+  constructor(private readonly options: DesktopUpdateAttentionOptions) {
+    this.platform = options.platform ?? process.platform
+  }
 
   /**
    * @param version - Prepared target whose confirmation is waiting.
@@ -40,8 +50,8 @@ export class DesktopUpdateAttention {
     } catch (error) { console.warn('desktop update: attention unavailable', error) }
     try {
       if (!Notification.isSupported()) return
-      const notification = new Notification({ title: this.locale.messages.mandatoryReady,
-        body: this.locale.messages.mandatoryNotification, silent: true })
+      const notification = new Notification({ title: this.options.locale.messages.mandatoryReady,
+        body: this.options.locale.messages.mandatoryNotification, silent: true, icon: this.options.notificationIcon })
       this.notification = notification
       notification.on('failed', () => {
         if (this.notification === notification) this.notification = undefined

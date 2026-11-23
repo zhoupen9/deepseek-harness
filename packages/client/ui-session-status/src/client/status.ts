@@ -10,6 +10,7 @@ import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-sessi
 // Retains ui-session's Context and Slot prop declarations for every consumer of this face.
 export type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { dispatchAttention } from './attention.ts'
 import { SessionReadModel } from './model.ts'
 
 /** Independent UI status facts for one Session identity. */
@@ -53,6 +54,8 @@ declare module '@deepseek-ai/dsh-client-ui-session/client' {
 export class UiSessionStatus extends Service implements HostObservable<SessionStatusSnapshot> {
   private readonly running = new Map<SessionId, boolean>()
   private statusSnapshot: SessionStatusSnapshot = new Map()
+  /** Pending interactions already surfaced to the Desktop shell, so one request notifies once. */
+  private pendingForAttention: ReadonlyMap<SessionId, SessionPendingInteraction> = new Map()
   private viewedBinding: SessionBinding | undefined
   private viewedOpenState: string | undefined
   private releaseViewed = (): void => {}
@@ -129,7 +132,10 @@ export class UiSessionStatus extends Service implements HostObservable<SessionSt
   }
 
   private observeRunning(sessionId: SessionId, running: boolean): void {
+    const previous = this.running.get(sessionId)
     this.running.set(sessionId, running)
+    // A turn that just stopped may need the Desktop shell's attention even outside the main view.
+    if (previous === true && !running) dispatchAttention('turn-complete')
     this.publishStatus()
   }
 
@@ -172,6 +178,12 @@ export class UiSessionStatus extends Service implements HostObservable<SessionSt
 
   private publishStatus(): void {
     const pending = this.pendingInteractions.getSnapshot()
+    // Surface each newly effective request once to the Desktop shell.
+    for (const [sessionId, interaction] of pending) {
+      const previous = this.pendingForAttention.get(sessionId)
+      if (previous === undefined || previous.key !== interaction.key) dispatchAttention(interaction.kind)
+    }
+    this.pendingForAttention = pending
     const reading = this.reading.state.getSnapshot().items
     const list = this.sessions.list.getSnapshot()
     // The visible, focused main view acknowledges its open Session's completions; hiding them meanwhile avoids a flash.

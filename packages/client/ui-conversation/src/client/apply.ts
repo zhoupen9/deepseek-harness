@@ -35,6 +35,8 @@ import { ConversationController, UnsupportedImageMediaTypeError, isImageMediaTyp
 import type { IConversation } from './service.ts'
 import { ComposerBlockRegistry } from './input/blocks.ts'
 import type { ComposerBlock } from './contract/composer-blocks.ts'
+import { ComposerPreferences, composerStatisticsVisible } from './composer-preferences.ts'
+import type { ChatPreferenceSettings } from './contract/composer-preferences.ts'
 import { InputHub } from './input/hub.ts'
 import { createComposerFileIntake } from './input/file-intake.ts'
 import { ComposerSubmissionPolicy } from './input/submission-policy.ts'
@@ -189,8 +191,12 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
   const submissionPolicy = new ComposerSubmissionPolicy(
     ctx.configForms.get<ConversationSettings>(CONVERSATION_SETTINGS_NAMESPACE),
   )
+  // The composer dock pills read this same Chat-owned preference directly;
+  // the meter follows its visibility here so one Settings choice removes both.
+  const composerPreferences = new ComposerPreferences(ctx.configForms.get<ChatPreferenceSettings>('ui-chat'))
+  const statisticsVisible = composerStatisticsVisible(composerPreferences)
 
-  ctx.effect(() => () => { submissionPolicy.dispose() })
+  ctx.effect(() => () => { submissionPolicy.dispose(); composerPreferences.dispose() })
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -485,6 +491,7 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
             notices: ABSENT_NOTICES,
             lexicon: ABSENT_LEXICON,
             menuLauncher: ABSENT_MENU_LAUNCHER,
+            statisticsVisible,
           },
         }
       }
@@ -565,6 +572,7 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
           notices: shell.notices,
           lexicon: shell.lexicon,
           menuLauncher: inputTriggers?.launcher ?? ABSENT_MENU_LAUNCHER,
+          statisticsVisible,
         },
       }
     },

@@ -8,10 +8,11 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject, SETTINGS_NS, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
-import type { AppearanceRowInjected, FontSettingsInjected, ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
+import type { AppearanceRowInjected, FontColorRowInjected, FontSettingsInjected, ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema, type ThemeSettings } from '../src/theme-settings.ts'
 import { AppearanceRow } from '../src/client/AppearanceRow.tsx'
-import type { createAppearanceRowStore, createFontRowStore } from '../src/client/settings-store.ts'
+import { FontColorRow } from '../src/client/FontColorRow.tsx'
+import type { createAppearanceRowStore, createFontColorRowStore, createFontRowStore } from '../src/client/settings-store.ts'
 import { FontSettingsGroup } from '../src/client/FontSettingsGroup.tsx'
 import type { Shortcuts, ShortcutContext, ShortcutFixedInput, ShortcutGesture, ShortcutPlatform } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { bindingKey, normalizeBinding, presentBinding } from '@deepseek-ai/dsh-client-shortcuts/protocol'
@@ -35,7 +36,7 @@ async function bench(isLoopback = true) {
   const locale = new LocaleRuntime(ctx)
   locale.setLocale('zh')
   ctx.provide('locale', locale)
-  const section: Record<string, unknown> = { preference: 'system', fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '' }
+  const section: Record<string, unknown> = { preference: 'system', fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '', fontColorLight: '', fontColorDark: '' }
   const namespace = () => ({
     ns: THEME_SETTINGS_NAMESPACE,
     schema: ThemeSettingsSchema.toJSON(),
@@ -85,6 +86,15 @@ function fontSettingsFaceOf(slots: SlotRegistry) {
   const instance = (entry.store as ReturnType<typeof createFontRowStore>).create()
   const face = entry.inject!(...([instance.actions] as never[])) as Partial<FontSettingsInjected>
   return { entry, instance, face: face as FontSettingsInjected }
+}
+
+/** The same choreography for the font-color row entry. */
+function fontColorFaceOf(slots: SlotRegistry) {
+  const entry = slots.entries(SLOT).find(e => e.component === FontColorRow)!
+  const handle = entry.store as ReturnType<typeof createFontColorRowStore>
+  const instance = handle.create()
+  const face = (entry.inject as unknown as (a: typeof instance.actions) => FontColorRowInjected)(instance.actions)
+  return { entry, instance, face }
 }
 
 /** Deliver the keyboard service's arbitrated input while keeping its real catalog and bindings. */
@@ -311,6 +321,10 @@ describe('ui-theme apply', () => {
     const fontEntry = before.slots.entries(SLOT).find(e => e.component === FontSettingsGroup)!
     expect(fontEntry.options).toMatchObject({ id: 'font-size', order: 11 })
     expect(fontEntry.locale).toBe(SETTINGS_NS)
+    const colorEntry = before.slots.entries(SLOT).find(e => e.component === FontColorRow)!
+    // Order 11.5 places the row right after the font settings group (11).
+    expect(colorEntry.options).toMatchObject({ id: 'font-color', order: 11.5 })
+    expect(colorEntry.locale).toBe(SETTINGS_NS)
 
     const after = await bench()
     const fiber = after.ctx.plugin({ inject: [...inject], apply })
@@ -320,6 +334,7 @@ describe('ui-theme apply', () => {
     await Promise.resolve()
     expect(after.slots.entries(SLOT).some(e => e.component === AppearanceRow)).toBe(true)
     expect(after.slots.entries(SLOT).some(e => e.component === FontSettingsGroup)).toBe(true)
+    expect(after.slots.entries(SLOT).some(e => e.component === FontColorRow)).toBe(true)
   })
 
   it('projects service snapshots into the row store and routes face writes back', async () => {
@@ -374,6 +389,29 @@ describe('ui-theme apply', () => {
     group.face.setFontSize('terminal', 16)
     expect(theme.getTheme().fontFamilies).toEqual({ text: '', code: '"Iosevka"', terminal: '"MesloLGS NF"' })
     expect(group.instance.getSnapshot().fontSizes.terminal).toBe(16)
+    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(3) })
+  })
+
+  it('projects font-color snapshots into its row store and routes face writes back', async () => {
+    const b = await bench()
+    declareItems(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const theme = b.ctx.get('theme') as ThemeRuntime
+    // An event ahead of any inject hits the unbound-actions arm.
+    theme.setFontColorLight('#101010')
+
+    const { entry, instance, face } = fontColorFaceOf(b.slots)
+    // The inject-time re-sync sealed the init window: the mirror is current.
+    expect(instance.getSnapshot().fontColorLight).toBe('#101010')
+    expect(instance.getSnapshot().fontColorDark).toBe('')
+    expect(entry.options).toMatchObject({ id: 'font-color', order: 11.5 })
+
+    face.setFontColorDark('#202020')
+    expect(theme.getTheme().fontColorDark).toBe('#202020')
+    expect(instance.getSnapshot().fontColorDark).toBe('#202020')
+    face.setFontColorLight('')
+    expect(theme.getTheme().fontColorLight).toBe('')
+    expect(instance.getSnapshot().fontColorLight).toBe('')
     await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(3) })
   })
 
@@ -443,7 +481,7 @@ describe('ui-theme apply', () => {
     const b = await bench()
     const host = declareItems(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    expect(b.slots.entries(SLOT)).toHaveLength(2)
+    expect(b.slots.entries(SLOT)).toHaveLength(3)
 
     // Collapse: the declarer dies, the cascade removes our entries while the
     // apply closure still holds its (now stale) disposers.
@@ -454,6 +492,7 @@ describe('ui-theme apply', () => {
     await Promise.resolve()
     expect(b.slots.entries(SLOT).some(e => e.component === AppearanceRow)).toBe(true)
     expect(b.slots.entries(SLOT).some(e => e.component === FontSettingsGroup)).toBe(true)
+    expect(b.slots.entries(SLOT).some(e => e.component === FontColorRow)).toBe(true)
   })
 
   it('teardown removes the rows and the dictionaries; teardown without a declaration is quiet', async () => {
@@ -461,7 +500,7 @@ describe('ui-theme apply', () => {
     declareItems(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(b.slots.entries(SLOT)).toHaveLength(2)
+    expect(b.slots.entries(SLOT)).toHaveLength(3)
     await fiber.dispose()
     expect(b.slots.entries(SLOT)).toHaveLength(0)
     // Dictionary disposal: translation falls back to the bare key.

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-28-desktop-presents-loading-window-before-host.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-28-desktop-presents-loading-window-before-host.md
+/agent-note-present-the-desktop-loading-window-before-host-startup:
+  en: 778fe9387b59e7c0
+  zh: 6612f8dc22bb90c3
+/agent-note-present-the-desktop-loading-window-before-host-startup/problem:
+  en: a6d31f539a61d24f
+  zh: 92e2261945197491
+/agent-note-present-the-desktop-loading-window-before-host-startup/decision:
+  en: 525f847fdfb06e8f
+  zh: 103a915378efe0f9
+/agent-note-present-the-desktop-loading-window-before-host-startup/alternatives-considered:
+  en: 994bb58e930f925c
+  zh: ba1829d77886f261
+/agent-note-present-the-desktop-loading-window-before-host-startup/consequences:
+  en: 05cd03f68b160d7a
+  zh: 8e5760917b3d044e

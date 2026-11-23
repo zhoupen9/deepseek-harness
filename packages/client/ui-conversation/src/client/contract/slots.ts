@@ -471,6 +471,8 @@ export interface ConvViewOwnerProps {
   openView: (view: string, focus: string) => void
   /** Acknowledge the current one-shot focus request. */
   completeViewRequest: () => void
+  /** Views registered for this session, in tab order. */
+  conversationViews: readonly ViewTab[]
 }
 
 /** Base props of one target-owned Conversation View entry. */
@@ -652,6 +654,8 @@ export interface ComposerBarInjected {
     notices: ObservableSnapshot<InputNotice | null>
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>
     menuLauncher: ObservableSnapshot<string | null>
+    /** Whether composer statistics render below the card; a hidden preference renders none. */
+    statisticsVisible: ObservableSnapshot<boolean>
   }
 }
 

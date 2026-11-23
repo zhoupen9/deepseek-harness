@@ -1,5 +1,17 @@
 import type { AfterPackContext, BeforePackContext } from 'app-builder-lib'
 
+/** One electron-builder file set: source, destination, and optional patterns. */
+export interface DesktopElectronBuilderFileSet {
+  readonly from: string
+  readonly to: string
+  readonly filter?: readonly string[]
+}
+
+/** One file set inside `files`, which always carries the patterns the release tests copy by value. */
+export interface DesktopElectronBuilderFilesEntry extends DesktopElectronBuilderFileSet {
+  readonly filter: readonly string[]
+}
+
 /** Electron-builder fields asserted by the Desktop release tests. */
 export interface DesktopElectronBuilderConfig {
   readonly appId: string
@@ -9,18 +21,11 @@ export interface DesktopElectronBuilderConfig {
   readonly directories: {
     readonly output: string
   }
-  readonly files: readonly [
-    ...string[],
-    { readonly from: string, readonly to: 'dsh', readonly filter: readonly ['**/*'] },
-    { readonly from: string, readonly to: 'dsh/node_modules', readonly filter: readonly ['**/*'] },
-  ]
+  readonly files: readonly (string | DesktopElectronBuilderFilesEntry)[]
   readonly extraMetadata: { readonly dshDesktopAppId: string }
   readonly asarUnpack: readonly string[]
-  readonly extraResources: readonly [
-    { readonly from: string, readonly to: 'runtime' },
-    { readonly from: string, readonly to: 'icon.png' },
-    ...{ readonly from: string, readonly to: 'tray.ico' }[],
-  ]
+  /** Resource directory contents, including the unpacked Harness payload beside the archive. */
+  readonly extraResources: readonly DesktopElectronBuilderFileSet[]
   readonly mac: {
     readonly extendInfo: {
       readonly CFBundleLocalizations: readonly string[]
@@ -45,6 +50,9 @@ export interface DesktopElectronBuilderConfig {
       readonly sign: ((configuration: { path: string, hash: string, isNest: boolean }) => Promise<void>) | undefined
       readonly signingHashAlgorithms: readonly string[]
     }
+  }
+  readonly linux: {
+    readonly syncDesktopName: boolean
   }
   readonly nsis: {
     readonly uninstallDisplayName: '${productName}'

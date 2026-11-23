@@ -89,8 +89,10 @@ it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('prepares %s with one pnpm
   expect(existsSync(join(runtime, 'cli', 'bin', windows ? 'dsh.cmd' : 'dsh'))).toBe(true)
   expect(readFileSync(join(runtime, 'cli', 'command-manager.js'), 'utf8')).toBe('command manager fixture')
   expect(existsSync(join(runtime, 'cli', 'command-path.ps1'))).toBe(true)
+  // The descriptor binds the Node.js the payload declares, not Electron's: the Host and the
+  // payload smoke run on the payload's runtime.
   expect(JSON.parse(readFileSync(join(runtime, 'versions.json'), 'utf8'))).toEqual({
-    schemaVersion: 1, node: '24.18.1', pnpm: '11.7.0',
+    schemaVersion: 1, node: '24.17.0', pnpm: '11.7.0',
   })
   expect(state.preparePrimary).toHaveBeenCalledWith({ deferSmoke: windows })
   if (windows) expect(state.commandLink).not.toHaveBeenCalled()

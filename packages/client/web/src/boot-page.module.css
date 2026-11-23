@@ -2,6 +2,7 @@
 
 .boot {
   --dsh-boot-label-primary: #0f1115;
+  --dsh-boot-label-primary-inverted: #fff;
   --dsh-boot-label-secondary: #61666b;
   --dsh-boot-label-tertiary: #81858c;
   --dsh-boot-border: rgb(0 0 0 / 10%);
@@ -15,6 +16,7 @@
 
 :global(body[data-ds-dark-theme]) .boot {
   --dsh-boot-label-primary: #f9fafb;
+  --dsh-boot-label-primary-inverted: rgb(53 54 56);
   --dsh-boot-label-secondary: #cfd3d6;
   --dsh-boot-label-tertiary: #adb2b8;
   --dsh-boot-border: rgb(255 255 255 / 12%);
@@ -28,12 +30,46 @@
   gap: 16px;
 }
 
-.wordmark {
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+/* Navigation-pane brand metrics: the whale mark, a 5px gap, then the name
+   artwork, all on one 24px baseline (ui-sidebar's brand row). */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
   color: var(--dsw-alias-label-primary, var(--dsh-boot-label-primary));
+}
+
+.brandMark,
+.brandName {
+  display: inline-flex;
+  align-items: center;
+}
+
+.brandMark svg {
+  display: block;
+  width: 24px;
+  height: auto;
+}
+
+.brandName svg {
+  display: block;
+  width: 156px;
+  height: 24px;
+}
+
+/* The brand banner is artwork; this text keeps the name available to
+   assistive technology. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .hint {

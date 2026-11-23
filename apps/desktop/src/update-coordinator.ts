@@ -6,6 +6,7 @@ import { app } from 'electron'
 import electronUpdater, { type AppUpdater, type ProgressInfo, type UpdateInfo, type UpdateCheckResult } from 'electron-updater'
 import { gt, valid } from 'semver'
 import type { DesktopUpdateState } from './ipc.ts'
+import { desktopResourceLayout } from './resource-layout.ts'
 import { DesktopUpdateHttpExecutor } from './updates/electron-updater/http-executor.ts'
 import { DesktopUpdatePreparationError, downloadFailureDetails } from './update-error.ts'
 import type { DesktopUpdateChannel } from './update-channel.ts'
@@ -61,7 +62,8 @@ export class DesktopUpdateCoordinator {
     private readonly publish: (state: DesktopUpdateState) => DesktopUpdateState,
     private readonly beforeRestart: () => Promise<boolean>,
     private readonly updater: AppUpdater = autoUpdater,
-    private readonly enabled: () => boolean = () => app.isPackaged && existsSync(join(process.resourcesPath, 'app-update.yml')),
+    private readonly enabled: () => boolean = () => app.isPackaged
+      && existsSync(join(desktopResourceLayout(app.getAppPath()).root, 'app-update.yml')),
     private readonly currentVersion: () => string = () => app.getVersion(),
     private readonly downloadResult?: (success: boolean, reason?: string) => void,
     private channel: DesktopUpdateChannel = 'nightly',

@@ -20,6 +20,12 @@
   - button "Decrease font size"
   - text: px
   - button "More font settings"
+  - text: Font color Default text color for light and dark mode Light mode
+  - textbox "Light mode": "#0f1115"
+  - button "Reset Light mode": Reset
+  - text: Dark mode
+  - textbox "Dark mode": "#f9fafb"
+  - button "Reset Dark mode": Reset
   - text: Work details Choose how much detail to show for tool calls
   - button "Standard"
   - text: When to Collapse Work Details Choose when to automatically collapse work details

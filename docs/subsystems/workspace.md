@@ -234,6 +234,36 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
 
+<a id="ctxgitcontroller--gitcontroller"></a>
+
+### `ctx.gitController` — `GitController`
+
+Host service backing the generated `ctx.remote.git` namespace. Its two verbs are Agent-scoped: the `agent` lookup resolves the caller's session, whose cwd is the fence root every read is bounded to.
+
+```ts cordis-catalog
+/**
+ * Log the workspace repository's commit history for a Remote caller's graph.
+ * @param agent - target Agent resolved from the Session identity on the wire; its cwd is the fence root.
+ * @param options - commit bound, ref selection, and the traversal mode; absent applies the configured defaults.
+ * @param signal - caller lifetime; abort kills the git child and rejects with the signal reason.
+ * @returns the repo context, HEAD facts, and the bounded newest-first commit window.
+ */
+@Remote('log') async log(agent: Agent, options: GitLogOptions | undefined, signal: AbortSignal): Promise<GitLogResult>
+
+/**
+ * Show one commit's full message and modifications for a Remote caller.
+ * @param agent - target Agent resolved from the Session identity on the wire; its cwd is the fence root.
+ * @param hash - abbreviated or full commit object id to show.
+ * @param signal - caller lifetime; abort kills the git child and rejects with the signal reason.
+ * @returns the repo context, the commit detail, its changed files, and the bounded patch.
+ */
+@Remote('show') async show(agent: Agent, hash: string, signal: AbortSignal): Promise<GitShowResult>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/api/git-controller/src/index.ts`](../../packages/api/git-controller/src/index.ts)
+
 <a id="ctxterminalcontroller--terminalcontroller"></a>
 
 ### `ctx.terminalController` — `TerminalController`

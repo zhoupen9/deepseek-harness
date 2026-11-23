@@ -1,17 +1,7 @@
 /** Public dsh commands using the immutable runtime carried by the Desktop installation. */
 
-import { basename, delimiter, dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { runCli } from '@deepseek-ai/dsh/lib/bin.js'
-
-/**
- * Locate the archive containing a packaged runtime.
- * @param runtimeDir - Prepared or ASAR-contained runtime directory.
- * @returns Parent archive path, or undefined for a prepared directory.
- */
-export function runtimeArchivePath(runtimeDir: string): string | undefined {
-  const parent = dirname(runtimeDir)
-  return basename(parent) === 'app.asar' ? parent : undefined
-}
 
 /**
  * Run the ordinary CLI with Desktop's bundled package manager and reserved-profile plugin access.
@@ -38,6 +28,7 @@ if (import.meta.main) {
     const { installWindowsCliSignals } = await import('./windows-cli-signals.ts')
     await installWindowsCliSignals()
   }
+  // The payload ships beside the application archive, so this directory is already physical.
   const runtimeDir = resolve(import.meta.dirname, '../../../..')
-  await runDesktopCli(join(dirname(runtimeArchivePath(runtimeDir) ?? runtimeDir), 'runtime'))
+  await runDesktopCli(join(dirname(runtimeDir), 'runtime'))
 }

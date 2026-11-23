@@ -438,8 +438,9 @@
   margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px) 6px;
 }
 
-/* New Session: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
-   corners); collapsed it renders as the rail's plain icon control. */
+/* New Session: borderless control (no backdrop) with the icon and label
+   left-aligned (figma 133:7634 geometry, squared-off corners); collapsed it
+   renders as the rail's plain icon control. */
 .newSession {
   container-type: inline-size;
   position: relative;
@@ -447,15 +448,15 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0;
+  justify-content: flex-start;
+  gap: 6px;
   height: 38px;
   padding: 8px 12px;
   margin: 0;
   box-sizing: border-box;
-  border: 0.5px solid var(--dsw-alias-border-l3);
+  border: none;
   border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-button-elevated-fill);
+  background: transparent;
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
   font-weight: 500;
@@ -466,7 +467,7 @@
 
 @media (hover: hover) {
   .newSession:hover {
-    background: var(--dsw-alias-button-floating-hover);
+    background: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
@@ -493,6 +494,7 @@
 
 .collapsed .newSession {
   flex: none;
+  justify-content: center;
   width: 36px;
   height: 36px;
   padding: 0;
@@ -530,6 +532,9 @@
 
 .newSessionLabelMask { flex: 1; min-width: 0; }
 
+/* The rail centers its single glyph; only the expanded row is left-aligned. */
+.collapsed .newSessionContent { justify-content: center; }
+
 .newSession:focus-visible .newSessionLabelMask:has(+ .newSessionShortcut) {
   overflow: hidden;
   mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
@@ -541,7 +546,7 @@
     mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
   }
 }
-.newSessionContent { display: flex; width: 100cqw; align-items: center; justify-content: center; gap: 6px; }
+.newSessionContent { display: flex; width: 100cqw; align-items: center; justify-content: flex-start; gap: 6px; }
 .newSessionContent > svg { flex: none; }
 
 .newSessionShortcut {

@@ -2,11 +2,12 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { cpSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { accessSync, closeSync, constants, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import extractZip from 'extract-zip'
 import { x as extractTar } from 'tar'
@@ -16,14 +17,23 @@ import lock from './lock.json' with { type: 'json' }
 import { prunePrimaryRuntimePythonTests } from './prune-python-tests.ts'
 
 /**
+ * Checksum-verified transport mirror for the Node.js distribution. Some networks
+ * reset TLS connections to nodejs.org; the lock digest still decides the accepted bytes.
+ */
+const NODE_DIST_MIRROR = 'https://npmmirror.com/mirrors/node'
+
+/**
  * Download or reuse an archive only when its bytes match the release lock.
  * @param url - Locked archive URL.
  * @param sha256 - Expected hexadecimal digest for the selected algorithm.
  * @param cache - Download cache directory.
+ * @param mirrors - Transport mirrors tried after the locked URL; the digest still decides the accepted bytes.
  * @param algorithm - Digest algorithm; npm archives use SHA-512.
  * @returns Verified local archive path.
  */
-export async function downloadPrimaryRuntimeAsset(url: string, sha256: string, cache: string, algorithm: 'sha256' | 'sha512' = 'sha256'): Promise<string> {
+export async function downloadPrimaryRuntimeAsset(
+  url: string, sha256: string, cache: string, mirrors: readonly string[] = [], algorithm: 'sha256' | 'sha512' = 'sha256',
+): Promise<string> {
   mkdirSync(cache, { recursive: true })
   const destination = join(cache, sha256)
   let bytes: Buffer
@@ -33,9 +43,7 @@ export async function downloadPrimaryRuntimeAsset(url: string, sha256: string, c
     cached = false
     const timeout = Number(process.env.DSH_RESOURCE_DOWNLOAD_TIMEOUT_MS ?? '300000')
     if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 2_147_483_647) throw new Error('DSH_RESOURCE_DOWNLOAD_TIMEOUT_MS must be an integer from 1 to 2147483647')
-    const response = await fetch(url, { signal: AbortSignal.timeout(timeout) })
-    if (!response.ok) throw new Error(`primary runtime download: ${String(response.status)} ${url}`)
-    bytes = Buffer.from(await response.arrayBuffer())
+    bytes = await fetchFirstAvailable([url, ...mirrors], url, timeout)
   }
   if (createHash(algorithm).update(bytes).digest('hex') !== sha256) {
     rmSync(destination, { force: true })
@@ -50,6 +58,27 @@ export async function downloadPrimaryRuntimeAsset(url: string, sha256: string, c
     rmSync(temporary, { force: true })
   }
   return destination
+}
+
+/**
+ * Fetch an archive from the first source that answers, so a blocked locked host can fall back to a mirror.
+ * @param sources - The locked URL followed by mirror URLs.
+ * @param url - The locked URL named in the failure message.
+ * @param timeoutMs - Per-attempt timeout in milliseconds.
+ * @returns The first successful response body.
+ */
+async function fetchFirstAvailable(sources: readonly string[], url: string, timeoutMs: number): Promise<Buffer> {
+  const failures: string[] = []
+  for (const source of sources) {
+    try {
+      const response = await fetch(source, { signal: AbortSignal.timeout(timeoutMs) })
+      if (!response.ok) { failures.push(`${String(response.status)} ${source}`); continue }
+      return Buffer.from(await response.arrayBuffer())
+    } catch (error) {
+      failures.push(`${error instanceof Error ? error.message : String(error)} ${source}`)
+    }
+  }
+  throw new Error(`primary runtime download failed for ${url}: ${failures.join('; ')}`)
 }
 
 /** Pinned npm tarball, without dependency resolution or lifecycle scripts. */
@@ -74,7 +103,7 @@ export interface RuntimeNpmArchive {
 export async function downloadRuntimeNpmPackage(artifact: RuntimeNpmArchive, destination: string, cache: string): Promise<void> {
   if (!/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(artifact.integrity)) throw new Error(`runtime download: invalid integrity for ${artifact.name}`)
   const checksum = Buffer.from(artifact.integrity.slice(7), 'base64').toString('hex')
-  const archive = await downloadPrimaryRuntimeAsset(artifact.url, checksum, cache, 'sha512')
+  const archive = await downloadPrimaryRuntimeAsset(artifact.url, checksum, cache, [], 'sha512')
   mkdirSync(destination, { recursive: true })
   await extractTar({ file: archive, cwd: destination, strip: 1 })
   const installed = JSON.parse(readFileSync(join(destination, 'package.json'), 'utf8')) as { name?: string; version?: string }
@@ -91,7 +120,8 @@ export async function downloadRuntimeNpmPackage(artifact: RuntimeNpmArchive, des
 export async function downloadNodeRuntime(target: PrimaryRuntimeTarget, destination: string, cache: string): Promise<void> {
   const artifact = lock.targets[target]
   const filename = `node-v${lock.nodeVersion}-${artifact.nodeArchive}`
-  const archive = await downloadPrimaryRuntimeAsset(`https://nodejs.org/dist/v${lock.nodeVersion}/${filename}`, artifact.nodeSha256, cache)
+  const archive = await downloadPrimaryRuntimeAsset(`https://nodejs.org/dist/v${lock.nodeVersion}/${filename}`, artifact.nodeSha256, cache,
+    [`${NODE_DIST_MIRROR}/v${lock.nodeVersion}/${filename}`])
   const staging = mkdtempSync(join(tmpdir(), 'dsh-node-'))
   try {
     if (target === 'win-x64') await extractZip(archive, { dir: staging })
@@ -175,6 +205,188 @@ export function prunePnpmForeignNativePackages(pnpm: string, platform: NodeJS.Pl
 /** A locked interpreter and wheel target. */
 export type PrimaryRuntimeTarget = keyof typeof lock.targets
 
+/**
+ * Resolve the manifest platform and architecture for a locked target.
+ * @param target - Locked runtime target.
+ * @returns Manifest platform and architecture identifiers.
+ */
+function targetIdentity(target: PrimaryRuntimeTarget): { platform: string; arch: string } {
+  return {
+    platform: target === 'win-x64' ? 'win32' : target.startsWith('linux-') ? 'linux' : 'darwin',
+    arch: target.endsWith('-arm64') ? 'arm64' : 'x64',
+  }
+}
+
+/**
+ * Find an executable on `PATH`, or validate an explicit override.
+ * @param name - Executable file name without extension.
+ * @param override - Absolute path that replaces the `PATH` search.
+ * @returns Absolute executable path.
+ */
+export function resolveSystemExecutable(name: string, override?: string): string {
+  if (override !== undefined) {
+    if (!isAbsolute(override) || !existsSync(override)) throw new Error(`primary runtime: ${name} override does not name an existing executable: ${override}`)
+    return override
+  }
+  for (const directory of (process.env.PATH ?? '').split(delimiter)) {
+    // A node_modules/.bin shim is a package manager's wrapper script, not the host interpreter.
+    if (directory === '' || basename(directory) === '.bin') continue
+    const candidate = join(directory, name)
+    try { accessSync(candidate, constants.X_OK) } catch { continue }
+    return candidate
+  }
+  throw new Error(`primary runtime: ${name} is not on PATH`)
+}
+
+function systemPythonVersion(python: string): string {
+  const version = execFileSync(python, ['-I', '-B', '-c', 'import sys; print("%d.%d.%d" % sys.version_info[:3])'], { encoding: 'utf8' }).trim()
+  if (!/^\d+\.\d+\.\d+$/u.test(version)) throw new Error(`primary runtime: ${python} reported an unsupported version ${JSON.stringify(version)}`)
+  return version
+}
+
+function systemPythonPackages(python: string): string {
+  const packages = execFileSync(python, ['-I', '-B', '-c', 'import site; print(site.getsitepackages()[0])'], { encoding: 'utf8' }).trim()
+  if (!isAbsolute(packages)) throw new Error(`primary runtime: ${python} reported no absolute site-packages directory`)
+  return packages
+}
+
+function systemPythonDistributions(python: string): Record<string, string> {
+  const script = [
+    'import importlib.metadata as metadata, json, sys',
+    'versions = {}',
+    'missing = []',
+    'for name in json.loads(sys.argv[1]):',
+    '    try:',
+    '        versions[name] = metadata.version(name)',
+    '    except metadata.PackageNotFoundError:',
+    '        missing.append(name)',
+    'print(json.dumps({"versions": versions, "missing": missing}))',
+  ].join('\n')
+  const reported = execFileSync(python, ['-I', '-B', '-c', script, JSON.stringify(Object.keys(lock.pythonPackages))], { encoding: 'utf8' })
+  const parsed: unknown = JSON.parse(reported)
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`primary runtime: ${python} reported invalid distribution versions`)
+  }
+  const { versions, missing } = parsed as { versions?: unknown; missing?: unknown }
+  if (Array.isArray(missing) && missing.length > 0) {
+    throw new Error(`primary runtime: system Python is missing ${missing.map(String).join(', ')}`)
+  }
+  if (typeof versions !== 'object' || versions === null || Array.isArray(versions)) {
+    throw new Error(`primary runtime: ${python} reported invalid distribution versions`)
+  }
+  for (const [name, value] of Object.entries(versions)) {
+    if (typeof value !== 'string') throw new Error(`primary runtime: ${python} reported an invalid version for ${name}`)
+  }
+  return versions as Record<string, string>
+}
+
+function systemNodeVersion(node: string): string {
+  const version = execFileSync(node, ['-p', 'process.version'], { encoding: 'utf8' }).trim().replace(/^v/u, '')
+  if (!/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/u.test(version)) throw new Error(`primary runtime: ${node} reported an unsupported version ${JSON.stringify(version)}`)
+  return version
+}
+
+/** Leading magic numbers of native images, which Node executes but cannot import. */
+const NATIVE_EXECUTABLE_MAGICS = new Set([
+  0x7f454c46, // ELF
+  0xfeedface, 0xcefaedfe, 0xfeedfacf, 0xcffaedfe, 0xcafebabe, // Mach-O, thin and universal
+])
+
+/**
+ * Whether pnpm was installed as a standalone binary rather than a JavaScript entry script.
+ * @param path - Absolute pnpm executable.
+ * @returns True for an ELF, Mach-O, or PE image; a script of any kind is not one.
+ */
+function isNativePnpmBinary(path: string): boolean {
+  const descriptor = openSync(path, 'r')
+  try {
+    const header = Buffer.alloc(4)
+    if (readSync(descriptor, header, 0, header.length, 0) < 2) return false
+    return header.subarray(0, 2).toString('latin1') === 'MZ' || NATIVE_EXECUTABLE_MAGICS.has(header.readUInt32BE(0))
+  } finally {
+    closeSync(descriptor)
+  }
+}
+
+/**
+ * Resolve the system pnpm executable and its version.
+ * @param node - System Node.js executable that runs a JavaScript entry script.
+ * @param pnpm - System pnpm executable: a JavaScript entry script or a standalone binary.
+ * @returns Absolute executable and its version.
+ */
+export function resolveSystemPnpm(node: string, pnpm: string): { entry: string; version: string } {
+  const entry = realpathSync(pnpm)
+  // A distribution that packages pnpm as a standalone binary never runs it under another Node.
+  const native = isNativePnpmBinary(entry)
+  // A project package.json with a packageManager field makes pnpm switch to that version; ask outside one.
+  const version = execFileSync(native ? entry : node, native ? ['--version'] : [entry, '--version'], { encoding: 'utf8', cwd: tmpdir() }).trim()
+  if (!/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/u.test(version)) throw new Error(`primary runtime: ${pnpm} reported an unsupported version ${JSON.stringify(version)}`)
+  return { entry, version }
+}
+
+/** Build-only inputs for a payload that uses the build host's own interpreters. */
+export interface SystemPrimaryRuntimeOptions {
+  /** Target whose platform and architecture the manifest records. */
+  readonly target: PrimaryRuntimeTarget
+  /** Resource directory receiving primary-runtime/. */
+  readonly output: string
+  /** Carrier release recorded in the legacy desktopVersion manifest field. */
+  readonly version: string
+  /** Python executable override; defaults to `python3` on `PATH`. */
+  readonly python?: string | undefined
+  /** Node.js executable override; defaults to `node` on `PATH`. */
+  readonly node?: string | undefined
+  /** pnpm executable override; defaults to `pnpm` on `PATH`. */
+  readonly pnpm?: string | undefined
+}
+
+/**
+ * Write a manifest that references the host's own Python, Node.js, and pnpm instead of a closed payload.
+ * @param options - Target, output directory, carrier version, and interpreter overrides.
+ * @returns Nothing; the manifest reaches the output directory and nothing is downloaded.
+ */
+export function prepareSystemPrimaryRuntime(options: SystemPrimaryRuntimeOptions): void {
+  const python = resolveSystemExecutable('python3', options.python)
+  const node = resolveSystemExecutable('node', options.node)
+  const { entry: pnpmEntry, version: pnpmVersion } = resolveSystemPnpm(node, resolveSystemExecutable('pnpm', options.pnpm))
+  const identity = targetIdentity(options.target)
+  const runtime = resolve(options.output)
+  const destination = join(runtime, 'primary-runtime')
+  rmSync(destination, { recursive: true, force: true })
+  mkdirSync(destination, { recursive: true })
+  // The payload's Node.js cannot import a native pnpm image, so the payload carries a launcher
+  // adapting whichever shape the host installed; the manifest records the wrapped host entry.
+  writeSystemPnpmLauncher(join(destination, 'dependencies'), pnpmEntry)
+  const manifest: PrimaryRuntimeManifest = {
+    desktopVersion: options.version,
+    ...identity,
+    python: systemPythonVersion(python),
+    node: systemNodeVersion(node),
+    pnpm: pnpmVersion,
+    pythonPackages: systemPythonDistributions(python),
+    external: { python, pythonPackages: systemPythonPackages(python), node, pnpm: pnpmEntry },
+  }
+  writeFileSync(join(destination, 'runtime.json'), `${JSON.stringify(manifest, undefined, 2)}\n`)
+}
+
+/**
+ * Write the pnpm launcher that a system payload executes under its own Node.js.
+ * @param root - Directory receiving `pnpm/bin/pnpm.mjs`; callers pass the
+ * primary-runtime dependencies directory so both runtime modes share one pnpm location.
+ * @param entry - Absolute system pnpm executable: a JavaScript entry script or a standalone binary.
+ * @returns Absolute launcher path.
+ */
+export function writeSystemPnpmLauncher(root: string, entry: string): string {
+  const launcher = join(root, 'pnpm', 'bin', 'pnpm.mjs')
+  rmSync(join(root, 'pnpm'), { recursive: true, force: true })
+  mkdirSync(dirname(launcher), { recursive: true })
+  // A standalone binary cannot be imported, so its launcher starts it and forwards the exit status.
+  writeFileSync(launcher, isNativePnpmBinary(entry)
+    ? `import { spawnSync } from 'node:child_process'\nconst result = spawnSync(${JSON.stringify(entry)}, process.argv.slice(2), { stdio: 'inherit' })\nif (result.error !== undefined) throw result.error\nprocess.exit(result.status ?? 1)\n`
+    : `process.argv[1] = ${JSON.stringify(entry)}\nawait import(${JSON.stringify(pathToFileURL(entry).href)})\n`)
+  return launcher
+}
+
 /** Resource preparation inputs shared by builds and explicit SDK downloads. */
 export interface PreparePrimaryRuntimeOptions {
   /** Target whose archives and wheels are downloaded. */
@@ -227,8 +439,7 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
     await extractTar({ file: await pythonArchive(target, paths.downloads), cwd: dependencies })
     const manifest: PrimaryRuntimeManifest = {
       desktopVersion: options.version,
-      platform,
-      arch,
+      ...targetIdentity(target),
       payloadDigest: primaryRuntimePayloadDigest(target, lock, pnpmVersion),
       python: lock.pythonVersion,
       ...(pnpmVersion === undefined ? {} : { node: lock.nodeVersion, pnpm: pnpmVersion }),
@@ -260,7 +471,8 @@ export function smokePrimaryRuntime(root: string, environment: NodeJS.ProcessEnv
   if (manifest.platform !== process.platform || manifest.arch !== process.arch) return
   if (Object.keys(manifest.pythonPackages).length === 0) throw new Error('primary runtime: missing Python distribution versions; prepare the payload before running its smoke checks.')
   const entries = workspaceDependencyPaths(root, manifest)
-  if (manifest.platform !== 'win32') {
+  const external = manifest.external !== undefined
+  if (!external && manifest.platform !== 'win32') {
     const interpreter = `python${manifest.python.split('.').slice(0, 2).join('.')}`
     for (const name of ['python', 'python3']) {
       const path = join(dirname(entries.python), name)
@@ -273,26 +485,36 @@ export function smokePrimaryRuntime(root: string, environment: NodeJS.ProcessEnv
   const options = { stdio: 'inherit', timeout: 120_000, env: environment } as const
   execFileSync(entries.python, ['-I', '-B', '-c', 'import decimal, xml.parsers.expat, lzma, uuid, numpy, pandas; assert numpy.arange(4).sum() == 6; assert pandas.DataFrame({"n": [1, 2]}).n.sum() == 3'], options)
   execFileSync(entries.python, ['-I', '-B', join(import.meta.dirname, 'smoke.py'), JSON.stringify(manifest.pythonPackages),
-    manifest.python], options)
-  execFileSync(entries.python, ['-I', '-B', '-m', 'pip', 'check'], options)
+    manifest.python, ...(external ? ['--external'] : [])], options)
+  // A system interpreter has no closed distribution set to check; pip is not a declared dependency either.
+  if (!external) execFileSync(entries.python, ['-I', '-B', '-m', 'pip', 'check'], options)
   if (entries.node !== undefined) execFileSync(entries.node, ['-e', `if (process.versions.node !== ${JSON.stringify(manifest.node)}) process.exit(1)`], options)
-  if (entries.pnpm !== undefined && entries.node !== undefined) execFileSync(entries.node, [entries.pnpm, '--version'], options)
+  // A project package.json with a packageManager field would make pnpm switch to that version instead.
+  if (entries.pnpm !== undefined && entries.node !== undefined) execFileSync(entries.node, [entries.pnpm, '--version'], { ...options, cwd: tmpdir() })
 }
 
 if (import.meta.main) {
   const { values } = parseArgs({ options: {
     target: { type: 'string' }, output: { type: 'string' }, cache: { type: 'string' },
-    'python-only': { type: 'boolean', default: false },
+    'python-only': { type: 'boolean', default: false }, system: { type: 'boolean', default: false },
+    python: { type: 'string' }, node: { type: 'string' }, pnpm: { type: 'string' },
   } })
   if (!values.target || !Object.hasOwn(lock.targets, values.target) || !values.output) {
-    throw new Error(`Usage: pnpm run prepare:primary-runtime --target <${Object.keys(lock.targets).join('|')}> --output <directory> [--cache <directory>] [--python-only]`)
+    throw new Error(`Usage: pnpm run prepare:primary-runtime --target <${Object.keys(lock.targets).join('|')}> --output <directory> [--cache <directory>] [--python-only] [--system]`)
   }
   const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }
   const output = resolve(values.output)
-  await preparePrimaryRuntime({
-    target: values.target as PrimaryRuntimeTarget, output,
-    cache: values.cache ?? join(tmpdir(), 'dsh-primary-runtime-downloads'), version,
-    pythonOnly: values['python-only'],
-  })
+  if (values.system) {
+    prepareSystemPrimaryRuntime({
+      target: values.target as PrimaryRuntimeTarget, output, version,
+      python: values.python, node: values.node, pnpm: values.pnpm,
+    })
+  } else {
+    await preparePrimaryRuntime({
+      target: values.target as PrimaryRuntimeTarget, output,
+      cache: values.cache ?? join(tmpdir(), 'dsh-primary-runtime-downloads'), version,
+      pythonOnly: values['python-only'],
+    })
+  }
   smokePrimaryRuntime(join(output, 'primary-runtime'))
 }

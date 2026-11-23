@@ -39,7 +39,7 @@ kind: "package-library"
 
 ### 启动页
 
-启动页只使用原生 DOM 与本地 CSS，因此 bundle 与插件激活失败保持可见：它显示一个 spinner 节点，其 CSS 圆弧随 entry 激活而增长。spinner 及其动画相位会一直保留，直到完整 UI 替换启动页。必需插件导入或激活失败时，页面按名称列出每个未激活插件及原因（缺失服务、导入失败或激活错误），并标出必需项，而不是白屏。可选插件的失败只出现在一条控制台警告中，不会阻止应用启动。控制台包含原始导入错误。
+启动就绪延迟对象兑现前，提示文字为 `Starting…`；`run()` 在延迟对象兑现、客户端加载开始时切换为 `Loading plugins…`。提示上方是品牌横幅：鲸鱼标记，然后是带 `HARNESS` 胶囊的 `deepseek` 名称图形，尺寸与导航栏一致（高 24px、间距 5px），因此启动页与侧边栏品牌一致。该图形是 `ui-primitives` 的 `brand-artwork` 模块内联的 SVG，也是 React 标记绘制的同一份几何，加载期间不发起任何请求，也不会出现漂移。主题样式表安装前，胶囊字形回退到启动页作用域的反色。一个视觉隐藏的 `DeepSeek Harness` 为辅助技术保留品牌名。启动页只使用原生 DOM 与本地 CSS，因此 bundle 与插件激活失败保持可见：它显示一个 spinner 节点，其 CSS 圆弧随 entry 激活而增长。spinner 及其动画相位会一直保留，直到完整 UI 替换启动页。必需插件导入或激活失败时，页面按名称列出每个未激活插件及原因（缺失服务、导入失败或激活错误），并标出必需项，而不是白屏。可选插件的失败只出现在一条控制台警告中，不会阻止应用启动。控制台包含原始导入错误。
 
 <a id="the-shared-module-table"></a>
 ### 共享模块表
@@ -78,7 +78,7 @@ kind: "package-library"
 
 ### 启动页机制
 
-启动页是原生 DOM 加本地 CSS，其回退字体与颜色匹配加载期间到达的主题 token。`internal/status` 事件驱动一个 spinner 节点；失败的 entry 在审计前不绘制，因为它可能是可选的。hydrate 会保留该节点与动画相位直到应用提交，`fail()` 渲染抛出的原因。React 挂载、slot 渲染与应用组装位于 `ui-renderer`；`ui-layout` 拥有组装后的浏览器标题投影。
+启动页是原生 DOM 加本地 CSS，其回退字体与颜色匹配加载期间到达的主题 token。`internal/status` 事件驱动一个 spinner 节点；失败的 entry 在审计前不绘制，因为它可能是可选的。hydrate 会保留该节点与动画相位直到应用提交，`fail()` 渲染抛出的原因。品牌横幅的节点在失败报告期间保持不变，因此插件失败不会留下无名页面。React 挂载、slot 渲染与应用组装位于 `ui-renderer`；`ui-layout` 拥有组装后的浏览器标题投影。
 
 启动内核把清单条目创建交给 Client Modules，使启动后的动态图同步继续持有相同的条目身份。初始激活审计只拒绝必需 entry；后续页面本地失败显示在插件页面顶部的同步提示中。
 
@@ -90,7 +90,7 @@ kind: "package-library"
 | [`src/boot.ts`](src/boot.ts) | `AppWebEntry`：模块阶段、启动页、immediately 层级预取、安装窗口拖拽矩形 watcher，随后调用 `bootClient` + `mountClient` |
 | [`src/boot-client.ts`](src/boot-client.ts) | `bootClient` / `assertEntriesActive`：挂载 Loader、每个 manifest 行一个 entry、激活审计 |
 | [`src/mount.ts`](src/mount.ts) | `mountClient`：经 `uiRenderer` 依赖 fiber 完成渲染器交接 |
-| [`src/boot-page.ts`](src/boot-page.ts) | 无框架启动页：spinner、逐 entry 状态、失败渲染 |
+| [`src/boot-page.ts`](src/boot-page.ts) | 无框架启动页：品牌横幅、spinner、逐 entry 状态、失败渲染 |
 | [`src/platform.ts`](src/platform.ts) | `PLATFORM_MODULES` / `PRELOADED_CLIENT_EXTERNALS`：隐式 external 基座 |
 | [`src/seed.ts`](src/seed.ts) | 启动时交给 loader 的静态模块表 |
 | [`src/window-drag/regions.ts`](src/window-drag/regions.ts) | darwin app-region 组合模型，以及 `base.css` 减除的交互元素选择器 |

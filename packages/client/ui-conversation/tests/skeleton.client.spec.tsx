@@ -327,6 +327,7 @@ function mount(
           useBusyEnter={bindSnapshotSelector(createSnapshotStore<'queue' | 'steer'>('queue'))}
           retry={undefined}
           useStopShortcut={bindSnapshotSelector(createSnapshotStore<readonly string[]>([]))}
+          useStatisticsVisible={bindSnapshotSelector(createSnapshotStore(true))}
           useNotices={bindSnapshotSelector(wiring.notices)}
           useLexicon={bindSnapshotSelector(wiring.lexicon)}
           useMenuLauncher={bindSnapshotSelector(createSnapshotStore<string | null>(null))}

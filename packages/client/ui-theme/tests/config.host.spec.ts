@@ -7,6 +7,7 @@ import { plainConfig } from '../../../settings/settings/src/schema.ts'
 import {
   DEFAULT_PREFERENCE, Config, apply,
 } from '@deepseek-ai/dsh-client-ui-theme'
+import { FONT_COLOR_DARK_FIELD, FONT_COLOR_LIGHT_FIELD, isFontColor } from '../src/theme-settings.ts'
 
 /** The Peer an index render speaks for; this listener reads no field of it. */
 const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['renderIndex']>[1]
@@ -30,11 +31,16 @@ describe('ui-theme host', () => {
     const ctx = new Context()
     const configuration = await liveConfig(ctx, { Config, apply })
     const { fiber } = configuration
-    expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({ preference: DEFAULT_PREFERENCE, fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '' })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({ preference: DEFAULT_PREFERENCE, fontSize: 14, codeFontSize: 11, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '', terminalFontFamily: '', fontColorLight: '', fontColorDark: '' })
     await configuration.update({ preference: 'dark', fontSize: 10, codeFontSize: 16, codeFontFamily: '"Iosevka"' })
-    expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({ preference: 'dark', fontSize: 10, codeFontSize: 16, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '"Iosevka"', terminalFontFamily: '' })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toEqual({ preference: 'dark', fontSize: 10, codeFontSize: 16, terminalFontSize: 13, textFontFamily: '', codeFontFamily: '"Iosevka"', terminalFontFamily: '', fontColorLight: '', fontColorDark: '' })
     await configuration.update({ fontSize: 22 })
     expect(plainConfig(configuration.fiber.effectiveConfig)).toMatchObject({ preference: 'dark', fontSize: 22 })
+    // Solid colors persist per mode; invalid or alpha-bearing values reject.
+    await configuration.update({ [FONT_COLOR_LIGHT_FIELD]: '#0f1115', [FONT_COLOR_DARK_FIELD]: 'hsl(210, 50%, 40%)' })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toMatchObject({ fontColorLight: '#0f1115', fontColorDark: 'hsl(210, 50%, 40%)' })
+    await expect(configuration.update({ [FONT_COLOR_LIGHT_FIELD]: 'red' })).rejects.toThrow()
+    await expect(configuration.update({ [FONT_COLOR_DARK_FIELD]: 'rgba(0, 0, 0, 0.5)' })).rejects.toThrow()
     await expect(configuration.update({ preference: 'sepia' })).rejects.toThrow()
     await expect(configuration.update({ fontSize: 9 })).rejects.toThrow()
     await expect(configuration.update({ fontSize: 23 })).rejects.toThrow()
@@ -75,7 +81,24 @@ describe('ui-theme host', () => {
     expect(rowText(collect(ctx)[1])).toContain('const preference = "system"')
   })
 
-
+  it('accepts empty, hex, and rgb()/hsl() text colors and rejects the rest', () => {
+    // The empty string is the durable "no override" value; every non-empty
+    // accepted value is a solid CSS color. Alpha-bearing forms (rgba(),
+    // alpha channels, #rrggbbaa) are rejected: alpha text composites
+    // differently over surfaces and makes contrast unguaranteed.
+    const valid = [
+      '', '#0f1115', '#fff', '#F9FAFB',
+      'rgb(15, 17, 21)', 'rgb(15 17 21)', 'rgb(100%, 0%, 0%)',
+      'hsl(210, 50%, 40%)', 'hsl(210deg 50% 40%)',
+    ]
+    for (const value of valid) expect(isFontColor(value)).toBe(true)
+    const invalid = [
+      'red', 'transparent', '#12345', '#f9fafb80',
+      'rgba(0, 0, 0, 0.5)', 'rgb(15 17 21 / 50%)', 'hsl(210 50%)',
+      'not-a-color', 42, null,
+    ]
+    for (const value of invalid) expect(isFontColor(value)).toBe(false)
+  })
 })
 
 it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage(ctx => ctx.plugin(HostPlugin)))

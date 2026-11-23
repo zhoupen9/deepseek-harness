@@ -2121,6 +2121,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'gitController',
+    summary: 'Host service backing the generated `ctx.remote.git` namespace.',
+    description: 'Host service backing the generated `ctx.remote.git` namespace. Its two verbs are Agent-scoped: the `agent` lookup resolves the caller\'s session, whose cwd is the fence root every read is bounded to.',
+    methods: [
+      {
+        signature: '@Remote(\'log\') async log(agent: Agent, options: GitLogOptions | undefined, signal: AbortSignal): Promise<GitLogResult>',
+        description: 'Log the workspace repository\'s commit history for a Remote caller\'s graph.',
+        parameters: [{ name: 'agent', description: 'target Agent resolved from the Session identity on the wire; its cwd is the fence root.' }, { name: 'options', description: 'commit bound, ref selection, and the traversal mode; absent applies the configured defaults.' }, { name: 'signal', description: 'caller lifetime; abort kills the git child and rejects with the signal reason.' }],
+        returns: 'the repo context, HEAD facts, and the bounded newest-first commit window.',
+      },
+      {
+        signature: '@Remote(\'show\') async show(agent: Agent, hash: string, signal: AbortSignal): Promise<GitShowResult>',
+        description: 'Show one commit\'s full message and modifications for a Remote caller.',
+        parameters: [{ name: 'agent', description: 'target Agent resolved from the Session identity on the wire; its cwd is the fence root.' }, { name: 'hash', description: 'abbreviated or full commit object id to show.' }, { name: 'signal', description: 'caller lifetime; abort kills the git child and rejects with the signal reason.' }],
+        returns: 'the repo context, the commit detail, its changed files, and the bounded patch.',
+      },
+    ],
+  },
+  {
     key: 'goals',
     summary: 'Goal service (`ctx.goals`) backed exclusively by the owning session log.',
     description: 'Goal service (`ctx.goals`) backed exclusively by the owning session log.',
@@ -7989,6 +8008,42 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GenericResultView',
     declaration: 'export interface GenericResultView {\n    card: \'generic\';\n    title?: string;\n    content?: ContentBlock[];\n}',
+  },
+  {
+    name: 'GitCommit',
+    declaration: 'export interface GitCommit {\n    readonly hash: string;\n    readonly parents: readonly string[];\n    readonly authorName: string;\n    readonly authorEmail: string;\n    readonly authorTime: number;\n    readonly subject: string;\n    readonly refs: readonly GitRef[];\n}',
+  },
+  {
+    name: 'GitCommitDetail',
+    declaration: 'export interface GitCommitDetail extends GitCommit {\n    readonly committerName: string;\n    readonly committerEmail: string;\n    readonly committerTime: number;\n    readonly body: string;\n}',
+  },
+  {
+    name: 'GitContext',
+    declaration: 'export type GitContext = {\n    readonly kind: \'none\';\n} | {\n    readonly kind: \'error\';\n    readonly message: string;\n} | {\n    readonly kind: \'git\';\n    readonly root: string;\n    readonly worktree: string;\n};',
+  },
+  {
+    name: 'GitFileChange',
+    declaration: 'export interface GitFileChange {\n    readonly path: string;\n    readonly status: GitFileStatus;\n    readonly previousPath?: string;\n}',
+  },
+  {
+    name: 'GitFileStatus',
+    declaration: 'export type GitFileStatus = \'added\' | \'deleted\' | \'modified\' | \'renamed\' | \'copied\' | \'typechanged\' | \'unmerged\';',
+  },
+  {
+    name: 'GitLogOptions',
+    declaration: 'export interface GitLogOptions {\n    readonly maxCount?: number;\n    readonly all?: boolean;\n    readonly firstParent?: boolean;\n    readonly maxParents?: 1 | 2;\n}',
+  },
+  {
+    name: 'GitLogResult',
+    declaration: 'export interface GitLogResult {\n    readonly vcs: GitContext;\n    readonly currentBranch?: string;\n    readonly headHash?: string;\n    readonly commits: readonly GitCommit[];\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'GitRef',
+    declaration: 'export interface GitRef {\n    readonly name: string;\n    readonly kind: \'head\' | \'branch\' | \'tag\' | \'remote\';\n}',
+  },
+  {
+    name: 'GitShowResult',
+    declaration: 'export interface GitShowResult {\n    readonly vcs: GitContext;\n    readonly commit?: GitCommitDetail;\n    readonly files: readonly GitFileChange[];\n    readonly diff: string;\n    readonly diffTruncated: boolean;\n}',
   },
   {
     name: 'GoalActivation',

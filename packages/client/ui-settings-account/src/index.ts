@@ -4,7 +4,10 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-settings'
 import { type ContactConfig, ContactConfigFields, CONTACT_CONFIG_GLOBAL } from './contact-config.ts'
 import z from '@deepseek-ai/schemastery'
-import { OnboardingSettingsFields, type OnboardingStep, type OnboardingPurpose, type OnboardingProcess } from './onboarding-settings.ts'
+import {
+  OnboardingSettingsFields,
+  type OnboardingProcess, type OnboardingPurpose, type OnboardingStep, type OnboardingUsage,
+} from './onboarding-settings.ts'
 /** Public contact options and live device-local onboarding progress. */
 export interface Config extends ContactConfig {
   /** Onboarding progress format version. */
@@ -18,7 +21,7 @@ export interface Config extends ContactConfig {
   /** Completion reason, absent until completion. */
   completion?: Volatile<'completed' | 'skipped' | 'api-key' | null | undefined>
   /** Selected usage detail. */
-  usage: Volatile<'compact' | 'detailed'>
+  usage: Volatile<OnboardingUsage>
   /** Selected developer-tool visibility. */
   developerTools: Volatile<boolean>
 }

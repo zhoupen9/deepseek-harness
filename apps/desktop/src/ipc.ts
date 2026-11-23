@@ -10,6 +10,11 @@ import type { DesktopFileDrag } from '@deepseek-ai/dsh-util-file-drag'
 
 /** IPC channel names kept private to the desktop application bundle. */
 export const DESKTOP_IPC = {
+  applicationAbout: 'dsh-desktop:application-about',
+  applicationQuit: 'dsh-desktop:application-quit',
+  applicationReload: 'dsh-desktop:application-reload',
+  applicationRestart: 'dsh-desktop:application-restart',
+  remoteConnect: 'dsh-desktop:remote-connect',
   fileSave: 'dsh-desktop:file-save',
   clipboardImageRead: 'dsh-desktop:clipboard-image-read',
   shortcutsInput: 'dsh-desktop:shortcuts-input',
@@ -44,7 +49,21 @@ export const DESKTOP_IPC = {
   windowFullscreen: 'dsh-desktop:window-fullscreen',
   windowsAppearance: 'dsh-desktop:windows-appearance',
   windowsMenu: 'dsh-desktop:windows-menu',
+  notify: 'dsh-desktop:notify',
 } as const
+
+/**
+ * Renderer argument marking a development shell. Reload and restart stay
+ * development-only, so the preload exposes them from this marker and the main
+ * process still rejects them in a packaged build.
+ */
+export const DESKTOP_DEVELOPMENT_ARGUMENT = '--dsh-desktop-development'
+
+/**
+ * Web UI attention discriminators the shell raises a native notification for.
+ * The Web UI sends these through `window.dshNotify`.
+ */
+export type DesktopAttentionKind = 'approval' | 'question' | 'plan-review' | 'turn-complete'
 
 /** Desktop release update state rendered by desktop-owned UI. */
 export type DesktopUpdatePreparationFailureKind = 'stop-failed' | 'tasks-changed' | 'tasks-unavailable' | 'fullscreen-timeout'
@@ -89,11 +108,49 @@ export interface DesktopUpdatePresentation {
   readonly configurationError?: DesktopChannelState['error']
 }
 
+/** Failure codes for preparing a remote Harness connection; the UI localizes each. */
+export type RemoteConnectionFailure =
+  | 'invalid-url'
+  | 'missing-token'
+  | 'unreachable'
+  | 'authentication'
+  | 'no-injections'
+  | 'version-mismatch'
+
+/** Failure codes for one remote Harness connection attempt; the UI localizes each. */
+export type DesktopRemoteFailure = RemoteConnectionFailure | 'local-host' | 'local-stop' | 'internal'
+
+/** Settlement of one remote Harness connection request. */
+export type DesktopRemoteConnectionResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly failure: DesktopRemoteFailure }
+
+/** Application commands the Web UI requests; the shell performs every effect. */
+export interface DshDesktopApplicationApi {
+  /** Whether the shell exposes the development-only reload and restart commands. */
+  readonly development: boolean
+  /** Show the shell's About panel. */
+  about(): Promise<void>
+  /** Request the shell's ordered shutdown. */
+  quit(): Promise<void>
+  /** Reload the primary document. */
+  reload(): Promise<void>
+  /** Relaunch the application. */
+  restart(): Promise<void>
+  /**
+   * Replace the local Harness with a remote Web Host for this run.
+   * @param url - complete URL printed by the remote `dsh --profile web`, including its token.
+   * @returns success, or the failure code the connect dialog localizes.
+   */
+  connectRemote(url: string): Promise<DesktopRemoteConnectionResult>
+}
+
 /** Product documents cannot supply update versions, package URLs, or installation authorization. */
 export interface DshDesktopProductApi {
   readonly fileActions: DesktopFileActions
   readonly protocolVersion: 1
   readonly browser: DesktopBrowserBridge
+  readonly application: DshDesktopApplicationApi
   readonly fileDrag: DesktopFileDrag
   readonly keyboard: DesktopKeyboardApi
   readonly shortcuts: DesktopShortcutsApi

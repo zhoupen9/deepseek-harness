@@ -20,13 +20,17 @@ import {
   powerMonitor,
   nativeImage,
   nativeTheme,
+  Notification,
   protocol,
+  screen,
   session,
   shell,
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
 } from 'electron'
 import { resolveDesktopPaths } from './paths.ts'
+import { desktopResourceLayout } from './resource-layout.ts'
+import { runtimeNode } from './runtime-node.ts'
 import { DesktopProjectManager } from './project-manager.ts'
 import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError } from './host-process.ts'
 import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-view.ts'
@@ -34,7 +38,7 @@ import { installDesktopFileDrag } from './file-drag.ts'
 import { installDesktopDirectoryPicker } from './directory-picker.ts'
 import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { DesktopBackendController } from './backend-controller.ts'
-import { DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
+import { DESKTOP_DEVELOPMENT_ARGUMENT, DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopRemoteConnectionResult, type DesktopUpdateState } from './ipc.ts'
 import { readDeviceInfo } from './device-info.ts'
 import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
 import type { DesktopMessages } from './locale.ts'
@@ -44,6 +48,7 @@ import { DesktopUpdateCoordinator } from './update-coordinator.ts'
 import { prepareDesktopUpdateWindow } from './update-window.ts'
 import { DesktopCommandManager } from './command-management.ts'
 import { serveWebDocument, forwardWebRequest, removeLegacyHostCookies } from './web-document.ts'
+import { prepareRemoteConnection, remoteDocumentInjections, RemoteConnectionError, type RemoteConnection } from './remote-connection.ts'
 import { DesktopFatalRecovery } from './fatal-recovery.ts'
 import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
 import { OperationJournal } from './operation-journal.ts'
@@ -62,6 +67,7 @@ import { desktopClientMetadata, desktopClientVersion } from './client-metadata.t
 import { DesktopMandatoryUpdateWindow } from './mandatory-update-window.ts'
 import { DesktopPolicyTestAuth } from './policy-test-auth.ts'
 import { readDesktopSettings } from './settings.ts'
+import { readThemeSourceHint, startupThemeMarkup, themeBackground, writeThemeSourceHint } from './startup-appearance.ts'
 import { readDesktopLocaleCache, writeDesktopLocaleCache } from './locale-cache.ts'
 import { DesktopUpdateDialog, type UpdateDialogOptions } from './update-dialog.ts'
 import { readDesktopRuntime } from './runtime-tree.ts'
@@ -200,21 +206,36 @@ protocol.registerSchemesAsPrivileged([{
 
 interface RuntimeResources {
   readonly nodeBin: string
+  /** Node.js runtime that runs the Host; Electron's Node only when the payload declares none. */
   readonly node: string
   readonly pnpm: string
   readonly dsh: string
+  /** Primary runtime the Host starts its plugins and tools from. */
+  readonly primaryRuntime: string
+  /** Resource directory of this installation, for payload files outside the application archive. */
+  readonly root: string
 }
 
 function runtimeResources(): RuntimeResources {
   const development = !app.isPackaged
-  const node = process.execPath
-  const nodeBin = development ? join(app.getAppPath(), 'scripts', 'node-bin') : join(process.resourcesPath, 'runtime', 'bin')
+  const layout = desktopResourceLayout(app.getAppPath())
+  // A distribution Electron reports an explicit application path as an unpackaged run, so an
+  // assembled payload without the launcher flag would take the development paths below.
+  if (layout.assembled && development) {
+    throw new Error('dsh desktop: launching an assembled payload requires ELECTRON_FORCE_IS_PACKAGED')
+  }
+  // The launcher names this directory because process.arch cannot reproduce a fixed build target.
+  const primaryRuntime = development
+    ? developmentPrimaryRuntime()
+    : join(layout.root, 'runtime', 'primary-runtime')
+  const node = runtimeNode(primaryRuntime) ?? process.execPath
+  const nodeBin = development ? join(app.getAppPath(), 'scripts', 'node-bin') : join(layout.root, 'runtime', 'bin')
   const pnpm = (development ? process.env.DSH_DESKTOP_PNPM_ENTRY : undefined)
     ?? (development ? join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.mjs')
-      : join(process.resourcesPath, 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs'))
+      : join(layout.root, 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs'))
   const dsh = (development ? process.env.DSH_DESKTOP_DSH_DIR : undefined)
-    ?? (development ? join(app.getAppPath(), '.desktop-build', 'development', 'project') : join(app.getAppPath(), 'dsh'))
-  return { node, nodeBin, pnpm, dsh }
+    ?? (development ? join(app.getAppPath(), '.desktop-build', 'development', 'project') : join(layout.root, 'dsh'))
+  return { node, nodeBin, pnpm, dsh, primaryRuntime, root: layout.root }
 }
 
 function developmentPrimaryRuntime(): string {
@@ -247,6 +268,15 @@ function chromeFallbackFill(): string {
   return nativeTheme.shouldUseDarkColors ? '#1b1b1c' : '#f9fafb'
 }
 
+// The Settings font pickers enumerate installed fonts through
+// window.queryLocalFonts, which Chromium gates behind this feature flag.
+app.commandLine.appendSwitch('enable-features', 'LocalFontAccess')
+
+/** DevTools dock state: Linux keeps the panel inside the application window. */
+function devToolsDockMode(): 'detach' | 'right' {
+  return process.platform === 'linux' ? 'right' : 'detach'
+}
+
 /**
  * Add the effective Desktop palette to a Platform authorization URL so the
  * login page opens in the application's theme. `system` resolves through
@@ -268,6 +298,13 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     minWidth: 520,
     minHeight: 600,
     show,
+    // The primary window runs frameless on Linux: no OS title bar and no menu
+    // bar. The page carries a transparent drag strip (window-chrome.ts) so the
+    // window stays movable, and window management rides the OS shortcuts.
+    ...(process.platform === 'linux' && primary ? {
+      frame: false,
+      autoHideMenuBar: true,
+    } : {}),
     ...(process.platform === 'win32' && primary ? {
       backgroundColor: chromeFallbackFill(),
       titleBarStyle: 'hidden' as const,
@@ -284,9 +321,15 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
       // 'followWindow' washes the sidebar out behind an unfocused window.
       visualEffectState: 'active' as const,
       backgroundColor: '#00000000',
-    } : {}),
+    } : {
+      // Match the loading page canvas before its first paint; the Web UI's own palette takes over after boot.
+      backgroundColor: themeBackground(nativeTheme.shouldUseDarkColors),
+    }),
     webPreferences: {
       preload,
+      // Only the primary document requests application commands; a packaged
+      // build omits the marker so its preload hides the development-only ones.
+      ...(primary && !app.isPackaged ? { additionalArguments: [DESKTOP_DEVELOPMENT_ARGUMENT] } : {}),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -379,16 +422,17 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
 }
 
 async function main(): Promise<void> {
-  const desktopSettings = await readDesktopSettings(app.getPath('userData'))
+  const userData = app.getPath('userData')
+  const desktopSettings = await readDesktopSettings(userData)
+  // The Web UI owns the durable theme preference; its last reported source themes the
+  // window and loading page before the Host can supply its index injections.
+  nativeTheme.themeSource = readThemeSourceHint(userData)
   void pruneCrashReports(app.getPath('logs'))
   const journalDirectory = process.env.DSH_DESKTOP_UPDATE_JOURNAL_DIR
   const updateJournal = journalDirectory === undefined ? undefined : new DesktopUpdateJournal(journalDirectory, app.getVersion())
   const resources = runtimeResources()
   const paths = resolveDesktopPaths()
   const development = !app.isPackaged
-  const primaryRuntime = development
-    ? developmentPrimaryRuntime()
-    : join(process.resourcesPath, 'runtime', 'primary-runtime')
   const activeProject = paths.profile
   const manager = new DesktopProjectManager(paths, resources)
   // Dock and Finder launches inherit only launchd's environment; every Host shares one login-shell read.
@@ -428,6 +472,8 @@ async function main(): Promise<void> {
     if (failure?.status === 'rejected') throw failure.reason
   }
   let enteredWorkspace = false
+  /** Whether the main window currently shows the startup boot page instead of a chosen surface. */
+  let bootPagePresented = false
   // NSIS passes --updated when it launches the application after installation.
   let raiseAfterUpdate = process.platform === 'win32' && process.argv.includes('--updated')
   let shellInstallerOwnsQuit = false
@@ -489,6 +535,7 @@ async function main(): Promise<void> {
   const applicationUrl = `${SCHEME}://app/`
   let hostUrl: string | undefined
   let hostCookie: string | undefined
+  let remoteConnection: RemoteConnection | undefined
   const browserGuests = new DesktopBrowserGuests(() => hostUrl)
   let injections: readonly unknown[] = []
   let welcomeBackend: DesktopWelcomeBackend | undefined
@@ -535,7 +582,7 @@ async function main(): Promise<void> {
     const hostInspectPort = developmentHostInspectPort(development)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
       hostInspectPort, { ...hostEnvironment, DSH_CLIENT_VERSION: desktopClientVersion() }, onFailure,
-      primaryRuntime,
+      resources.primaryRuntime,
       resources, (next) => { platformView.setSession(next) }, (record) => {
         operationJournal ??= new OperationJournal(join(app.getPath('userData'), 'plugin-operations'), {
           segmentBytes: 256 * 1024, recordBytes: 4096, queuedBytes: 64 * 1024,
@@ -548,6 +595,7 @@ async function main(): Promise<void> {
         const cookie = ready.authenticationCookie
         hostCookie = cookie
         hostUrl = ready.url
+        registerWebSocketForwarding(hostUrl)
         void removeLegacyHostCookies(session.defaultSession.cookies, ready.url)
           .catch((error: unknown) => { console.error('desktop: legacy Host cookie cleanup failed', error) })
         if (ready.injections === undefined) throw new Error('Desktop Host did not provide boot injections')
@@ -683,9 +731,23 @@ async function main(): Promise<void> {
     finally { await Promise.all([operationJournal?.drain(500), reports]) }
   }
 
+  /**
+   * Present the loaded boot page while the Host starts. The welcome window or
+   * workspace replaces it once the first visible window is known.
+   */
+  const presentBootWindow = (): void => {
+    const window = mainWindow
+    if (quitting || window === undefined || window.isDestroyed()) return
+    // Welcome owns the screen once it opens; the workspace must not appear behind it.
+    if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) return
+    bootPagePresented = true
+    window.show()
+  }
+
   const reconcileBackend = (): Promise<void> => {
     startup ??= (async () => {
       await navigateMain(applicationUrl)
+      presentBootWindow()
       await backend.start(async () => {
         await Promise.all([manager.applyRelease(), prepareHostEnvironment()])
       })
@@ -806,10 +868,17 @@ async function main(): Promise<void> {
     if (url.hostname === 'shell') return serveWebDocument(request, join(app.getAppPath(),
       url.pathname === '/design-platform.css' ? 'lib/welcome' : 'renderer'))
     if (url.hostname === 'app') {
-      if (url.pathname === '/' || url.pathname === '/index.html' || url.pathname.startsWith('/assets/')
-        || ['/favicon.svg', '/manifest.webmanifest'].includes(url.pathname)) {
-        return serveWebDocument(request, join(resources.dsh, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist'))
+      const webRoot = join(resources.dsh, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist')
+      // The packaged index has no Host-rendered rows; the last reported source colors it until boot injections arrive.
+      if (url.pathname === '/' || url.pathname === '/index.html') {
+        // A remote Harness contributes its boot rows; the packaged index keeps this app's client build.
+        return serveWebDocument(request, webRoot, startupThemeMarkup(nativeTheme.themeSource),
+          remoteConnection === undefined ? undefined : remoteDocumentInjections(remoteConnection))
       }
+      if (url.pathname.startsWith('/assets/') || ['/favicon.svg', '/manifest.webmanifest'].includes(url.pathname)) {
+        return serveWebDocument(request, webRoot)
+      }
+      if (remoteConnection !== undefined) return forwardWebRequest(request, remoteConnection.base.href, remoteConnection.cookie)
       if (backend.host === undefined || hostUrl === undefined || hostCookie === undefined) {
         return Promise.resolve(new Response(null, { status: 503 }))
       }
@@ -824,8 +893,51 @@ async function main(): Promise<void> {
     process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux', () => { refreshApplicationMenu() }, window => updateOverlays.input(window))
   app.on('will-quit', () => { shortcuts.dispose() })
 
+  // Packaged builds carry the Windows artwork as 'resources/icon.png' (electron-builder-config.mjs
+  // extraResources), so development reads that same checked-in file.
+  const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
+    : join(resources.root, 'icon.png')
+  // The application artwork is 1024 px for installers and the About panel. A notification service
+  // draws the bitmap at the size it is given, so the shell hands over a 48 px copy in device
+  // pixels: one that matches the output scale draws 1:1, while a smaller copy is stretched.
+  const notificationIconEdge = Math.round(48 * screen.getPrimaryDisplay().scaleFactor)
+  const notificationIcon = nativeImage.createFromPath(applicationIconPath)
+    .resize({ width: notificationIconEdge, height: notificationIconEdge })
+
+  /**
+   * Raise a native notification for one Web UI attention kind. A window already
+   * in front of the user shows the event itself, so it is not interrupted.
+   * @param kind - Attention discriminator sent by the Web UI.
+   */
+  const handleAttention = (kind: unknown): void => {
+    if (typeof kind !== 'string') return
+    if (process.env.DSH_DEBUG_NOTIFY !== undefined && process.env.DSH_DEBUG_NOTIFY !== '') {
+      console.log('[dsh-notify]', kind)
+    }
+    const messages = currentDesktopLocale().messages
+    const copy: Record<string, { title: string; body: string }> = {
+      approval: { title: messages.attentionApprovalTitle, body: messages.attentionApprovalBody },
+      question: { title: messages.attentionQuestionTitle, body: messages.attentionQuestionBody },
+      'plan-review': { title: messages.attentionPlanReviewTitle, body: messages.attentionPlanReviewBody },
+      'turn-complete': { title: messages.attentionTurnCompleteTitle, body: messages.attentionTurnCompleteBody },
+    }
+    const selected = copy[kind]
+    if (selected === undefined) return
+    if (mainWindow !== undefined && mainWindow.isFocused()) return
+    if (!Notification.isSupported()) return
+    new Notification({ title: selected.title, body: selected.body, icon: notificationIcon }).show()
+  }
+  ipcMain.on(DESKTOP_IPC.notify, (event, payload: unknown) => {
+    assertDesktopSender(event, ['app'])
+    handleAttention(typeof payload === 'object' && payload !== null ? (payload as { kind?: unknown }).kind : undefined)
+  })
+
   ipcMain.handle(DESKTOP_IPC.boot, async (event) => {
     assertDesktopSender(event, ['app'])
+    if (remoteConnection !== undefined) {
+      // The remote document already carries its boot rows; only the stream base is shell-owned.
+      return { injections: [], streamBaseUrl: remoteConnection.base.href }
+    }
     await startup
     if (backend.host === undefined || hostUrl === undefined) throw new Error('Desktop Host is unavailable')
     return { injections, streamBaseUrl: new URL(hostUrl).origin }
@@ -849,7 +961,8 @@ async function main(): Promise<void> {
     return browserGuests.release(event.sender, lease)
   })
 
-  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['ws://127.0.0.1/*', 'wss://127.0.0.1/*'] }, (details, callback) => {
+  const forwardWebSocketHeaders = (details: Electron.OnBeforeSendHeadersListenerDetails,
+    callback: (response: Electron.BeforeSendResponse) => void): void => {
     if (hostUrl === undefined || hostCookie === undefined || details.webContentsId !== mainWindow?.webContents.id) {
       callback({})
       return
@@ -860,7 +973,24 @@ async function main(): Promise<void> {
     const headers = Object.fromEntries(Object.entries(details.requestHeaders).map(([name, value]) => [name.toLowerCase(), value]))
     if (headers.origin !== 'dsh-app://app') { callback({ cancel: true }); return }
     callback({ requestHeaders: { ...headers, origin: target.origin, cookie: hostCookie, 'sec-fetch-site': 'same-origin' } })
-  })
+  }
+  let webSocketFilter: readonly string[] | undefined
+  /**
+   * Move the WebSocket credential filter to the authority the page currently talks to.
+   * @param target - authenticated Host URL, or undefined before any Host reports ready.
+   */
+  const registerWebSocketForwarding = (target: string | undefined): void => {
+    if (webSocketFilter !== undefined) {
+      session.defaultSession.webRequest.onBeforeSendHeaders({ urls: [...webSocketFilter] }, null)
+    }
+    const urls = target === undefined
+      ? ['ws://127.0.0.1/*', 'wss://127.0.0.1/*']
+      // Electron match patterns do not carry a port; the handler still compares the full authority.
+      : [`${new URL(target).protocol === 'https:' ? 'wss' : 'ws'}://${new URL(target).hostname}/*`]
+    webSocketFilter = urls
+    session.defaultSession.webRequest.onBeforeSendHeaders({ urls }, forwardWebSocketHeaders)
+  }
+  registerWebSocketForwarding(undefined)
 
   const assertMainApplication = (event: IpcMainInvokeEvent): BrowserWindow => {
     const owner = mainWindow
@@ -890,11 +1020,18 @@ async function main(): Promise<void> {
       || !event.senderFrame.url.startsWith(`${SCHEME}://app/`)) return
     if (source !== 'light' && source !== 'dark' && source !== 'system') return
     nativeTheme.themeSource = source
+    // Retain the Web UI's choice so the next launch paints its loading page in the same palette.
+    writeThemeSourceHint(userData, source)
   })
   ipcMain.handle(DESKTOP_IPC.localeBootstrap, async (event) => {
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame
       || new URL(event.senderFrame.url).origin !== new URL(applicationUrl).origin) {
       throw new Error('desktop welcome: rejected locale request from an unowned frame')
+    }
+    if (remoteConnection !== undefined) {
+      // The remote Host owns its language setting. This window's language seeds the page until the
+      // Host settings mirror adopts that selection; there is no local welcome preference to read.
+      return { languages: [locale.id, ...systemLanguages], preference: null }
     }
     if (welcomeBackend === undefined) throw new Error('desktop welcome: backend unavailable')
     return { languages: systemLanguages, preference: await welcomeBackend.readLocalePreference() }
@@ -951,6 +1088,8 @@ async function main(): Promise<void> {
   })
   ipcMain.handle(DESKTOP_IPC.onboardingApiKey, async (event) => {
     assertProductSender(event)
+    // A remote Harness owns its credentials; this shell has no local onboarding state to report.
+    if (remoteConnection !== undefined) return false
     return (await readWelcomeState()).hasApiKey
   })
   ipcMain.on(DESKTOP_IPC.onboardingActive, (event, active: unknown) => {
@@ -967,6 +1106,74 @@ async function main(): Promise<void> {
   ipcMain.handle(DESKTOP_IPC.updatesOpen, async (event) => {
     assertProductSender(event)
     await openUpdatePrompt()
+  })
+  const assertApplicationDevelopment = (): void => {
+    if (!development) throw new Error('dsh desktop: application command requires a development build')
+  }
+  ipcMain.handle(DESKTOP_IPC.applicationAbout, async (event) => {
+    assertProductSender(event)
+    // Windows has no system About panel; Electron's fallback is a plain
+    // message box, so the shell shows its own dimmed dialog instead.
+    if (process.platform === 'win32') await showAbout()
+    else app.showAboutPanel()
+  })
+  ipcMain.handle(DESKTOP_IPC.applicationQuit, (event) => {
+    assertProductSender(event)
+    app.quit()
+  })
+  ipcMain.handle(DESKTOP_IPC.applicationReload, (event) => {
+    assertProductSender(event)
+    assertApplicationDevelopment()
+    const window = mainWindow
+    if (window !== undefined && !window.isDestroyed()) window.webContents.reload()
+  })
+  ipcMain.handle(DESKTOP_IPC.applicationRestart, (event) => {
+    assertProductSender(event)
+    assertApplicationDevelopment()
+    if (quitting) return
+    app.relaunch()
+    app.quit()
+  })
+  ipcMain.handle(DESKTOP_IPC.remoteConnect, async (event, url: unknown): Promise<DesktopRemoteConnectionResult> => {
+    assertProductSender(event)
+    if (typeof url !== 'string') return { ok: false, failure: 'invalid-url' }
+    let connection: RemoteConnection
+    try {
+      connection = await prepareRemoteConnection(url, app.getVersion())
+    } catch (error) {
+      if (error instanceof RemoteConnectionError) return { ok: false, failure: error.failure }
+      console.error('desktop remote: connection preparation failed', error)
+      return { ok: false, failure: 'internal' }
+    }
+    // Connecting to this run's own child would stop the Host the page is about to use.
+    if (hostUrl !== undefined && connection.base.origin === new URL(hostUrl).origin) {
+      return { ok: false, failure: 'local-host' }
+    }
+    try {
+      await backend.stop()
+    } catch (error) {
+      console.error('desktop remote: local Harness stop failed', error)
+      return { ok: false, failure: 'local-stop' }
+    }
+    // The local profile keeps its data on disk; this run continues against the remote instead.
+    stopAccount?.()
+    stopAccount = undefined
+    welcomeBackend = undefined
+    analyticsEnabled = false
+    remoteConnection = connection
+    hostUrl = connection.base.href
+    hostCookie = connection.cookie
+    injections = []
+    backendReady = true
+    registerWebSocketForwarding(hostUrl)
+    // Reload once this reply settles: the running document still holds the local Host's render state.
+    navigation = undefined
+    setImmediate(() => {
+      const window = mainWindow
+      if (quitting || window === undefined || window.isDestroyed()) return
+      window.webContents.reload()
+    })
+    return { ok: true }
   })
 
   let configurationPrompt: Promise<void> | undefined
@@ -1161,8 +1368,6 @@ async function main(): Promise<void> {
     updates.dispose()
   })
 
-  const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
-    : join(process.resourcesPath, 'icon.png')
   app.setAboutPanelOptions({
     applicationName: 'DeepSeek Harness',
     applicationVersion: app.getVersion(),
@@ -1235,22 +1440,45 @@ async function main(): Promise<void> {
     { role: 'quit', ...(darwin ? { label: currentDesktopLocale().messages.quitApplication }
       : process.platform === 'win32' ? { label: currentDesktopLocale().messages.exitApplication } : {}) },
   ]
-  const devToolsF12Shortcut: MenuItemConstructorOptions = { role: 'toggleDevTools', visible: false, accelerator: 'F12' }
+  // A frameless Linux window draws no menu bar, so these hidden items carry the
+  // DevTools shortcuts and toggle the docked panel themselves. Electron requires
+  // a label or role on every item, and the empty label is never drawn.
+  const toggleDevTools = (): void => {
+    const target = BrowserWindow.getFocusedWindow() ?? mainWindow
+    if (target === undefined || target.isDestroyed()) return
+    if (target.webContents.isDevToolsOpened()) target.webContents.closeDevTools()
+    else target.webContents.openDevTools({ mode: devToolsDockMode() })
+  }
+  const devToolsF12Shortcut: MenuItemConstructorOptions = process.platform === 'linux'
+    ? { label: '', visible: false, accelerator: 'F12', click: toggleDevTools }
+    : { role: 'toggleDevTools', visible: false, accelerator: 'F12' }
   const windowsDevToolsShortcuts: MenuItemConstructorOptions[] = [
     { role: 'toggleDevTools', visible: false },
     devToolsF12Shortcut,
   ]
+  // macOS and Windows route accelerators through the menu bar; frameless Linux has none.
+  const hiddenDevToolsShortcuts: MenuItemConstructorOptions[] = process.platform === 'linux'
+    ? [{ label: '', visible: false, accelerator: 'Ctrl+Shift+I', click: toggleDevTools }, devToolsF12Shortcut]
+    : [devToolsF12Shortcut]
   const refreshApplicationMenu = (): void => {
     Menu.setApplicationMenu(Menu.buildFromTemplate(process.platform === 'win32'
       ? windowsDevToolsShortcuts : [{
         label: darwin ? app.name : currentDesktopLocale().messages.application,
-        submenu: [...applicationItems(), devToolsF12Shortcut],
+        submenu: [...applicationItems(), ...hiddenDevToolsShortcuts],
       }, ...platformMenus()]))
     tray?.relabel()
   }
   refreshApplicationMenu()
-  const trayIconPath = development ? join(app.getAppPath(), 'resources', 'tray-windows.ico') : join(process.resourcesPath, 'tray.ico')
-  if (process.platform === 'win32') {
+  // Windows takes the multi-size ICO so the shell picks a bitmap per display scale, and the quit
+  // task dialog draws its own icon at the system icon size instead of scaling the 1024 px PNG down
+  // through GDI.
+  const windowsTrayIconPath = development ? join(app.getAppPath(), 'resources', 'tray-windows.ico') : join(resources.root, 'tray.ico')
+  // Linux renders its tray through StatusNotifierItem, which takes a single PNG; nativeImage reads
+  // ICO only on Windows.
+  const trayIconPath = process.platform === 'linux'
+    ? development ? join(app.getAppPath(), 'resources', 'tray-linux.png') : join(resources.root, 'tray.png')
+    : windowsTrayIconPath
+  if (process.platform === 'win32' || process.platform === 'linux') {
     // The tray is the way back to a hidden window; without it, relaunching the application still focuses it.
     try {
       tray = new DesktopTray({ iconPath: trayIconPath, locale: currentDesktopLocale,
@@ -1269,9 +1497,7 @@ async function main(): Promise<void> {
     // macOS raises the open alert with the application; Electron exposes no handle to the Windows task
     // dialog, so a repeated request there only joins the open decision.
     focus: () => { if (process.platform === 'darwin') app.focus({ steal: true }) },
-    // The task dialog draws its main icon at the system icon size; the multi-size ICO yields that
-    // size directly, where the 1024 px PNG would be scaled down by GDI.
-    ...(process.platform === 'win32' ? { icon: nativeImage.createFromPath(trayIconPath) } : {}),
+    ...(process.platform === 'win32' ? { icon: nativeImage.createFromPath(windowsTrayIconPath) } : {}),
   })
 
   if (process.platform === 'win32') {
@@ -1381,6 +1607,7 @@ async function main(): Promise<void> {
     const window = mainWindow ?? createMainWindow()
     await navigateMain(applicationUrl)
     if (isQuitting() || recovery.active || window.isDestroyed()) return
+    bootPagePresented = false
     if (process.platform === 'win32') window.setBackgroundColor(chromeFallbackFill())
     if (activate) window.show()
     else window.showInactive()
@@ -1398,7 +1625,7 @@ async function main(): Promise<void> {
       window.focus()
     }
     if (activate && development && process.env.DSH_DESKTOP_OPEN_DEVTOOLS !== '0') {
-      window.webContents.openDevTools({ mode: 'detach' })
+      window.webContents.openDevTools({ mode: devToolsDockMode() })
     }
   }
   let openingWelcome: Promise<void> | undefined
@@ -1459,7 +1686,10 @@ async function main(): Promise<void> {
         else app.quit()
       })
       if (isQuitting() || recovery.active || enteredWorkspace) window.close()
-      else mainWindow?.hide()
+      else {
+        bootPagePresented = false
+        mainWindow?.hide()
+      }
     })().finally(() => { openingWelcome = undefined })
     return openingWelcome
   }
@@ -1486,11 +1716,13 @@ async function main(): Promise<void> {
     const window = welcomeWindow ?? mainWindow
     if (window === undefined || window.isDestroyed()) {
       try { createMainWindow() } catch (error) { reportFatal(error, 'main'); return }
-      void (backend.state.phase === 'ready' ? openInitialWindow() : navigateMain(applicationUrl)).catch((error: unknown) => { reportFatal(error, 'main') })
+      void (backend.state.phase === 'ready'
+        ? openInitialWindow()
+        : navigateMain(applicationUrl).then(presentBootWindow)).catch((error: unknown) => { reportFatal(error, 'main') })
       return
     }
-    // Startup and sign-out select the visible window before activation may reveal the workspace.
-    if (window === mainWindow && !enteredWorkspace) return
+    // A main window that has not presented the boot page waits for the startup or sign-out decision.
+    if (window === mainWindow && !enteredWorkspace && !bootPagePresented) return
     if (window.isMinimized()) window.restore()
     window.show()
     window.focus()
@@ -1591,7 +1823,7 @@ async function main(): Promise<void> {
     const policy = mandatoryPolicy
     mandatoryUI = new DesktopMandatoryUpdateWindow({
       overlays: updateOverlays,
-      preload: fileURLToPath(new URL('./preload-mandatory.cjs', import.meta.url)), locale,
+      preload: fileURLToPath(new URL('./preload-mandatory.cjs', import.meta.url)), locale, notificationIcon,
       allowedPageOrigins: policyConfig.allowedPageOrigins, parent: () => mainWindow,
       policy: () => policy.state, update: () => updates.state,
       refresh: async () => {
@@ -1610,7 +1842,7 @@ async function main(): Promise<void> {
   if (isQuitting()) return
   const window = currentMainWindow()
   if (window !== undefined && development && process.env.DSH_DESKTOP_OPEN_DEVTOOLS !== '0') {
-    window.webContents.openDevTools({ mode: 'detach' })
+    window.webContents.openDevTools({ mode: devToolsDockMode() })
   }
   publishUpdate(updateState)
 }

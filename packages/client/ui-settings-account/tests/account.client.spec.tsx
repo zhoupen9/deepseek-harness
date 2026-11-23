@@ -6,6 +6,7 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AccountDetails, AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { PlatformBridge } from '../src/client/PlatformOverlay.tsx'
+import type { DesktopApplicationCommands } from '../src/types.ts'
 import { createPlatformPages, type PlatformPages } from '../src/client/platform-pages.ts'
 import { AccountPlatformHost } from '../src/client/AccountPlatformHost.tsx'
 import { AccountSection, type AccountSectionInjected, type AccountSnapshot } from '../src/client/AccountSection.tsx'
@@ -17,18 +18,22 @@ import { en, zh, type AccountKey } from '../src/client/locales.ts'
 import css from '../src/client/AccountSection.module.css'
 import type { AccountAvatarSnapshot } from '../src/client/account-avatar.ts'
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 
 /** One resolved theme snapshot per scheme; the slot's theme hook serves these in the application. */
 const themeOf = (colorScheme: 'light' | 'dark'): ThemeSnapshot => ({
   preference: colorScheme, fontSizes: { text: 14, code: 11, terminal: 13 }, fontFamilies: { text: '', code: '', terminal: '' },
+  fontColorLight: '', fontColorDark: '',
   active: { id: colorScheme, colorScheme, tokens: {} }, themes: [], revision: 0,
 })
 
-function operationsOf(state: Omit<AccountView, 'links'>, details?: Partial<AccountDetails>, pages?: PlatformPages,
-  avatar?: AccountAvatarSnapshot): AccountSectionInjected {
+function operationsOf(
+  state: Omit<AccountView, 'links'>, details?: Partial<AccountDetails>, pages?: PlatformPages,
+  application?: DesktopApplicationCommands, avatar?: AccountAvatarSnapshot,
+): AccountSectionInjected {
   return {
     ...pages === undefined ? {} : { openPlatformPage: pages.open },
+    ...application === undefined ? {} : { application },
     hooks: {
       account: {
         getSnapshot: () => ({ view: { ...state, links: { usageUrl: 'http://localhost:8081/usage', topUpUrl: 'http://localhost:8081/top_up' } }, details, avatar, failed: false }),
@@ -47,7 +52,7 @@ function operationsOf(state: Omit<AccountView, 'links'>, details?: Partial<Accou
 function mount(state: Omit<AccountView, 'links'>, copy: typeof en | typeof zh = en, details?: Partial<AccountDetails>,
   platform?: PlatformBridge, avatar?: AccountAvatarSnapshot) {
   const pages = platform === undefined ? undefined : createPlatformPages()
-  const operations = operationsOf(state, details, pages, avatar)
+  const operations = operationsOf(state, details, pages, undefined, avatar)
   // AccountSection consumes no global hooks; the slot supplies them in the application.
   const globals = {} as GlobalStandardProps
   render(<>
@@ -93,12 +98,15 @@ function SharedPlatformHost({ Globals, pages, platform, copy, refreshAccount }: 
  * @param settingsOpen - whether the settings panel covers the sidebar.
  * @returns the sidebar launcher with its framework hooks wired to the test face.
  */
-async function accountMenu(operations: AccountSectionInjected, snapshot: () => AccountSnapshot, settingsOpen: boolean) {
+async function accountMenu(
+  operations: AccountSectionInjected, snapshot: () => AccountSnapshot, settingsOpen: boolean,
+  openSettings: AccountMenuProps['openSettings'] = () => {}, wide = true, copy: typeof en | typeof zh = en,
+) {
   const { AccountMenu } = await import('../src/client/AccountMenu.tsx')
   return <AccountMenu {...({} as GlobalStandardProps)} {...operations}
-    settingsOpen={settingsOpen} useAccount={selector => selector(snapshot())} wide
+    settingsOpen={settingsOpen} useAccount={selector => selector(snapshot())} wide={wide}
     useTheme={selector => selector(operations.hooks.theme.getSnapshot())}
-    openOnboarding={() => {}} openSettings={() => {}} t={key => en[key as AccountKey]} />
+    openOnboarding={() => {}} openSettings={openSettings} t={key => copy[key as AccountKey]} />
 }
 
 it.each([en, zh])('renders account cards without inventing profile or balance data', async (copy) => {
@@ -199,6 +207,94 @@ it.each([en, zh])('offers settings, contact and sign-in from the signed-out acco
   fireEvent.click(screen.getByRole('button', { name: copy.menu }))
   fireEvent.click(screen.getByRole('menuitem', { name: copy.contactUs }))
   expect(operations.contactUs).toHaveBeenCalledOnce()
+})
+
+/** Shell application commands with recording stubs; `development` adds the development-only rows. */
+function applicationOf(overrides?: Partial<DesktopApplicationCommands>): DesktopApplicationCommands {
+  return {
+    development: false,
+    about: vi.fn(() => Promise.resolve()),
+    openUpdates: vi.fn(() => Promise.resolve()),
+    reload: vi.fn(() => Promise.resolve()),
+    restart: vi.fn(() => Promise.resolve()),
+    quit: vi.fn(() => Promise.resolve()),
+    ...overrides,
+  }
+}
+
+/**
+ * Mount the launcher over shell application commands and open its menu.
+ * @param application - Commands the Desktop preload supplies.
+ * @param copy - dictionary the launcher renders.
+ * @returns the injected operations the caller's assertions inspect.
+ */
+async function openApplicationMenu(
+  application: DesktopApplicationCommands, copy: typeof en | typeof zh = en,
+): Promise<AccountSectionInjected> {
+  const operations = operationsOf({ status: 'credential-stored', attempt: null }, undefined, undefined, application)
+  render(await accountMenu(operations, () => operations.hooks.account.getSnapshot(), false, undefined, true, copy))
+  fireEvent.click(screen.getByRole('button', { name: copy.menu }))
+  return operations
+}
+
+it('shows the local build revision under the About row when the build opts in', async () => {
+  vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+  vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
+  vi.stubEnv('DSH_CLIENT_COMMIT_HASH', 'abc1234')
+
+  await openApplicationMenu(applicationOf())
+  expect(screen.getByText('1.2.3-rc.4-abc1234')).toBeTruthy()
+})
+
+it('keeps the About row on the release when an opted-in build records no commit', async () => {
+  vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+  vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
+
+  await openApplicationMenu(applicationOf())
+  expect(screen.getByText('1.2.3-rc.4')).toBeTruthy()
+})
+
+it('leaves the About row without build metadata when the build carries no version', async () => {
+  vi.stubEnv('DSH_CLIENT_REVISION_BADGE', 'true')
+
+  await openApplicationMenu(applicationOf())
+  expect(screen.getByRole('menuitem', { name: en.about }).textContent).toBe(en.about)
+})
+
+it.each([en, zh])('carries the shell application commands in the sidebar account menu', async (copy) => {
+  const application = applicationOf({ development: true })
+  await openApplicationMenu(application, copy)
+  expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+    copy.about, copy.checkUpdates, copy.reloadPage, copy.restartApplication,
+    copy.settings, copy.contactUs, copy.signOut, copy.quitApplication,
+  ])
+  await expect(`${screen.getByRole('menu').textContent}\n`).toMatchFileSnapshot(`./expected/menu-application-${copy === en ? 'en' : 'zh'}.txt`)
+  for (const [index, row] of [copy.about, copy.checkUpdates, copy.reloadPage, copy.restartApplication, copy.quitApplication].entries()) {
+    // Each command closes the menu; reopen it for the next row.
+    if (index > 0) fireEvent.click(screen.getByRole('button', { name: copy.menu }))
+    fireEvent.click(screen.getByRole('menuitem', { name: row }))
+  }
+  expect(application.about).toHaveBeenCalledOnce()
+  expect(application.openUpdates).toHaveBeenCalledOnce()
+  expect(application.reload).toHaveBeenCalledOnce()
+  expect(application.restart).toHaveBeenCalledOnce()
+  expect(application.quit).toHaveBeenCalledOnce()
+})
+
+it('omits development commands and reports a rejected shell command', async () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  onTestFinished(() => { consoleError.mockRestore() })
+  const application = applicationOf({ about: vi.fn(() => Promise.reject(new Error('about failed'))) })
+  const operations = operationsOf({ status: 'signed-out', attempt: null }, undefined, undefined, application)
+  render(await accountMenu(operations, () => operations.hooks.account.getSnapshot(), false))
+  fireEvent.click(screen.getByRole('button', { name: en.menu }))
+  expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+    en.about, en.checkUpdates, en.settings, en.contactUs, en.signIn, en.quitApplication,
+  ])
+  await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: en.about })) })
+  expect(application.about).toHaveBeenCalledOnce()
+  expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ message: 'about failed' }))
+  expect(screen.queryByRole('menu')).toBeNull()
 })
 
 it.each([true, false])('keeps the account inset local through sign-in changes with wide=%s', async (wide) => {

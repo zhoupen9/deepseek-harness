@@ -251,6 +251,28 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-api-gateway -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-api-git-controller -->
+<a id="deepseek-aidsh-api-git-controller"></a>
+
+## `@deepseek-ai/dsh-api-git-controller`
+
+- `source`: [`packages/api/git-controller/src/index.ts:75`](../packages/api/git-controller/src/index.ts)
+
+```ts config-catalog
+/** Validated plugin configuration. */
+export interface Config {
+  /** Commit bound of one log call; the extra probe record proves truncation. */
+  readonly maxCount: number
+  /** `true` requests all refs, not just HEAD's ancestry. */
+  readonly all: boolean
+  /** `true` follows only the first parent, collapsing merges to the mainline. */
+  readonly firstParent: boolean
+  /** Byte bound of one commit's unified patch. */
+  readonly maxDiffBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-api-git-controller -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-api-job-controller -->
 <a id="deepseek-aidsh-api-job-controller"></a>
 
@@ -735,7 +757,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-client-ui-settings-account`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/client/ui-settings-account/src/index.ts:9`](../packages/client/ui-settings-account/src/index.ts)
+- `source`: [`packages/client/ui-settings-account/src/index.ts:12`](../packages/client/ui-settings-account/src/index.ts)
 
 ```ts config-catalog
 /** Public contact options and live device-local onboarding progress. */
@@ -751,7 +773,7 @@ export interface Config extends ContactConfig {
   /** Completion reason, absent until completion. */
   completion?: Volatile<'completed' | 'skipped' | 'api-key' | null | undefined>
   /** Selected usage detail. */
-  usage: Volatile<'compact' | 'detailed'>
+  usage: Volatile<OnboardingUsage>
   /** Selected developer-tool visibility. */
   developerTools: Volatile<boolean>
 }
@@ -772,6 +794,9 @@ export type OnboardingPurpose = 'office' | 'development' | 'both'
 
 /** Work-detail mode applied to Chat when onboarding completes. */
 export type OnboardingProcess = 'compact' | 'standard' | 'detailed'
+
+/** Performance and usage display applied to Chat when onboarding completes; mirrors the Chat setting. */
+export type OnboardingUsage = 'compact' | 'detailed'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-settings-account -->
 
@@ -845,7 +870,7 @@ export interface ExcelLimits {
 ## `@deepseek-ai/dsh-client-ui-theme`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/client/ui-theme/src/index.ts:20`](../packages/client/ui-theme/src/index.ts)
+- `source`: [`packages/client/ui-theme/src/index.ts:23`](../packages/client/ui-theme/src/index.ts)
 
 ```ts config-catalog
 /** Runtime preferences projected to the browser. */
@@ -864,6 +889,10 @@ export interface Config {
   codeFontFamily: Volatile<string>
   /** Sidebar terminal font list; `''` keeps the built-in stack. */
   terminalFontFamily: Volatile<string>
+  /** Default text color while the light palette is active; `''` keeps the shipped palette default. */
+  fontColorLight: Volatile<string>
+  /** Default text color while the dark palette is active; `''` keeps the shipped palette default. */
+  fontColorDark: Volatile<string>
 }
 
 /** Theme preference persisted by the product Appearance row. */
@@ -5218,7 +5247,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-workspace-dependencies`
 
 - `inject`: `tools`
-- `source`: [`packages/skill/tool-workspace-dependencies/src/index.ts:18`](../packages/skill/tool-workspace-dependencies/src/index.ts)
+- `source`: [`packages/skill/tool-workspace-dependencies/src/index.ts:25`](../packages/skill/tool-workspace-dependencies/src/index.ts)
 
 ```ts config-catalog
 /** Payload location and optional installation directory. */

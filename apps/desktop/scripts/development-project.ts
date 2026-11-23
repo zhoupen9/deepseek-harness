@@ -69,6 +69,30 @@ function linkDirectory(source: string, destination: string): void {
   symlinkSync(realpathSync(source), destination, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
+/**
+ * Resolve one dependency directory, treating a link to a workspace path that no
+ * longer exists as absent: pnpm leaves such entries in its hoist directory after
+ * a package is removed or moved, and nothing can be linked from them.
+ * @param path - candidate dependency directory.
+ * @returns the resolved directory, or undefined for a dangling link.
+ */
+function resolvableDirectory(path: string): string | undefined {
+  try {
+    return realpathSync(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
+}
+
+function mirrorResolvedLink(source: string, destination: string, names: string[], name: string): void {
+  const resolved = resolvableDirectory(source)
+  if (resolved === undefined) return
+  mkdirSync(dirname(destination), { recursive: true })
+  symlinkSync(resolved, destination, process.platform === 'win32' ? 'junction' : 'dir')
+  names.push(name)
+}
+
 function mirrorDependencyLinks(sourceRoot: string, destinationRoot: string): string[] {
   const names: string[] = []
   for (const entry of readdirSync(sourceRoot, { withFileTypes: true })) {
@@ -78,14 +102,17 @@ function mirrorDependencyLinks(sourceRoot: string, destinationRoot: string): str
       mkdirSync(join(destinationRoot, entry.name), { recursive: true })
       for (const scoped of readdirSync(source, { withFileTypes: true })) {
         if (!scoped.isDirectory() && !scoped.isSymbolicLink()) continue
-        linkDirectory(join(source, scoped.name), join(destinationRoot, entry.name, scoped.name))
-        names.push(`${entry.name}/${scoped.name}`)
+        mirrorResolvedLink(
+          join(source, scoped.name),
+          join(destinationRoot, entry.name, scoped.name),
+          names,
+          `${entry.name}/${scoped.name}`,
+        )
       }
       continue
     }
     if (entry.isDirectory() || entry.isSymbolicLink()) {
-      linkDirectory(source, join(destinationRoot, entry.name))
-      names.push(entry.name)
+      mirrorResolvedLink(source, join(destinationRoot, entry.name), names, entry.name)
     }
   }
   return names

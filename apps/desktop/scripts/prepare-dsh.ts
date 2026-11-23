@@ -32,7 +32,7 @@ import {
 import {
   signMacOSRuntime,
 } from './macos-runtime.ts'
-import { desktopTargetPlatform, resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
+import { desktopElectronExecutable, desktopTargetPlatform, resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
 import { desktopRuntimeFileExclusion } from './runtime-file-policy.ts'
 import { selectOfficeEngine } from '../../../scripts/libreoffice-packages.mjs'
 
@@ -40,11 +40,14 @@ const APP_ROOT = resolve(import.meta.dirname, '..')
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
 const DSH_OUTPUT_ROOT = BUILD_PATHS.dsh
 const BUILD_ROOT = mkdtempSync(join(tmpdir(), 'dsh-desktop-runtime-'))
-const STORE_ROOT = BUILD_PATHS.pnpmStore
+/** pnpm store the runtime install reads; `DSH_DESKTOP_NPM_STORE_DIR` reuses a warm store so repeat builds skip downloads. */
+const STORE_ROOT = process.env.DSH_DESKTOP_NPM_STORE_DIR?.trim() || BUILD_PATHS.pnpmStore
 const RUNTIME_ROOT = BUILD_PATHS.runtime
 const PNPM_BUILD_STATE = BUILD_PATHS.dshPnpm
+/** pnpm's XDG cache home; `DSH_DESKTOP_NPM_CACHE_HOME` reuses warm registry metadata. */
+const CACHE_HOME = process.env.DSH_DESKTOP_NPM_CACHE_HOME?.trim() || join(PNPM_BUILD_STATE, 'cache')
 const PACKAGE_SET_ROOT = BUILD_PATHS.packageSet
-const NODE = join(BUILD_PATHS.electron, process.platform === 'win32' ? 'electron.exe' : 'Electron.app/Contents/MacOS/Electron')
+const NODE = desktopElectronExecutable(resolveDesktopBuildTarget())
 const PNPM = join(RUNTIME_ROOT, 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
 
 function manifestVersion(path: string, subject: string): string {
@@ -69,6 +72,17 @@ function desktopRelease(): DesktopRelease {
   })
 }
 
+/**
+ * Registry policy for the runtime install, read from the packaging environment
+ * because `runPnpm` scrubs `pnpm_config_*` before spawning pnpm.
+ * @returns pnpm arguments that reuse cached metadata, or refuse the network.
+ */
+function npmCacheArguments(): readonly string[] {
+  if (process.env.DSH_DESKTOP_NPM_OFFLINE === '1') return ['--config.offline=true']
+  if (process.env.DSH_DESKTOP_NPM_PREFER_OFFLINE === '1') return ['--config.prefer-offline=true']
+  return []
+}
+
 function runPnpm(args: readonly string[]): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     const [command, ...commandArgs] = args
@@ -87,6 +101,7 @@ function runPnpm(args: readonly string[]): Promise<void> {
       '--config.package-import-method=copy',
       '--config.enable-global-virtual-store=false',
       `--config.userconfig=${userConfig}`,
+      ...npmCacheArguments(),
       command,
       ...commandArgs,
     ], {
@@ -100,7 +115,7 @@ function runPnpm(args: readonly string[]): Promise<void> {
         NPM_CONFIG_USERCONFIG: userConfig,
         ...desktopNodeEnvironment(NODE, join(RUNTIME_ROOT, 'bin'), {}),
         PATH: `${join(RUNTIME_ROOT, 'bin')}${delimiter}${process.env.PATH ?? ''}`,
-        XDG_CACHE_HOME: join(PNPM_BUILD_STATE, 'cache'),
+        XDG_CACHE_HOME: CACHE_HOME,
         XDG_CONFIG_HOME: config,
         XDG_STATE_HOME: join(PNPM_BUILD_STATE, 'state'),
       },
@@ -175,7 +190,7 @@ async function main(): Promise<void> {
       return writeRuntime(DSH_OUTPUT_ROOT, release, packageSet.packages.map(entry => entry.name), target)
     })
     const descriptor = await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:verify-before-smoke', () => verifyDesktopRuntime(DSH_OUTPUT_ROOT, release.version, target))
-    if (!process.argv.includes('--defer-runtime-smoke')) {
+    if (!process.argv.includes('--defer-runtime-smoke') && !process.argv.includes('--skip-runtime-smoke')) {
       await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:smoke', () => smokePreparedRuntime(DSH_OUTPUT_ROOT, NODE, RUNTIME_ROOT, descriptor))
       await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:verify-after-smoke', () => verifyDesktopRuntime(DSH_OUTPUT_ROOT, release.version, target))
     }

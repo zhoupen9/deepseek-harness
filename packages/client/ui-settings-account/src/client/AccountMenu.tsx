@@ -1,16 +1,34 @@
-/** Sidebar account launcher and locally authoritative sign-out action. */
+/** Sidebar account launcher, its shell-owned application commands, and the locally authoritative sign-out action. */
 import { useEffect, useRef, useState } from 'react'
 import {
-  Toast, Menu, IconEllipsisOutlineMedium, IconPaperPlaneOutlineRegular, IconSettingsOutlineRegular, IconUserOutlineRegular,
+  Toast, Menu, IconCloseOutlineMedium, IconDownloadOutlineMedium, IconEllipsisOutlineMedium, IconGlobeOutlineMedium,
+  IconInfoOutlineMedium, IconPaperPlaneOutlineRegular, IconPlayOutlineMedium, IconRefreshOutlineMedium,
+  IconSettingsOutlineRegular, IconUserOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AccountSectionInjected } from './AccountSection.tsx'
 import { SignOutDialog } from './SignOutDialog.tsx'
 import { SignInDialog } from './SignInDialog.tsx'
+import { ConnectRemoteDialog } from './ConnectRemoteDialog.tsx'
 import { LogoutIcon } from './LogoutIcon.tsx'
 import { AccountAvatar } from './AccountAvatar.tsx'
 import type {} from './account-ui.ts'
 import css from './AccountMenu.module.css'
+
+/**
+ * Format the local build revision shown under the About row. Release builds
+ * leave `DSH_CLIENT_REVISION_BADGE` unset, so their About row carries the label
+ * alone; a local build that opts in reports the revision it was built from.
+ * @returns `version[-commit]`, or undefined when revision display is off or the build carries no version.
+ */
+function buildRevision(): string | undefined {
+  if (process.env.DSH_CLIENT_REVISION_BADGE !== 'true') return undefined
+  const version = process.env.DSH_CLIENT_VERSION
+  if (version === undefined) return undefined
+  const commit = process.env.DSH_CLIENT_COMMIT_HASH
+  return version + (commit === undefined ? '' : `-${commit}`)
+}
 
 /** Account launcher composed by the settings shell. */
 export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsLocale<'settings.account'> & InjectFace<AccountSectionInjected>
@@ -22,7 +40,7 @@ export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsLocale<'
 export function AccountMenu({
   subscribeSessionExpired, subscribeModelSignInRequired, wide, settingsShortcut, openSettings, openOnboarding, settingsOpen,
   useAccount, useTheme, signOut, hasRunningAccountTasks, refreshAccount,
-  contactUs, showLogin, start, cancel, avatarFailed, t,
+  contactUs, showLogin, start, cancel, application, avatarFailed, t,
 }: AccountMenuProps) {
   // The launcher outlives the panel, so a false-to-true edge is one Settings entry:
   // re-renders, section switches and tab switches inside one open must not read again.
@@ -42,6 +60,7 @@ export function AccountMenu({
   const label = profile === undefined ? null : profile.status === 'ready'
     ? profile.value.name ?? profile.value.contact ?? t('signedIn') : t('signedIn')
   const [open, setOpen] = useState(false)
+  const [connectRemoteOpen, setConnectRemoteOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const [busy, setBusy] = useState(false)
   const [signOutImpact, setSignOutImpact] = useState<boolean | 'unknown'>()
@@ -53,6 +72,55 @@ export function AccountMenu({
   }
   // The plugin's start publishes `loginFailed` before it rejects, so the dialog owns the report.
   const beginSignIn = (): void => { setOpen(false); void start().catch(() => undefined) }
+  // The shell's application menu, without the macOS-only window visibility
+  // commands. Each registered row carries the command its id resolves to.
+  const applicationItems: MenuEntry[] = []
+  const applicationCommands = new Map<string, () => Promise<void>>()
+  if (application !== undefined) {
+    // The build revision rides the About row as a second line, so the row is
+    // the one place a user can read which build they are running.
+    const revision = buildRevision()
+    applicationItems.push(
+      {
+        id: 'about',
+        label: revision === undefined ? t('about') : (
+          <span className={css.aboutItem}>
+            <span>{t('about')}</span>
+            <span className={css.aboutRevision}>{revision}</span>
+          </span>
+        ),
+        icon: <IconInfoOutlineMedium size={16} />,
+      },
+      { id: 'updates', label: t('checkUpdates'), icon: <IconDownloadOutlineMedium size={16} /> },
+    )
+    applicationCommands.set('about', application.about)
+    applicationCommands.set('updates', application.openUpdates)
+    if (application.connectRemote !== undefined) {
+      applicationItems.push({ id: 'remote', label: t('connectRemoteHarness'), icon: <IconGlobeOutlineMedium size={16} /> })
+    }
+    if (application.development) {
+      applicationItems.push(
+        { id: 'reload', label: t('reloadPage'), icon: <IconRefreshOutlineMedium size={16} /> },
+        { id: 'restart', label: t('restartApplication'), icon: <IconPlayOutlineMedium size={16} /> },
+      )
+      applicationCommands.set('reload', application.reload)
+      applicationCommands.set('restart', application.restart)
+    }
+    applicationCommands.set('quit', application.quit)
+  }
+  const items: MenuEntry[] = [
+    ...applicationItems,
+    ...applicationItems.length === 0 ? [] : [{ type: 'separator' as const, id: 'account' }],
+    { id: 'settings', label: t('settings'), icon: <IconSettingsOutlineRegular size={14} />,
+      ...(settingsShortcut === undefined ? {} : { shortcut: settingsShortcut }) },
+    { id: 'contact', label: t('contactUs'), icon: <IconPaperPlaneOutlineRegular size={14} /> },
+    ...(signedIn ? [{ id: 'signout', label: t('signOut'), icon: <LogoutIcon />, disabled: busy }]
+      : [{ id: 'signin', label: t('signIn'), icon: <IconUserOutlineRegular size={14} /> }]),
+    ...application === undefined ? [] : [
+      { type: 'separator' as const, id: 'quit-command' },
+      { id: 'quit', label: t('quitApplication'), icon: <IconCloseOutlineMedium size={16} /> },
+    ],
+  ]
   return <div className={css.root} data-inset={signedIn && wide}>
     {signInNotice > 0 && <Toast key={signInNotice} text={t('modelSignInRequired')} onDone={() => { setSignInNotice(0) }} />}
     {expiryNotice && <Toast text={t('sessionExpired')} onDone={() => { setExpiryNotice(false) }} />}
@@ -66,24 +134,30 @@ export function AccountMenu({
           : <IconEllipsisOutlineMedium size={14} />}
         {wide && <span className={css.label}>{signedIn ? label : t('more')}</span>}
       </button>}
-      items={[
-        { id: 'settings', label: t('settings'), icon: <IconSettingsOutlineRegular size={14} />,
-          ...(settingsShortcut === undefined ? {} : { shortcut: settingsShortcut }) },
-        { id: 'contact', label: t('contactUs'), icon: <IconPaperPlaneOutlineRegular size={14} /> },
-        ...(signedIn ? [{ id: 'signout', label: t('signOut'), icon: <LogoutIcon />, disabled: busy }]
-          : [{ id: 'signin', label: t('signIn'), icon: <IconUserOutlineRegular size={14} /> }]),
-      ]}
+      items={items}
       onClose={() => { setOpen(false) }}
       onSelect={(id) => {
         if (id === 'settings') { setOpen(false); trigger.current?.focus(); openSettings() }
         else if (id === 'contact') { setOpen(false); contactUs() }
         else if (id === 'signin') beginSignIn()
-        else void requestSignOut()
+        else if (id === 'signout') void requestSignOut()
+        else if (id === 'remote') { setOpen(false); setConnectRemoteOpen(true) }
+        else {
+          setOpen(false)
+          const command = applicationCommands.get(id)
+          /* v8 ignore next -- the Menu reports only rendered rows, and every application row registers its command above. */
+          if (command === undefined) return
+          // The native application menu has no failure surface for these shell
+          // commands either, so a rejection reports to the console.
+          void command().catch((error: unknown) => { console.error(error) })
+        }
       }} />
     {account.loginVisible && !account.onboarding && <SignInDialog account={account} colorScheme={colorScheme}
       start={start} cancel={cancel} t={t}
       close={() => { showLogin(false) }} useApiKey={() => { showLogin(false); openOnboarding('deepseek-official') }} />}
     {signedIn && signOutImpact !== undefined && <SignOutDialog running={signOutImpact} signOut={signOut}
       close={() => { setSignOutImpact(undefined) }} t={t} />}
+    {connectRemoteOpen && application?.connectRemote !== undefined && <ConnectRemoteDialog
+      connectRemote={application.connectRemote} close={() => { setConnectRemoteOpen(false) }} t={t} />}
   </div>
 }

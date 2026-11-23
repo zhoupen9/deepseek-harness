@@ -35,6 +35,7 @@ export type {} from '@deepseek-ai/dsh-client-ui-session-status/remote'
 import sessionRemote from '@deepseek-ai/dsh-api-session-controller/remote'
 import jobRemote from '@deepseek-ai/dsh-api-job-controller/remote'
 import workspaceRemote from '@deepseek-ai/dsh-api-workspace-controller/remote'
+import gitRemote from '@deepseek-ai/dsh-api-git-controller/remote'
 import terminalRemote from '@deepseek-ai/dsh-api-terminal-controller/remote'
 import workspaceFilesRemote from '@deepseek-ai/dsh-api-workspace-files/remote'
 import webRemote from '@deepseek-ai/dsh-web/remote'
@@ -87,6 +88,8 @@ export type {} from '@deepseek-ai/dsh-api-job-controller/remote'
 export type * from '@deepseek-ai/dsh-api-job-controller/types'
 export type {} from '@deepseek-ai/dsh-api-workspace-controller/remote'
 export type * from '@deepseek-ai/dsh-api-workspace-controller/types'
+export type {} from '@deepseek-ai/dsh-api-git-controller/remote'
+export type * from '@deepseek-ai/dsh-api-git-controller/types'
 export type {} from '@deepseek-ai/dsh-api-workspace-files/remote'
 export type * from '@deepseek-ai/dsh-api-workspace-files/types'
 export type {} from '@deepseek-ai/dsh-api-terminal-controller/remote'
@@ -213,7 +216,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
       messageFeedbackRemote, sessionFeedbackRemote,
       fileUploadsRemote, sessionReferencesRemote,
       permissionPresetsRemote, subagentsRemote, sessionRemote, sessionStatusRemote, jobRemote,
-      workspaceRemote, workspaceFilesRemote, terminalRemote,
+      workspaceRemote, gitRemote, workspaceFilesRemote, terminalRemote,
       officeKitRemote, userQuestionsRemote, webRemote, actionCardsRemote, pluginRecommendationsRemote,
     ]) {
       disposers.push(await ctx.remote.$mount(contribution))

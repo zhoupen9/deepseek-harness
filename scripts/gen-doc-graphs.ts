@@ -440,6 +440,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Projects the user-settings seam onto the generated Remote namespace: the read is always redacted and every refusal is classified here, not on the seam Definition.',
   },
   {
+    key: 'gitController',
+    pkg: 'api-git-controller',
+    title: 'Host git-history Remote controller',
+    mode: 'core',
+    note: 'Serves fenced commit-log and single-commit reads through the generated Remote namespace; every read is confined to the calling Session\'s workspace root, so a browser graph never reads another repository.',
+  },
+  {
     key: 'workspaceFiles',
     pkg: 'api-workspace-files',
     title: 'Host workspace file Remote service',

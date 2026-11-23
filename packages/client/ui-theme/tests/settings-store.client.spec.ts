@@ -1,6 +1,6 @@
-/** Appearance and font-size row stores: snapshot-mirror actions and the revision guards. */
+/** Appearance, font, and font-color row stores: snapshot-mirror actions and the revision guards. */
 import { describe, expect, it } from 'vitest'
-import { createAppearanceRowStore, createFontRowStore } from '../src/client/settings-store.ts'
+import { createAppearanceRowStore, createFontColorRowStore, createFontRowStore } from '../src/client/settings-store.ts'
 
 describe('createAppearanceRowStore', () => {
   it('init shape: system preference with revision at -1', () => {
@@ -42,6 +42,23 @@ describe('createFontRowStore', () => {
     store.actions.sync({ ...sizes, text: 12 }, fonts, 2)
     store.actions.sync({ ...sizes, text: 12 }, fonts, 3)
     expect(store.getSnapshot().fontSizes.text).toBe(16)
+    expect(store.getSnapshot().revision).toBe(3)
+  })
+})
+
+describe('createFontColorRowStore', () => {
+  it('init shape: no override for either mode with revision at -1', () => {
+    expect(createFontColorRowStore().create().getSnapshot()).toEqual({ fontColorLight: '', fontColorDark: '', revision: -1 })
+  })
+
+  it('sync mirrors both colors; the revision guard drops stale and duplicate writes', () => {
+    const store = createFontColorRowStore().create()
+    store.actions.sync('#0f1115', '#f9fafb', 3)
+    expect(store.getSnapshot()).toEqual({ fontColorLight: '#0f1115', fontColorDark: '#f9fafb', revision: 3 })
+    store.actions.sync('#101010', '#eeeeee', 2)
+    store.actions.sync('#101010', '#eeeeee', 3)
+    expect(store.getSnapshot().fontColorLight).toBe('#0f1115')
+    expect(store.getSnapshot().fontColorDark).toBe('#f9fafb')
     expect(store.getSnapshot().revision).toBe(3)
   })
 })

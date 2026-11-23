@@ -284,4 +284,19 @@ describe('PerformanceUsageRow', () => {
     expect(screen.getAllByRole('button', { name: 'Compact' })).toHaveLength(1)
     expect(b.setTranscriptView).not.toHaveBeenCalled()
   })
+
+  it('offers the compact detail level and reads the saved choice back', () => {
+    const b = mount()
+    const source = createSnapshotStore<PerformanceUsageMode>('detailed')
+    const setPerformanceUsage = vi.fn((mode: PerformanceUsageMode) => { source.set(mode) })
+    render(<PerformanceUsageRow
+      {...b.props}
+      usePerformanceUsage={bindSnapshotSelector(source)}
+      setPerformanceUsage={setPerformanceUsage}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: 'Detailed' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Compact' }))
+    expect(setPerformanceUsage).toHaveBeenCalledWith('compact')
+    expect(screen.getAllByRole('button', { name: 'Compact' })).toHaveLength(1)
+  })
 })

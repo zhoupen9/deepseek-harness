@@ -92,6 +92,9 @@
       "path": "../workspace-controller/tsconfig.client.json"
     },
     {
+      "path": "../git-controller"
+    },
+    {
       "path": "../../typert/protocol"
     },
     {

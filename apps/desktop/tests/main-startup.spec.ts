@@ -4,11 +4,11 @@ import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from '../src/windows-layout.ts'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { IpcMainInvokeEvent } from 'electron'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type { MenuItemConstructorOptions, MessageBoxOptions } from 'electron'
-import { DESKTOP_IPC, type DesktopUpdateState } from '../src/ipc.ts'
+import { DESKTOP_DEVELOPMENT_ARGUMENT, DESKTOP_IPC, SCHEME, type DesktopUpdateState } from '../src/ipc.ts'
 import { WELCOME_IPC } from '../src/welcome-api.ts'
 import { MANDATORY_IPC } from '../src/mandatory-update-ipc.ts'
 import { DesktopHostFatalError, DesktopHostUncleanExitError } from '../src/host-process.ts'
@@ -23,7 +23,8 @@ type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
 const fileDrag = vi.hoisted(() => ({ dispose: vi.fn<() => Promise<void>>(), install: vi.fn() }))
 vi.mock('../src/file-drag.ts', () => ({ installDesktopFileDrag: () => { fileDrag.install(); return fileDrag.dispose } }))
 
-vi.mock('../src/web-document.ts', () => ({
+vi.mock('../src/web-document.ts', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/web-document.ts')>(),
   serveWebDocument: vi.fn(), forwardWebRequest: vi.fn(),
   removeLegacyHostCookies: harness.removeLegacyHostCookies,
 }))
@@ -60,6 +61,7 @@ const harness = await vi.hoisted(async () => {
   let quitCompleted = deferred()
   let policyBlocked = deferred()
   let embeddedPolicy: unknown
+  let payloadRuntimeNode: string | undefined
   let closeWindowsOnQuit = false
   let updateState: DesktopUpdateState = { phase: 'idle' }
   let platformDisposeDeferred: ReturnType<typeof deferred> | undefined
@@ -76,7 +78,20 @@ const harness = await vi.hoisted(async () => {
   const updateDownload = vi.fn(async (_version: string, _revision?: number): Promise<DesktopUpdateState> => updateState)
   const updateInstall = vi.fn(async (_version: string, _revision?: number): Promise<DesktopUpdateState> => updateState)
   const popup = vi.fn<(options: { window: FakeWindow; x?: number; y?: number; callback?: () => void }) => void>()
-  const menuBuilder = vi.fn<(template: MenuItemConstructorOptions[]) => { popup: typeof popup }>(() => ({ popup }))
+  // Electron rejects an item without a label or role; the fake menu applies the
+  // same rule to nested submenus so an accelerator-only template cannot ship.
+  const assertMenuTemplate = (template: MenuItemConstructorOptions[]): void => {
+    for (const item of template) {
+      if (item.type !== 'separator' && item.label === undefined && item.role === undefined) {
+        throw new TypeError('Invalid template for MenuItem: must have at least one of label, role or type')
+      }
+      if (Array.isArray(item.submenu)) assertMenuTemplate(item.submenu)
+    }
+  }
+  const menuBuilder = vi.fn<(template: MenuItemConstructorOptions[]) => { popup: typeof popup }>((template) => {
+    assertMenuTemplate(template)
+    return { popup }
+  })
   const menu = Object.assign(menuBuilder, { buildFromTemplate: menuBuilder, setApplicationMenu: vi.fn() })
   class FakeWindow extends EventEmitter {
     destroyed = false
@@ -91,6 +106,7 @@ const harness = await vi.hoisted(async () => {
       getURL: () => this.urls.at(-1) ?? '',
       mainFrame: { url: '' },
       getZoomFactor: () => 1,
+      reload: vi.fn(),
       isDestroyed: () => this.destroyed,
       setIgnoreMenuShortcuts: vi.fn(),
       focus: vi.fn(),
@@ -112,7 +128,7 @@ const harness = await vi.hoisted(async () => {
     readonly setTitleBarOverlay = vi.fn()
     readonly setVibrancy = vi.fn()
     readonly setBackgroundColor = vi.fn()
-    constructor(readonly options: { show: boolean; modal?: boolean }) {
+    constructor(readonly options: Electron.BrowserWindowConstructorOptions) {
       super(); if (windowFailure !== undefined) throw windowFailure; windows.push(this)
     }
     isDestroyed() { return this.destroyed }
@@ -183,14 +199,18 @@ const harness = await vi.hoisted(async () => {
   const app = Object.assign(new EventEmitter(), {
     isPackaged: true,
     name: 'Desktop test',
+    commandLine: { appendSwitch: vi.fn() },
     whenReady: () => Promise.resolve(),
     getLocale: (): string => 'en-US',
     getPreferredSystemLanguages: () => ['en-US'],
     getVersion: () => '1.0.0',
-    getAppPath: (): string => 'desktop-test-app',
+    // A packaged application runs from `<resources>/app.asar`; the development launcher runs the
+    // application directory itself, and a distribution Electron reports the same archive path.
+    getAppPath: (): string => app.isPackaged ? join('desktop-test-app', 'resources', 'app.asar') : 'desktop-test-app',
     setAppLogsPath: vi.fn(),
     getPath: vi.fn<(name: string) => string>(),
     setAboutPanelOptions: vi.fn<(options: Electron.AboutPanelOptionsOptions) => void>(),
+    showAboutPanel: vi.fn(),
     requestSingleInstanceLock: () => true,
     setAsDefaultProtocolClient: vi.fn(),
     exit: vi.fn(),
@@ -253,6 +273,7 @@ const harness = await vi.hoisted(async () => {
     set publishUpdate(value: (state: DesktopUpdateState) => DesktopUpdateState) { publishUpdate = value },
     dialog: { showOpenDialog: vi.fn(), showErrorBox: vi.fn(), showMessageBox: vi.fn() },
     openExternal: vi.fn(async () => {}),
+    notifications: [] as { title: string; body: string; icon?: unknown }[],
     showItemInFolder: vi.fn(),
     protocolHandle: vi.fn<(scheme: string, handler: (request: Request) => Response | Promise<Response>) => void>(),
     applyRelease: vi.fn(() => { preparing.resolve(); return prepared.promise }),
@@ -265,6 +286,8 @@ const harness = await vi.hoisted(async () => {
     get dialogShown() { return dialogShown }, get quitCompleted() { return quitCompleted },
     get policyBlocked() { return policyBlocked },
     get embeddedPolicy() { return embeddedPolicy },
+    get payloadRuntimeNode() { return payloadRuntimeNode },
+    set payloadRuntimeNode(value: string | undefined) { payloadRuntimeNode = value },
     set embeddedPolicy(value: unknown) { embeddedPolicy = value },
     nextNavigation() { navigated = deferred(); return navigated.promise },
     nextHostStart() { hostStarted = deferred(); return hostStarted.promise },
@@ -298,6 +321,7 @@ const harness = await vi.hoisted(async () => {
       navigated = deferred(); dialogShown = deferred(); quitCompleted = deferred()
       policyBlocked = deferred()
       embeddedPolicy = undefined
+      payloadRuntimeNode = undefined
       fileDrag.install.mockReset()
       fileDrag.dispose.mockReset().mockResolvedValue(undefined)
       platformDisposeDeferred = undefined
@@ -322,6 +346,9 @@ vi.mock('electron', () => ({
   dialog: harness.dialog,
   shell: { openExternal: harness.openExternal, showItemInFolder: harness.showItemInFolder },
   nativeTheme: harness.nativeTheme,
+  // The notification icon is sized in device pixels; a 2x display keeps that assertion distinct
+  // from the logical size on the 1x displays that run this spec.
+  screen: { getPrimaryDisplay: () => ({ scaleFactor: 2 }) },
   ipcMain: {
     on: harness.ipcOn,
     handle: (channel: string, handler: InvokeHandler) => {
@@ -337,8 +364,16 @@ vi.mock('electron', () => ({
   } },
   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: harness.protocolHandle },
   powerMonitor: harness.powerMonitor,
+  Notification: class {
+    static isSupported(): boolean { return true }
+    constructor(options: { title: string; body: string; icon?: unknown }) { harness.notifications.push(options) }
+    show(): void {}
+  },
   Tray: harness.FakeTray,
-  nativeImage: { createFromPath: (path: string) => ({ path }) },
+  // resize mirrors Electron's non-enumerable method, so images that are only loaded still compare
+  // as plain paths in the tray and close-dialog assertions.
+  nativeImage: { createFromPath: (path: string) => Object.defineProperty({ path }, 'resize',
+    { value: (size: { width: number; height: number }) => ({ path, size }) }) },
 }))
 vi.mock('../src/background-notice.ts', () => ({ DesktopBackgroundNotice: class {
   constructor(options: { markerPath: string }) { harness.backgroundNotice.markerPath = options.markerPath }
@@ -348,7 +383,8 @@ vi.mock('../src/background-notice.ts', () => ({ DesktopBackgroundNotice: class {
 vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:fs/promises')>()
   return { ...original, readFile: vi.fn((path: Parameters<typeof original.readFile>[0], encoding?: 'utf8') => {
-    if (path === join('desktop-test-app', 'package.json')) {
+    if (path === join('desktop-test-app', 'package.json')
+      || path === join('desktop-test-app', 'resources', 'app.asar', 'package.json')) {
       return Promise.resolve(JSON.stringify({ dshDesktopAppId: 'com.deepseek.dsh', dshMandatoryUpdatePolicy: harness.embeddedPolicy }))
     }
     return encoding === undefined ? original.readFile(path) : original.readFile(path, encoding)
@@ -359,6 +395,7 @@ vi.mock('../src/login-shell-environment.ts', async importOriginal => ({
   readDesktopLoginShellEnvironment: harness.loginShell,
 }))
 vi.mock('../src/runtime-tree.ts', () => ({ readDesktopRuntime: () => ({ release: { version: '1.0.0' } }) }))
+vi.mock('../src/runtime-node.ts', () => ({ runtimeNode: () => harness.payloadRuntimeNode }))
 vi.mock('../src/paths.ts', () => ({ resolveDesktopPaths: () => ({ profile: 'desktop-test-profile' }) }))
 vi.mock('../src/project-manager.ts', () => ({
   DesktopProjectManager: class {
@@ -460,6 +497,15 @@ function applicationMenuItems(): MenuItemConstructorOptions[] {
   return harness.menu.mock.lastCall![0]
 }
 
+/** The most recent application menu; the Linux tray rebuilds a context menu after it. */
+function latestApplicationMenuItems(): MenuItemConstructorOptions[] {
+  const template = [...harness.menu.mock.calls].reverse()
+    .map(([candidate]) => candidate)
+    .find(candidate => Array.isArray(candidate[0]?.submenu))
+  if (template === undefined) throw new Error('no application menu template was built')
+  return template[0]!.submenu as MenuItemConstructorOptions[]
+}
+
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
@@ -484,7 +530,9 @@ beforeEach(() => {
   vi.stubEnv('DSH_DESKTOP_PNPM_ENTRY', 'test-pnpm')
   vi.stubEnv('DSH_DESKTOP_DSH_DIR', 'test-runtime')
   vi.stubEnv('DSH_DESKTOP_PRIMARY_RUNTIME_DIR', 'test-primary-runtime')
-  vi.stubGlobal('process', { ...process, platform: 'win32', arch: 'x64', resourcesPath: 'desktop-test-resources' })
+  // A distribution Electron reports its own resources directory here; every application payload
+  // path must come from the application path instead.
+  vi.stubGlobal('process', { ...process, platform: 'win32', arch: 'x64', resourcesPath: 'electron-dist-resources' })
   vi.stubEnv('DSH_DESKTOP_HOST_INSPECT_PORT', undefined)
   vi.stubEnv('DSH_DESKTOP_DEV_PROJECT_DIR', undefined)
   vi.stubEnv('DSH_DESKTOP_MANDATORY_UPDATE_CONFIG', undefined)
@@ -513,15 +561,46 @@ describe('desktop main startup', () => {
     harness.app.isPackaged = packaged
     await readyForUpdate()
     const host = harness.hosts[0]!
+    // Every application payload path derives from the application path, not from the resources
+    // directory a distribution Electron reports.
+    const resources = dirname(harness.app.getAppPath())
     expect(host.node).toBe(process.execPath)
     expect(host.primaryRuntime).toBe(packaged
-      ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime')
+      ? join(resources, 'runtime', 'primary-runtime') : 'test-primary-runtime')
     expect(host.packageManager).toMatchObject({
       pnpm: packaged
-        ? join('desktop-test-resources', 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
+        ? join(resources, 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
         : 'test-pnpm',
-      nodeBin: packaged ? join('desktop-test-resources', 'runtime', 'bin') : join('desktop-test-app', 'scripts', 'node-bin'),
+      nodeBin: packaged ? join(resources, 'runtime', 'bin') : join('desktop-test-app', 'scripts', 'node-bin'),
     })
+  })
+
+  it('switches to a remote Harness and reloads the packaged client against it', async () => {
+    await readyForUpdate()
+    const remoteIndex = '<html><head><base href="./"><script>globalThis["__DSH_BOOT__"] = {"rev":"r","release":{"version":"1.0.0"},"entries":[],"batches":[]}</script></head><body><script>(globalThis.__DSH_BOOT_READY__ ??= Promise.withResolvers()).resolve()</script><div id="root"></div></body></html>'
+    const request = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 303, headers: { 'set-cookie': 'dsh-session=owned' } }))
+      .mockResolvedValueOnce(new Response(remoteIndex, { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 303, headers: { 'set-cookie': 'dsh-session=owned' } }))
+      .mockResolvedValueOnce(new Response(remoteIndex, { status: 200 }))
+    vi.stubGlobal('fetch', request)
+    const host = harness.hosts[0]!
+    // This run's own child answers the same rows, but stopping it would kill the Host the page uses.
+    expect(await invoke(DESKTOP_IPC.remoteConnect, 'app', 'http://127.0.0.1:3080/?token=local')).toEqual({ ok: false, failure: 'local-host' })
+    expect(host.stop).not.toHaveBeenCalled()
+    const connecting = invoke(DESKTOP_IPC.remoteConnect, 'app', 'https://app.example/ui/?token=owned')
+    // The shell waits for the local child to exit before it points the window at the remote Host.
+    host.exited.resolve()
+    expect(await connecting).toEqual({ ok: true })
+    expect(request.mock.calls.at(-1)?.[0]).toBe('https://app.example/ui/index.html')
+    expect(host.stop).toHaveBeenCalledOnce()
+    expect(await invoke(DESKTOP_IPC.boot, 'app')).toEqual({ injections: [], streamBaseUrl: 'https://app.example/ui/' })
+    // The locale bridge must answer without the local welcome backend the switch cleared.
+    expect(await invoke(DESKTOP_IPC.localeBootstrap, 'app')).toEqual({ languages: ['en', 'en-US'], preference: null })
+    expect(harness.socketHeaders.mock.calls.at(-2)?.[1]).toBeNull()
+    expect(harness.socketHeaders.mock.calls.at(-1)?.[0]).toEqual({ urls: ['wss://app.example/*'] })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.windows[0]!.webContents.reload).toHaveBeenCalledOnce()
   })
 
   it('persists a channel through product IPC and ignores external edits during the process', async () => {
@@ -805,11 +884,11 @@ describe('desktop main startup', () => {
     for (const file of ['update-dialog.html', 'update-dialog.js', 'update-dialog.css', 'update-close.svg', 'mandatory-update.html']) {
       const request = new Request(`dsh-app://shell/${file}`)
       await handler(request)
-      expect(serveWebDocument).toHaveBeenLastCalledWith(request, join('desktop-test-app', 'renderer'))
+      expect(serveWebDocument).toHaveBeenLastCalledWith(request, join(harness.app.getAppPath(), 'renderer'))
     }
     const tokens = new Request('dsh-app://shell/design-platform.css')
     await handler(tokens)
-    expect(serveWebDocument).toHaveBeenLastCalledWith(tokens, join('desktop-test-app', 'lib/welcome'))
+    expect(serveWebDocument).toHaveBeenLastCalledWith(tokens, join(harness.app.getAppPath(), 'lib/welcome'))
     expect(forwardWebRequest).not.toHaveBeenCalled()
     expect((await handler(new Request('dsh-app://unknown/update-dialog.html'))).status).toBe(404)
   })
@@ -843,6 +922,14 @@ describe('desktop main startup', () => {
         { role: 'toggleDevTools', visible: false, accelerator: 'F12' },
       ])
       expect(menu.every(item => item.visible !== false)).toBe(true)
+    } else if (platform === 'linux') {
+      // A frameless Linux window draws no menu bar, so hidden items toggle the docked panel themselves.
+      // The click handlers are compared by presence only; their bodies are not under test.
+      expect(menu.filter(item => item.visible === false)
+        .map(item => [item.label, item.accelerator, typeof item.click])).toEqual([
+        ['', 'Ctrl+Shift+I', 'function'],
+        ['', 'F12', 'function'],
+      ])
     } else {
       expect(menu.filter(item => item.visible === false)).toEqual([
         { role: 'toggleDevTools', visible: false, accelerator: 'F12' },
@@ -853,8 +940,7 @@ describe('desktop main startup', () => {
     harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.localeChanged)![1](
       { sender, senderFrame: sender.mainFrame }, nextLocale,
     )
-    const refreshed = platform === 'win32' ? applicationMenuItems()
-      : harness.menu.mock.lastCall![0][0]!.submenu as MenuItemConstructorOptions[]
+    const refreshed = platform === 'win32' ? applicationMenuItems() : latestApplicationMenuItems()
     expect(refreshed.filter(item => item.role === 'toggleDevTools' && item.visible !== false)).toEqual([
       { role: 'toggleDevTools', label: nextLocale === 'en' ? en.toggleDevToolsMenu : zh.toggleDevToolsMenu },
     ])
@@ -879,7 +965,7 @@ describe('desktop main startup', () => {
     const [about, separator] = submenu
     expect({ menu: [{ label: about!.label, role: about!.role }, separator], options: { ...options, iconPath: '<app icon>' } })
       .toEqual(expected[`${platform}:${locale}`])
-    expect(options.iconPath).toBe(packaged ? join('desktop-test-resources', 'icon.png')
+    expect(options.iconPath).toBe(packaged ? join(dirname(harness.app.getAppPath()), 'icon.png')
       : join('desktop-test-app', 'resources', 'icon-windows.png'))
     if (platform !== 'win32') { expect(about!.click).toBeUndefined(); return }
     // Windows reuses the dimmed update dialog because Electron's fallback is a bare message box.
@@ -896,6 +982,52 @@ describe('desktop main startup', () => {
     ;(about!.click as () => void)()
     await vi.advanceTimersByTimeAsync(0)
     expect(console.error).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'overlay unavailable' }))
+  })
+
+  it.each(['win32', 'darwin', 'linux'] as const)('shows the shell About panel for the Web application command on %s', async (platform) => {
+    vi.stubGlobal('process', { ...process, platform })
+    await readyForUpdate()
+    harness.dialog.showMessageBox.mockClear()
+    harness.dialog.showMessageBox.mockResolvedValue({ response: 0 })
+    await invoke(DESKTOP_IPC.applicationAbout, 'app')
+    if (platform !== 'win32') {
+      expect(harness.app.showAboutPanel).toHaveBeenCalledOnce()
+      expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+      return
+    }
+    // Windows reuses the dimmed update dialog because Electron's fallback is a bare message box.
+    expect(harness.app.showAboutPanel).not.toHaveBeenCalled()
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'info', message: 'DeepSeek Harness',
+    }))
+  })
+
+  it('runs the Web reload and restart commands in a development shell', async () => {
+    harness.app.isPackaged = false
+    await readyForUpdate()
+    const window = harness.windows[0]!
+    expect(window.options.webPreferences?.additionalArguments).toEqual([DESKTOP_DEVELOPMENT_ARGUMENT])
+    await invoke(DESKTOP_IPC.applicationReload, 'app')
+    expect(window.webContents.reload).toHaveBeenCalledOnce()
+    await invoke(DESKTOP_IPC.applicationRestart, 'app')
+    expect(harness.app.relaunch).toHaveBeenCalledOnce()
+    expect(harness.app.quit).toHaveBeenCalled()
+  })
+
+  it('rejects the development-only Web commands in a packaged shell', async () => {
+    await readyForUpdate()
+    expect(harness.windows[0]!.options.webPreferences?.additionalArguments).toBeUndefined()
+    expect(() => invoke(DESKTOP_IPC.applicationReload, 'app')).toThrow('development build')
+    expect(() => invoke(DESKTOP_IPC.applicationRestart, 'app')).toThrow('development build')
+    expect(harness.windows[0]!.webContents.reload).not.toHaveBeenCalled()
+    expect(harness.app.relaunch).not.toHaveBeenCalled()
+  })
+
+  it('requests the ordered shutdown from the Web quit command', async () => {
+    await readyForUpdate()
+    await invoke(DESKTOP_IPC.applicationQuit, 'app')
+    expect(harness.app.quit).toHaveBeenCalled()
+    expect(() => invoke(DESKTOP_IPC.applicationQuit, 'shell')).toThrow('unowned renderer')
   })
 
   it.each(['missing-file', 'missing-field', 'disabled'] as const)('suppresses every test auth dialog for %s while continuing update checks', async (configuration) => {
@@ -1170,14 +1302,14 @@ describe('desktop main startup', () => {
         { role: 'toggleDevTools', visible: false, accelerator: 'F12' },
       ])
     } else {
-      expect(window.options).not.toHaveProperty('backgroundColor')
+      // The loading page paints its own themed background; only the native titlebar styling is absent.
       expect(window.options).not.toHaveProperty('titleBarStyle')
       expect(window.options).not.toHaveProperty('vibrancy')
     }
     expect(harness.hosts).toHaveLength(0)
   })
 
-  it.each([[false, '#f9fafb'], [true, '#1b1b1c']] as const)('paints the Windows workspace in its startup palette (dark=%s)', async (dark, color) => {
+  it.each([[false, '#fff'], [true, '#151517']] as const)('paints the Windows loading page in its startup palette (dark=%s)', async (dark, color) => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     harness.nativeTheme.shouldUseDarkColors = dark
     await import('../src/main.ts')
@@ -1195,7 +1327,8 @@ describe('desktop main startup', () => {
       await import('../src/main.ts')
       await harness.preparing.promise
       const window = harness.windows[0]!
-      expect(window.show).not.toHaveBeenCalled()
+      // The loading page is presented before the Host starts; the workspace reveal is the second presentation.
+      expect(window.show).toHaveBeenCalledOnce()
       harness.prepared.resolve()
       await harness.hostStarted.promise
       const host = harness.hosts[0]!
@@ -1207,7 +1340,7 @@ describe('desktop main startup', () => {
       })
       host.ready.resolve()
       await Promise.resolve(invoke(DESKTOP_IPC.boot))
-      await vi.waitFor(() => { expect(window.show).toHaveBeenCalledOnce() })
+      await vi.waitFor(() => { expect(window.show).toHaveBeenCalledTimes(2) })
       expect(host.fetch).toHaveBeenCalledOnce()
     })
   })
@@ -1249,7 +1382,7 @@ describe('desktop main startup', () => {
     const handler = harness.protocolHandle.mock.calls[0]![1]
     const request = new Request('dsh-app://shell/update-dialog.html')
     expect(await (await handler(request)).text()).toBe('shell document')
-    expect(serveWebDocument).toHaveBeenCalledWith(request, join('desktop-test-app', 'renderer'))
+    expect(serveWebDocument).toHaveBeenCalledWith(request, join(harness.app.getAppPath(), 'renderer'))
     expect((await handler(new Request('dsh-app://foreign/index.html'))).status).toBe(404)
   })
 
@@ -1328,6 +1461,26 @@ describe('desktop main startup', () => {
     expect(window.setBackgroundColor).not.toHaveBeenCalled()
   })
 
+  it('raises a native notification only while the window is in the background', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const window = harness.windows[0]!
+    const listener = harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.notify)![1]
+    const event = { sender: window.webContents, senderFrame: { url: 'dsh-app://app/' } }
+    harness.notifications.length = 0
+    listener(event, { kind: 'approval' })
+    expect(harness.notifications).toEqual([])
+    vi.spyOn(window, 'isFocused').mockReturnValue(false)
+    listener(event, { kind: 'approval' })
+    listener(event, { kind: 'unsupported' })
+    expect(harness.notifications).toHaveLength(1)
+    expect(harness.notifications[0]).toEqual({
+      title: 'Approval requested', body: 'DeepSeek Harness needs your approval to continue.',
+      icon: { path: join(dirname(harness.app.getAppPath()), 'icon.png'), size: { width: 96, height: 96 } },
+    })
+  })
+
   it('follows confirmed language and primary document palette without trusting other frames', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     await import('../src/main.ts')
@@ -1379,6 +1532,58 @@ describe('desktop main startup', () => {
     await harness.dialogShown.promise
     expect(vi.mocked(writeCrashReport).mock.calls[0]![1].app.locale).toBe('zh-CN')
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).message).toBe(zh.fatalSummary)
+  })
+
+  it.each([
+    ['dark', true, '#151517'],
+    ['light', false, '#fff'],
+  ] as const)('paints the loading window from the stored %s theme source', async (source, dark, background) => {
+    const userData = harness.app.getPath('userData')
+    mkdirSync(join(userData, 'desktop'), { recursive: true })
+    writeFileSync(join(userData, 'desktop', 'theme.json'), JSON.stringify({ themeSource: source }))
+    // Electron resolves shouldUseDarkColors from themeSource; the fake keeps them separate.
+    harness.nativeTheme.shouldUseDarkColors = dark
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    expect(harness.nativeTheme.themeSource).toBe(source)
+    expect(harness.windows[0]!.options.backgroundColor).toBe(background)
+  })
+
+  it('stores the Web UI theme source for the next launch', async () => {
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const window = harness.windows[0]!
+    const listener = harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.nativeThemeSet)![1]
+    const stored = join(harness.app.getPath('userData'), 'desktop', 'theme.json')
+    listener({ sender: {}, senderFrame: {} }, 'dark')
+    expect(harness.nativeTheme.themeSource).toBe('system')
+    expect(existsSync(stored)).toBe(false)
+    listener({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, 'dark')
+    expect(harness.nativeTheme.themeSource).toBe('dark')
+    expect(readFileSync(stored, 'utf8')).toBe('{\n  "themeSource": "dark"\n}\n')
+    listener({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, 'sepia')
+    expect(harness.nativeTheme.themeSource).toBe('dark')
+    expect(readFileSync(stored, 'utf8')).toBe('{\n  "themeSource": "dark"\n}\n')
+  })
+
+  it('serves the packaged index with the current theme source', async () => {
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const web = await import('../src/web-document.ts')
+    const handler = harness.protocolHandle.mock.calls.find(([scheme]) => scheme === SCHEME)![1]
+    const window = harness.windows[0]!
+    const listener = harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.nativeThemeSet)![1]
+    await handler(new Request('dsh-app://app/'))
+    const initial = vi.mocked(web.serveWebDocument).mock.lastCall?.[2]
+    expect(initial?.head).toContain(':root{color-scheme:light}')
+    expect(initial?.body).toContain('document.documentElement.dataset.dsThemeSource = "system"')
+    listener({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, 'dark')
+    await handler(new Request('dsh-app://app/'))
+    const updated = vi.mocked(web.serveWebDocument).mock.lastCall?.[2]
+    expect(updated?.head).toContain(':root{color-scheme:dark}')
+    expect(updated?.body).toContain('document.documentElement.dataset.dsThemeSource = "dark"')
+    await handler(new Request('dsh-app://app/assets/index.js'))
+    expect(vi.mocked(web.serveWebDocument).mock.lastCall?.[2]).toBeUndefined()
   })
 
   it('maps Windows caption menus to localized native commands and rejects foreign popup requests', async () => {
@@ -1708,17 +1913,19 @@ describe('desktop main startup', () => {
     await import('../src/main.ts')
     await harness.preparing.promise
     const window = harness.windows[0]!
+    // The loaded boot page is presented before the Host answers.
+    expect(window.show).toHaveBeenCalledOnce()
     expect(window.moveTop).not.toHaveBeenCalled()
     harness.prepared.resolve()
     await harness.hostStarted.promise
     harness.hosts[0]!.ready.resolve()
-    await window.shown.promise
-    expect(window.show).toHaveBeenCalledOnce()
+    await Promise.resolve(invoke(DESKTOP_IPC.boot))
+    expect(window.show).toHaveBeenCalledTimes(2)
     expect(window.moveTop).toHaveBeenCalledTimes(raises ? 1 : 0)
     expect(window.focus).toHaveBeenCalledTimes(raises ? 1 : 0)
     expect(window.setAlwaysOnTop).not.toHaveBeenCalled()
     if (raises) {
-      expect(window.show.mock.invocationCallOrder[0]).toBeLessThan(window.moveTop.mock.invocationCallOrder[0]!)
+      expect(window.show.mock.invocationCallOrder.at(-1)!).toBeLessThan(window.moveTop.mock.invocationCallOrder[0]!)
     }
     window.destroy()
     harness.app.emit('second-instance')
@@ -1774,7 +1981,7 @@ describe('desktop main startup', () => {
     const host = await readyWorkspace()
     const window = harness.windows[0]!
     expect(harness.trays).toHaveLength(1)
-    expect(harness.trays[0]!.image).toEqual({ path: join('desktop-test-resources', 'tray.ico') })
+    expect(harness.trays[0]!.image).toEqual({ path: join(dirname(harness.app.getAppPath()), 'tray.ico') })
     expect(harness.backgroundNotice.markerPath).toBe(join(harness.app.getPath('userData'), 'background-close-confirmed'))
     window.show.mockClear()
     window.close()
@@ -1792,6 +1999,24 @@ describe('desktop main startup', () => {
     const relabels = harness.trays[0]!.setContextMenu.mock.calls.length
     harness.ipcOn.mock.calls.find(call => call[0] === DESKTOP_IPC.localeChanged)![1]({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, 'zh')
     expect(harness.trays[0]!.setContextMenu.mock.calls.length).toBe(relabels + 1)
+  })
+
+  it('creates the Linux tray and hides on close without the Windows acknowledgement', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux', arch: 'x64', resourcesPath: 'electron-dist-resources' })
+    const host = await readyWorkspace()
+    const window = harness.windows[0]!
+    expect(harness.trays).toHaveLength(1)
+    expect(harness.trays[0]!.image).toEqual({ path: join(dirname(harness.app.getAppPath()), 'tray.png') })
+    expect(harness.backgroundNotice.markerPath).toBeUndefined()
+    window.show.mockClear()
+    window.close()
+    expect(window.isDestroyed()).toBe(false)
+    expect(window.hide).toHaveBeenCalledOnce()
+    expect(harness.backgroundNotice.close).not.toHaveBeenCalled()
+    expect(host.stop).not.toHaveBeenCalled()
+    harness.trays[0]!.emit('click')
+    expect(window.show).toHaveBeenCalledOnce()
+    expect(window.focus).toHaveBeenCalled()
   })
 
   it('hides a macOS owner with a mandatory view without quitting or stopping the Host', async () => {
@@ -3051,13 +3276,13 @@ describe('desktop main startup', () => {
     expect(signal?.aborted).toBe(true)
   })
 
-  it('prepares recovery offscreen and starts one Host before choosing the first visible window', async () => {
+  it('presents the loading page before starting one Host and chooses the first visible window later', async () => {
     await import('../src/main.ts')
     await harness.preparing.promise
     expect(harness.windows).toHaveLength(1)
     const window = harness.windows[0]!
     expect(window.options.show).toBe(false)
-    expect(window.show).not.toHaveBeenCalled()
+    expect(window.show).toHaveBeenCalledOnce()
     expect(window.urls).toEqual(['dsh-app://app/'])
     expect(harness.hosts).toHaveLength(0)
     const retry = invoke(DESKTOP_IPC.boot)
@@ -3071,8 +3296,8 @@ describe('desktop main startup', () => {
     expect(harness.applyRelease).toHaveBeenCalledTimes(1)
     expect(harness.hosts[0]).toMatchObject({
       node: process.execPath,
-      runtime: join(harness.app.getAppPath(), 'dsh'),
-      primaryRuntime: join('desktop-test-resources', 'runtime', 'primary-runtime'),
+      runtime: join(dirname(harness.app.getAppPath()), 'dsh'),
+      primaryRuntime: join(dirname(harness.app.getAppPath()), 'runtime', 'primary-runtime'),
       profile: 'desktop-test-profile',
     })
     expect(harness.hosts[0]!.environment).not.toBe(process.env)
@@ -3083,6 +3308,17 @@ describe('desktop main startup', () => {
     expect(harness.hosts[0]!.start).toHaveBeenCalledTimes(1)
     expect(harness.windows).toHaveLength(1)
     expect(window.urls).toEqual(['dsh-app://app/'])
+    // The workspace reveal is the second presentation; the first showed the boot page.
+    expect(window.show).toHaveBeenCalledTimes(2)
+  })
+
+  it('runs the Host on the Node the payload declares', async () => {
+    harness.payloadRuntimeNode = join('desktop-test-app', 'runtime', 'primary-runtime', 'dependencies', 'node', 'bin', 'node')
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    harness.prepared.resolve()
+    await harness.hostStarted.promise
+    expect(harness.hosts[0]).toMatchObject({ node: harness.payloadRuntimeNode })
   })
 
   it('prepares an independent plugin profile for the unpackaged Host', async () => {
@@ -3126,10 +3362,12 @@ describe('desktop main startup', () => {
     expect(harness.hosts).toHaveLength(1)
   })
 
-  it('keeps recovery visible when the backend fails during the welcome preference read', async () => {
+  it('keeps the loading page and recovery visible when the backend fails during the welcome preference read', async () => {
     const preferences = Promise.withResolvers<Response>()
     await import('../src/main.ts')
     await harness.preparing.promise
+    // The boot page is already presented and stays behind the native failure dialog.
+    expect(harness.windows[0]!.show).toHaveBeenCalledOnce()
     harness.prepared.resolve()
     await harness.hostStarted.promise
     const host = harness.hosts[0]!
@@ -3145,7 +3383,7 @@ describe('desktop main startup', () => {
     expect(harness.windows[0]!.urls).not.toContain('http://127.0.0.1:3080/')
     const failureDialog = harness.dialog.showMessageBox.mock.calls[0]![0] as { detail: string }
     expect(failureDialog.detail).toContain('backend exited during startup preferences')
-    expect(harness.windows[0]!.show).not.toHaveBeenCalled()
+    expect(harness.windows[0]!.show).toHaveBeenCalledOnce()
   })
 
   it('waits for a pending child to exit on quit without late window navigation', async () => {

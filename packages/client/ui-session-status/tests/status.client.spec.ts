@@ -15,6 +15,7 @@ const roots: Context[] = []
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(ctx => ctx.fiber.dispose()))
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -275,6 +276,59 @@ describe('Session status pending interactions', () => {
     b.pending.set(new Map([[sessionId('later'), pendingQuestion(sessionId('later'))]]))
     b.reading.set({ ready: true, items: { [sessionId('later')]: b.record(sessionId('later'), { completedTurn: 1 }) } })
     expect(service.getSnapshot()).toBe(before)
+  })
+})
+
+describe('Desktop attention', () => {
+  it('surfaces each newly effective pending interaction once and again when the request is replaced', () => {
+    const notify = vi.fn()
+    vi.stubGlobal('window', { dshNotify: notify })
+    const b = bench()
+    const id = sessionId('attention')
+    const service = b.status()
+    expect(service.getSnapshot().size).toBe(0)
+
+    const approval = { key: 'approval:1', kind: 'approval', sessionId: id } as SessionPendingInteraction
+    b.pending.set(new Map([[id, approval]]))
+    expect(notify).toHaveBeenCalledExactlyOnceWith('approval')
+
+    // The same request still effective does not notify again.
+    b.pending.set(new Map([[id, approval]]))
+    expect(notify).toHaveBeenCalledOnce()
+
+    const replacement = { key: 'question:2', kind: 'question', sessionId: id } as SessionPendingInteraction
+    b.pending.set(new Map([[id, replacement]]))
+    expect(notify).toHaveBeenLastCalledWith('question')
+    expect(notify).toHaveBeenCalledTimes(2)
+
+    b.pending.set(new Map())
+    expect(notify).toHaveBeenCalledTimes(2)
+  })
+
+  it('surfaces a finished turn only on a running-to-stopped transition', () => {
+    const notify = vi.fn()
+    vi.stubGlobal('window', { dshNotify: notify })
+    const b = bench()
+    const id = sessionId('finished')
+    b.row(id)
+    b.status()
+    expect(notify).not.toHaveBeenCalled()
+
+    b.list.update((draft) => { draft.byId[id]!.running = true })
+    expect(notify).not.toHaveBeenCalled()
+    b.list.update((draft) => { draft.byId[id]!.running = false })
+    expect(notify).toHaveBeenCalledExactlyOnceWith('turn-complete')
+
+    b.emitStatus(id, false)
+    expect(notify).toHaveBeenCalledOnce()
+  })
+
+  it('ignores a page without a Desktop attention bridge', () => {
+    vi.stubGlobal('window', {})
+    const b = bench()
+    const id = sessionId('plain-browser')
+    b.status()
+    expect(() => { b.pending.set(new Map([[id, pendingQuestion(id)]])) }).not.toThrow()
   })
 })
 

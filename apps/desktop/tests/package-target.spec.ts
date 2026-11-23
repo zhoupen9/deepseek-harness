@@ -26,7 +26,8 @@ describe('desktop package target', () => {
   })
 
   it('rejects unsupported targets and hosts before building', () => {
-    expect(() => resolveDesktopPackageTarget('linux-x64', 'linux', 'x64')).toThrow(/unsupported target/u)
+    expect(resolveDesktopPackageTarget('linux-x64', 'linux', 'x64').platform).toBe('linux')
+    expect(() => resolveDesktopPackageTarget('linux-x64', 'darwin', 'arm64')).toThrow(/Linux x64/u)
     expect(() => resolveDesktopPackageTarget('win-x64', 'darwin', 'arm64')).toThrow(/Windows x64/u)
     expect(() => resolveDesktopPackageTarget('mac-arm64', 'darwin', 'x64')).toThrow(/Apple Silicon/u)
     expect(() => resolveDesktopPackageTarget('mac-arm64', 'linux', 'arm64')).toThrow(/macOS/u)
@@ -85,6 +86,13 @@ describe('desktop package target', () => {
     }
     expect(() => parseDesktopPackageInvocation(['--unsigned', '--prepare-only'], 'win32', 'x64'))
       .toThrow(/cannot use --prepare-only/u)
+  })
+
+  it('skips the Electron runtime smoke only for the Linux target', () => {
+    expect(parseDesktopPackageInvocation(['linux-x64', '--skip-runtime-smoke'], 'linux', 'x64').skipRuntimeSmoke).toBe(true)
+    expect(parseDesktopPackageInvocation(['linux-x64'], 'linux', 'x64').skipRuntimeSmoke).toBe(false)
+    expect(() => parseDesktopPackageInvocation(['win-x64', '--skip-runtime-smoke'], 'win32', 'x64'))
+      .toThrow(/requires linux-x64/u)
   })
 
   it('removes ambient certificate inputs for unsigned builds and overrides an inherited signing mode', () => {

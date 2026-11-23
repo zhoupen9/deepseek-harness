@@ -8,7 +8,7 @@
  * same top-down order) on one fade that ends with the slide. The bottom-pinned
  * settings control only fades. The workspace/session browsing region between
  * global panel rows and the foot is the `sidebar.workspaces` registrant's,
- * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the shell
+ * and the foot holds `sidebar.footer.action` plus `sidebar.settings`; the shell
  * hands them the wide flag (plus an expand request callback for the browser).
  * Through the browser's hookContext, the shell also hands it the scroller hook
  * that continues wheel scrolling over the sidebar viewport into its list.

@@ -90,6 +90,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     useBusyEnter: bindSnapshotSelector(createSnapshotStore<'queue' | 'steer'>('queue')),
     retry: undefined,
     useStopShortcut: bindSnapshotSelector(createSnapshotStore<readonly string[]>([])),
+    useStatisticsVisible: bindSnapshotSelector(createSnapshotStore(true)),
     useNotices: bindSnapshotSelector(shell.notices),
     useLexicon: bindSnapshotSelector(shell.lexicon),
     useMenuLauncher: bindSnapshotSelector(createSnapshotStore<string | null>(null)),

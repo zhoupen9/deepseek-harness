@@ -49,7 +49,7 @@ export const InputBar = memo(function InputBar({
   toggleCommandMenu, stop, retry, t,
   renderSlot, renderSlotChain, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
   useAccess,
-  useProjection, sessionId, variant, occurrence, disabled: inert = false, blocked,
+  useProjection, useStatisticsVisible, sessionId, variant, occurrence, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory,
 }: InputBarProps) {
@@ -599,7 +599,9 @@ export const InputBar = memo(function InputBar({
         {variant === 'composer' && input !== undefined && sessionId !== undefined
           ? renderSlot('conversation.composer.dock', {})
           : null}
-        {activity ? null : <ContextMeter useProjection={useProjection} t={t} />}
+        {activity ? null : (
+          <ContextMeter useProjection={useProjection} useStatisticsVisible={useStatisticsVisible} t={t} />
+        )}
       </div>
     </div>
   )

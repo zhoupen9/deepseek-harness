@@ -246,6 +246,7 @@ function standaloneProps(
     viewRequest: null,
     openView: () => {},
     completeViewRequest: () => {},
+    conversationViews: [],
     // Image seats the outlet would bake: standalone renders omit the gallery.
     renderSlot: () => null,
     loadImage: () => Promise.reject(new Error('standalone views load no images')),
@@ -325,12 +326,13 @@ function tabsOf(slots: SlotRegistry): ViewTab[] {
     .map(e => ({ id: e.options.id!, label: resolveSlotLabel(e.options.label) ?? e.options.id! }))
 }
 
-type ConvViewOwner = Pick<ConvViewProps, 'inspectCall' | 'viewRequest' | 'openView' | 'completeViewRequest'>
+type ConvViewOwner = Pick<ConvViewProps, 'inspectCall' | 'viewRequest' | 'openView' | 'completeViewRequest' | 'conversationViews'>
 
 function isConvViewOwner(owner: object): owner is ConvViewOwner {
   return 'inspectCall' in owner && 'viewRequest' in owner
     && 'openView' in owner && typeof owner.openView === 'function'
     && 'completeViewRequest' in owner && typeof owner.completeViewRequest === 'function'
+    && 'conversationViews' in owner
 }
 
 /** Mount the strict Session header/body over the ring ledger with outlet-faithful render shares. */

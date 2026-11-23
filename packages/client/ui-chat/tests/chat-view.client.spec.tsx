@@ -16,7 +16,7 @@ import type {
   ChatNode, ChatNodeHookContext, ChatNodeOwnerProps, ChatSnapshot, UserBeforeOwnerProps,
   ChatViewSlotProps, CommandNode, CompactionSummaryNode, ContextMessageNode, ConversationNode,
   LegacyConversationSlice, ModelRetryNode, StartedToolCall, SteeringMessageNode,
-  ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode,
+  ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode, TurnTailOwnerProps,
   TranscriptViewMode, UserContentInput, UserMessageNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
@@ -576,6 +576,7 @@ function makeHarness(
     // The fixture implements the concrete flow dispatch behind the generic slot signature.
     renderSlot: renderSlot as ChatViewSlotProps['renderSlot'],
     SessionProvider: SessionProviderStub,
+    conversationViews: [{ id: 'chat', label: 'Chat' }],
     inspectCall: (callId: string) => { openView('trajectory', callId) },
     viewRequest: null,
     openView,
@@ -848,6 +849,31 @@ describe('Chat node rendering', () => {
     fireEvent.click(mention)
     // The vocabulary was built from the closing message's own owner currency.
     expect(h.openFile).toHaveBeenCalledWith('for-seq-4/site/report.html')
+  })
+
+  it('threads the Chat view openView into the closing-turn owner', () => {
+    const wrote = (seq: number, callId: string): ToolResultNode => ({
+      ...toolResult(seq, callId, 'write'),
+    })
+    const h = makeHarness({
+      nodes: [
+        user(1, 'build it'),
+        assistant(2, 'Wrote `report.html` now', 1),
+        wrote(3, 'w'),
+        assistant(4, 'Wrote `report.html`.', 1),
+      ],
+      turnEnds: new Map([[1, 4]]),
+    })
+    let seen: TurnTailOwnerProps | undefined
+    h.props.fileMentions = (owner) => {
+      seen = owner
+      return undefined
+    }
+    render(<h.ChatView {...h.props} />)
+    // The closing Assistant's mention vocabulary receives the same view
+    // opener the Chat view was given, so a provider can route a file open
+    // to a Conversation View (for example the Files explorer) on click.
+    expect(seen?.openView).toBe(h.openView)
   })
 
   it('formatRunDuration localizes units and floors partial seconds', () => {

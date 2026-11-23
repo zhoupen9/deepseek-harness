@@ -1,4 +1,4 @@
-/** Install and use a local dependency with the packaged pnpm and Electron Node launcher. */
+/** Install and use a local dependency with the packaged pnpm under the payload's Node.js. */
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -8,12 +8,12 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 
 /**
- * Exercise offline installation and package scripts without a system pnpm or Node installation.
- * @param {string} resourcesRuntime - Packaged runtime directory outside ASAR.
+ * Exercise offline installation and package scripts with the payload's own Node.js.
+ * @param {string} resourcesRuntime - Packaged runtime directory beside the application archive.
  * @returns {Promise<void>} Resolves after execution and removal of the private installation.
  */
 export async function checkPnpm(resourcesRuntime) {
-  assert.ok(process.versions.electron, 'Run the package-manager smoke with Electron Node mode')
+  assert.ok(!process.versions.electron, 'Run the package-manager smoke with the payload Node.js runtime')
   assert.equal(existsSync(join(resourcesRuntime, 'pnpm')), false, 'Desktop must ship only primary-runtime pnpm')
   const primary = join(resourcesRuntime, 'primary-runtime')
   const pnpm = join(primary, 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
@@ -36,7 +36,7 @@ export async function checkPnpm(resourcesRuntime) {
 const assert = require('node:assert/strict')
 assert.equal(require('desktop-pnpm-smoke-dependency').answer, 42)
 assert.equal(process.execPath, ${JSON.stringify(process.execPath)})
-assert.ok(process.versions.electron)
+assert.ok(!process.versions.electron)
 assert.ok(process.execArgv.includes('--expose-internals'))
 assert.equal(typeof require('internal/modules/esm/loader').getOrInitializeCascadedLoader, 'function')
 console.log('desktop-node-script-ok')
@@ -46,7 +46,7 @@ console.log('desktop-node-script-ok')
     const run = args => execFileSync(process.execPath, ['--expose-internals', pnpm, ...args], {
       cwd: scratch, encoding: 'utf8', timeout: 45_000, windowsHide: true,
       env: { ...environment, pnpm_config_verify_deps_before_run: 'false',
-        ELECTRON_RUN_AS_NODE: '1', DSH_DESKTOP_NODE_EXECUTABLE: process.execPath,
+        DSH_DESKTOP_NODE_EXECUTABLE: process.execPath,
         PATH: `${join(resourcesRuntime, 'bin')}${delimiter}${systemBin}`,
         HOME: scratch, USERPROFILE: scratch, TMP: scratch, TEMP: scratch, TMPDIR: scratch,
         XDG_CONFIG_HOME: scratch, XDG_CACHE_HOME: scratch, XDG_STATE_HOME: scratch,
@@ -65,5 +65,5 @@ console.log('desktop-node-script-ok')
 if (import.meta.main) {
   assert.ok(process.argv[2], 'Pass the packaged runtime directory')
   await checkPnpm(process.argv[2])
-  console.log('desktop pnpm: offline installation and Electron Node package script passed')
+  console.log('desktop pnpm: offline installation and payload Node package script passed')
 }

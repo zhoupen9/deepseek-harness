@@ -285,6 +285,59 @@ function schemaConst(ctx: FileCtx, name: string, exported: boolean): ts.Expressi
   return null
 }
 
+/**
+ * Resolve a named value import to its exported const initializer, or null.
+ * @param world - Cross-file resolution context.
+ * @param ctx - File holding the reference.
+ * @param name - Local binding name.
+ * @returns The initializer expression, or null when the name is not an imported const.
+ */
+function importedConst(world: World, ctx: FileCtx, name: string): ts.Expression | null {
+  const imported = ctx.imports.get(name)
+  if (imported === undefined || imported.typeOnly || imported.imported === '*' || imported.imported === 'default') return null
+  const target = imported.specifier.startsWith('.')
+    ? loadRelative(world, ctx, imported.specifier)
+    : loadWorkspaceSource(world, ctx, imported.specifier)
+  return schemaConst(target, imported.imported, true)
+}
+
+/**
+ * Resolve one schema object property name to its literal key. A computed name
+ * must reach a string-literal const, locally or through a named value import,
+ * so the catalog compares real keys instead of source text.
+ * @param world - Cross-file resolution context.
+ * @param ctx - File holding the property.
+ * @param name - Property name node.
+ * @param where - Location label for violations.
+ * @param violations - Collected violations.
+ * @returns The literal key, or null when it cannot be resolved.
+ */
+function schemaPropertyKey(
+  world: World,
+  ctx: FileCtx,
+  name: ts.PropertyName,
+  where: string,
+  violations: string[],
+): string | null {
+  if (ts.isStringLiteral(name) || ts.isNumericLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name)) return name.text
+  if (!ts.isComputedPropertyName(name)) {
+    if (ts.isIdentifier(name)) return name.text
+    violations.push(`${where}: schema object key '${name.getText(ctx.sf)}' is not a string literal or const identity.`)
+    return null
+  }
+  const expression = unwrapExpr(name.expression)
+  if (!ts.isIdentifier(expression)) {
+    violations.push(`${where}: schema object key '${name.getText(ctx.sf)}' is not a string literal or const identity.`)
+    return null
+  }
+  const value = schemaConst(ctx, expression.text, false) ?? importedConst(world, ctx, expression.text)
+  if (value === null || !ts.isStringLiteral(value)) {
+    violations.push(`${where}: schema object key '${expression.text}' does not resolve to a string-literal const.`)
+    return null
+  }
+  return value.text
+}
+
 /** Follow only const identities and named value imports; never execute schema factories. */
 function schemaAlias(world: World, ctx: FileCtx, name: string): { ctx: FileCtx; expr: ts.Expression } {
   const local = schemaConst(ctx, name, false)
@@ -546,9 +599,9 @@ function schemaObjectFields(
   for (const property of expr.properties) {
     if (ts.isSpreadAssignment(property)) {
       for (const [key, value] of schemaObjectFields(world, ctx, property.expression, where, violations, aliases)) fields.set(key, value)
-    } else if ((ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
-      && !ts.isComputedPropertyName(property.name)) {
-      const key = ts.isStringLiteral(property.name) ? property.name.text : property.name.getText(ctx.sf)
+    } else if (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) {
+      const key = schemaPropertyKey(world, ctx, property.name, where, violations)
+      if (key === null) continue
       fields.set(key, { ctx, ...ts.isPropertyAssignment(property) ? { value: property.initializer } : {} })
     } else violations.push(`${where}: schema object property '${property.getText(ctx.sf)}' is not a plain key.`)
   }

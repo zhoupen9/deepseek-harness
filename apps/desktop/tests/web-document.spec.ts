@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { forwardWebRequest, removeLegacyHostCookies, serveWebDocument } from '../src/web-document.ts'
+import { forwardWebRequest, readSessionCookie, removeLegacyHostCookies, serveWebDocument } from '../src/web-document.ts'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -27,6 +27,32 @@ it('serves the Web entry and assets without starting or contacting a Host', asyn
   expect((await serveWebDocument(new Request('dsh-app://app/missing.js'), root)).status).toBe(404)
 })
 
+it('applies appearance rows to an attributed index ahead of its client bundles', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-web-'))
+  roots.push(root)
+  await mkdir(join(root, 'assets'))
+  await writeFile(join(root, 'index.html'), '<html><head data-shell="desktop"><link rel="stylesheet" href="assets/app.css"></head><body class="app"><div id="root"></div><script src="assets/entry.js"></script></body></html>')
+  await writeFile(join(root, 'assets/entry.js'), 'globalThis.entryLoaded = true')
+  const html = await (await serveWebDocument(new Request('dsh-app://app/'), root, {
+    head: '<style>HEAD</style>', body: '<script>BODY</script>',
+  })).text()
+  expect(html).toContain('<head data-shell="desktop"><script>globalThis.__DSH_BOOT_READY__')
+  expect(html.indexOf('HEAD')).toBeGreaterThan(html.indexOf('<head data-shell="desktop">'))
+  expect(html.indexOf('HEAD')).toBeLessThan(html.indexOf('assets/app.css'))
+  expect(html).toContain('<body class="app"><script>BODY</script>')
+  expect(html.indexOf('BODY')).toBeLessThan(html.indexOf('assets/entry.js'))
+  // Assets never receive index rows.
+  expect(await (await serveWebDocument(new Request('dsh-app://app/assets/entry.js'), root, {
+    head: '<style>HEAD</style>', body: '<script>BODY</script>',
+  })).text()).toBe('globalThis.entryLoaded = true')
+})
+
+it('reads the cookie only from an authenticated index exchange', async () => {
+  const authenticated = new Response(null, { status: 303, headers: { 'set-cookie': 'session=owned; HttpOnly; SameSite=Strict' } })
+  expect(readSessionCookie(authenticated)).toBe('session=owned')
+  expect(readSessionCookie(new Response('unauthorized', { status: 401 }))).toBeUndefined()
+  expect(readSessionCookie(new Response(null, { status: 303 }))).toBeUndefined()
+})
 it('forwards upload bytes and cancellation with Host credentials while keeping the response streaming', async () => {
   const body = new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('stream')); controller.close() } })
   const fetch = vi.fn().mockResolvedValue(new Response(body, { headers: { 'content-encoding': 'gzip', 'set-cookie': 'private' } }))
@@ -91,4 +117,32 @@ it('removes only legacy Host authentication cookies for the Host hostname', asyn
   await removeLegacyHostCookies(cookies, 'http://127.0.0.1:1234/?token=secret')
   expect(cookies.get).toHaveBeenCalledExactlyOnceWith({ url: 'http://127.0.0.1:1234' })
   expect(removed).toEqual([['http://127.0.0.1:1234', 'dsh-auth-old'], ['http://127.0.0.1:1234', 'dsh-auth-older']])
+})
+
+it('puts remote boot rows after the boot gate and ahead of the packaged client bundle', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-web-'))
+  roots.push(root)
+  await mkdir(join(root, 'assets'))
+  await writeFile(join(root, 'index.html'), '<html><head></head><body><div id="root"></div><script src="assets/entry.js"></script></body></html>')
+  await writeFile(join(root, 'assets/entry.js'), 'globalThis.entryLoaded = true')
+  const html = await (await serveWebDocument(new Request('dsh-app://app/'), root,
+    { head: '<style>APPEARANCE</style>', body: '<script>APPEARANCE_BODY</script>' },
+    { head: '<script>REMOTE</script>', body: '<script>REMOTE_BODY</script>' })).text()
+  expect(html.indexOf('__DSH_BOOT_READY__')).toBeLessThan(html.indexOf('<script>REMOTE</script>'))
+  expect(html.indexOf('APPEARANCE</style>')).toBeLessThan(html.indexOf('<script>REMOTE</script>'))
+  expect(html.indexOf('<script>REMOTE</script>')).toBeLessThan(html.indexOf('assets/entry.js'))
+  expect(html).toContain('<script>APPEARANCE_BODY</script><script>REMOTE_BODY</script>')
+  // Rows never reach a static asset.
+  expect(await (await serveWebDocument(new Request('dsh-app://app/assets/entry.js'), root, undefined, {
+    head: '<script>REMOTE</script>', body: '<script>REMOTE_BODY</script>',
+  })).text()).toBe('globalThis.entryLoaded = true')
+})
+
+it('forwards beneath a mounted Host base', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response('ok'))
+  vi.stubGlobal('fetch', request)
+  await forwardWebRequest(new Request('dsh-app://app/api/list?x=1'), 'https://app.example/ui/', 'session=owned')
+  await forwardWebRequest(new Request('dsh-app://app/'), 'https://app.example/ui/', 'session=owned')
+  expect((request.mock.calls[0]?.[0] as URL).href).toBe('https://app.example/ui/api/list?x=1')
+  expect((request.mock.calls[1]?.[0] as URL).href).toBe('https://app.example/ui/')
 })

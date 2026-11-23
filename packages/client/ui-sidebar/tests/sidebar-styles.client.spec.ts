@@ -113,7 +113,7 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.logoRow')?.get('margin-bottom')).toBe('0')
     expect(declarations('.newSessionRow')?.get('margin')).toBe('0 calc(var(--dsh-sidebar-paint-inset) + 1px) 6px')
     expect(declarations('.newSession')?.get('margin')).toBe('0')
-    expect(declarations('.newSessionContent')?.get('justify-content')).toBe('center')
+    expect(declarations('.newSessionContent')?.get('justify-content')).toBe('flex-start')
     expect(declarations(":global(html[data-platform='darwin']:not([data-fullscreen])) .root:not(.collapsed) > .topStrip > .toggle")?.get('transform')).toBe('translateX(4px)')
     expect(css).not.toContain(':not(.fading)')
     expect(declarations(':global([data-windows-titlebar]) .root:not(.collapsed) .newSessionRow')?.get('margin-top')).toBe('6px')
@@ -193,6 +193,18 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.brandName')?.get('font-size')).toBe('18px')
     expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
     expect(declarations('.fallbackBrandName')?.get('white-space')).toBe('nowrap')
+  })
+
+  it('renders New Session borderless and left-aligned, centered on the rail', () => {
+    const wide = declarations('.newSession')
+    expect(wide?.get('justify-content')).toBe('flex-start')
+    expect(wide?.get('background')).toBe('transparent')
+    expect(wide?.get('border')).toBe('none')
+    expect(declarations('.newSession:hover')?.get('background')).toBe(
+      'var(--dsw-alias-interactive-bg-hover)',
+    )
+    expect(declarations('.collapsed .newSession')?.get('justify-content')).toBe('center')
+    expect(declarations('.collapsed .newSessionContent')?.get('justify-content')).toBe('center')
   })
 
   it('lays panel trailing content out after the title like a Session row, reserving no room without content', () => {

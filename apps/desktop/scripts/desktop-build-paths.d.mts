@@ -40,13 +40,20 @@ export function resolveDesktopBuildTarget(
 export function desktopTargetBuildPaths(target: DesktopAutoUpdateTarget, environment?: NodeJS.ProcessEnv): DesktopTargetBuildPaths
 
 /**
+ * Resolve the Electron executable inside one target's downloaded distribution.
+ * @param target - Supported Desktop target name.
+ * @returns Absolute path to the Electron executable.
+ */
+export function desktopElectronExecutable(target: DesktopAutoUpdateTarget): string
+
+/**
  * Return the platform and architecture of the payload one release target prepares.
  * Windows is prepared as x64 only, so this differs from the build host on an arm64 Windows machine.
  * @param target - Supported Desktop target name.
  * @returns Platform and architecture of the prepared payload.
  */
 export function desktopTargetPlatform(target: DesktopAutoUpdateTarget): {
-  readonly platform: 'darwin' | 'win32'
+  readonly platform: 'darwin' | 'win32' | 'linux'
   readonly arch: 'arm64' | 'x64'
 }
 

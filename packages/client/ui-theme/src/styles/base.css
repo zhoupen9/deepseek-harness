@@ -29,6 +29,12 @@
 body {
   --dsw-font-family: var(--dsh-font-family-text, var(--dsh-font-family-text-default)), var(--dsh-font-family-text-default);
   --ds-font-family-code: var(--dsh-font-family-code, var(--dsh-font-family-code-default)), var(--dsh-font-family-code-default);
+  /* Alternate monospace token spellings consumed by a few feature surfaces
+   * (Cordis panel, job actions, agent-preset rows); alias them to the same
+   * selected mono stack so a chosen fixed-width font reaches every consumer.
+   * Declared on body so they resolve against body's user-stack override. */
+  --dsw-font-mono: var(--ds-font-family-code);
+  --dsh-font-mono: var(--ds-font-family-code);
   --dsw-alias-settings-card-fill: var(--dsw-alias-bg-layer-2);
   --dsw-alias-settings-card-stroke: var(--dsw-alias-border-l4);
 }

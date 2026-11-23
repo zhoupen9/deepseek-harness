@@ -10,6 +10,8 @@ export type OnboardingStep = 'welcome' | 'credit' | 'purpose' | 'process' | 'don
 export type OnboardingPurpose = 'office' | 'development' | 'both'
 /** Work-detail mode applied to Chat when onboarding completes. */
 export type OnboardingProcess = 'compact' | 'standard' | 'detailed'
+/** Performance and usage display applied to Chat when onboarding completes; mirrors the Chat setting. */
+export type OnboardingUsage = 'compact' | 'detailed'
 /** One installation's resumable choices and terminal outcome. */
 export interface OnboardingProgress {
   version: 1
@@ -17,7 +19,7 @@ export interface OnboardingProgress {
   purpose: OnboardingPurpose | null
   process: OnboardingProcess | null
   completion: 'completed' | 'skipped' | 'api-key' | null
-  usage: 'compact' | 'detailed'
+  usage: OnboardingUsage
   developerTools: boolean
 }
 

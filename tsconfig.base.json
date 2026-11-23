@@ -129,6 +129,8 @@
       "@deepseek-ai/dsh-cua/api": ["./packages/experimental/cua/src/api.ts"],
       "@deepseek-ai/dsh-cua/bridge": ["./packages/experimental/cua/src/bridge.ts"],
       "@deepseek-ai/dsh-experimental-computer-use-cua-driver-native": ["./packages/experimental/computer-use-cua-driver-native/src/index.ts"],
+      // The desktop app reads payload metadata from source; no wildcard maps this subpath.
+      "@deepseek-ai/dsh-tool-workspace-dependencies/primary-runtime": ["./packages/skill/tool-workspace-dependencies/src/primary-runtime.ts"],
       "@deepseek-ai/cordis": ["./vendor/cordis/src"],
       "@deepseek-ai/cosmokit": ["./vendor/cosmokit/src"],
       "@deepseek-ai/schemastery": ["./vendor/schemastery/src"],
@@ -149,6 +151,9 @@
       "@deepseek-ai/dsh-api-gateway": ["./packages/api/gateway/src/index.ts"],
       "@deepseek-ai/dsh-api-gateway/client": ["./packages/api/gateway/src/client/index.ts"],
       "@deepseek-ai/dsh-api-gateway/types": ["./packages/api/gateway/src/types.ts"],
+      "@deepseek-ai/dsh-api-git-controller": ["./packages/api/git-controller/src/index.ts"],
+      "@deepseek-ai/dsh-api-git-controller/invariant": ["./packages/api/git-controller/src/invariant.ts"],
+      "@deepseek-ai/dsh-api-git-controller/types": ["./packages/api/git-controller/src/types.ts"],
       "@deepseek-ai/dsh-api-job-controller": ["./packages/api/job-controller/src/index.ts"],
       "@deepseek-ai/dsh-api-job-controller/client": ["./packages/api/job-controller/src/client/index.ts"],
       "@deepseek-ai/dsh-api-job-controller/types": ["./packages/api/job-controller/src/types.ts"],

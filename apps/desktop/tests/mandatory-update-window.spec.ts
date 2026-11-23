@@ -46,6 +46,7 @@ function setup(platform: NodeJS.Platform = 'darwin', beforeSync?: (surface: Retu
   const currentParent = (): WindowFixture => platform === 'win32' ? window : owner
   const parent = currentParent as () => BrowserWindow
   ui = new DesktopMandatoryUpdateWindow({ overlays: { create }, preload: 'owned', locale: resolveDesktopLocale('zh'),
+    notificationIcon: {} as never,
     allowedPageOrigins: ['https://downloads.example.com'], parent,
     policy: () => policy, update: () => update, refresh: async () => {}, download: async () => update, install })
   beforeSync?.(window)

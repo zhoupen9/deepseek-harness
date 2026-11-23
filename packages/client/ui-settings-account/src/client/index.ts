@@ -17,6 +17,7 @@ import { ContactConfig, CONTACT_CONFIG_GLOBAL } from '../contact-config.ts'
 import { contactUrl } from './contact-url.ts'
 import { authorizeUrlWithTheme } from './authorize-url.ts'
 import { BrowserLogin } from './browser-login.ts'
+import { desktopApplicationCommands, type DesktopCarrier } from './desktop-application.ts'
 import { AccountOnboarding } from './AccountOnboarding.tsx'
 import { AccountPlatformHost, type AccountPlatformHostInjected } from './AccountPlatformHost.tsx'
 import { AccountMenu } from './AccountMenu.tsx'
@@ -178,12 +179,14 @@ export function apply(ctx: Context): void {
       onClose(reason)
       if (reason === 'returned' && page === 'top-up') void refreshAfterReturn(refreshing, reRead)
     })
+  const application = desktopApplicationCommands((globalThis as typeof globalThis & { dshDesktop?: DesktopCarrier }).dshDesktop)
   const operations: AccountSectionInjected = {
     avatarFailed: (value) => { avatar.failed(value) },
     subscribeSessionExpired: listener => ctx.remote.$on('deepseek-account/session-expired', listener),
     subscribeModelSignInRequired: listener => ctx.remote.$on('deepseek-account/model-sign-in-required', listener),
     ...nativePlatform === undefined ? {} : { openPlatformPage: platformPageOpener(refreshAccount) },
     refreshAccount,
+    ...application === undefined ? {} : { application },
     contactUs() {
       // Sample the account, build and environment before awaiting native information, so
       // a profile the read outlasts cannot replace the UID this click reported.
@@ -260,7 +263,10 @@ export function apply(ctx: Context): void {
   if (desktop) {
     const controller = new DesktopOnboardingController(
       ctx.configForms.get<OnboardingSettings>(DESKTOP_ONBOARDING_NAMESPACE),
-      ctx.configForms.get<{ transcriptView?: TranscriptViewMode | null; performanceUsage: 'compact' | 'detailed' }>('ui-chat'),
+      ctx.configForms.get<{
+        transcriptView?: TranscriptViewMode | null
+        performanceUsage: 'compact' | 'detailed'
+      }>('ui-chat'),
       enabled => ctx.configForms.developerTools.setEnabled(enabled),
       operations.hooks.account,
       readOnboardingApiKeyPresence,

@@ -14,6 +14,12 @@ export const THEME_PREFERENCE_FIELD = 'preference'
 /** Field carrying the conversation content font size. */
 export const FONT_SIZE_FIELD = 'fontSize'
 
+/** Field carrying the default text color while the light palette is active. */
+export const FONT_COLOR_LIGHT_FIELD = 'fontColorLight'
+
+/** Field carrying the default text color while the dark palette is active. */
+export const FONT_COLOR_DARK_FIELD = 'fontColorDark'
+
 /** Theme preference persisted by the product Appearance row. */
 export type ThemePreference = typeof THEME_PREFERENCES[number]
 
@@ -104,6 +110,16 @@ export interface ThemeSettings {
   codeFontFamily: string
   /** Sidebar terminal fonts placed before the built-in terminal stack; `''` keeps the built-in stack. */
   terminalFontFamily: string
+  /**
+   * Default text color while the light palette is active. Empty or absent =
+   * no override, so the shipped alias palette applies.
+   */
+  fontColorLight?: string
+  /**
+   * Default text color while the dark palette is active. Empty or absent =
+   * no override, so the shipped alias palette applies.
+   */
+  fontColorDark?: string
 }
 
 /**
@@ -135,6 +151,32 @@ export function isFontSize(role: FontRole, px: number): boolean {
   return Number.isInteger(px) && px >= spec.min && px <= spec.max
 }
 
+/**
+ * Anchored matcher for one persistable default-text-color value: the empty
+ * string (no override) or a solid CSS color — #rgb/#rrggbb hex, or rgb()/hsl()
+ * in the comma or space-separated form. Alpha-bearing forms (rgba(), a /
+ * <alpha> channel, #rrggbbaa) are rejected because text color must stay
+ * solid: alpha text composites differently over surfaces and makes contrast
+ * unguaranteed.
+ */
+const FONT_COLOR_PATTERN = new RegExp(
+  [
+    '^(?:|#(?:[0-9a-f]{3}){1,2}',
+    '|rgb\\(\\s*-?\\d+(?:\\.\\d+)?%?\\s*,\\s*-?\\d+(?:\\.\\d+)?%?\\s*,\\s*-?\\d+(?:\\.\\d+)?%?\\s*\\)',
+    '|rgb\\(\\s*-?\\d+(?:\\.\\d+)?%?\\s+-?\\d+(?:\\.\\d+)?%?\\s+-?\\d+(?:\\.\\d+)?%?\\s*\\)',
+    '|hsl\\(\\s*-?\\d+(?:\\.\\d+)?(?:deg|grad|rad|turn)?\\s*,\\s*-?\\d+(?:\\.\\d+)?%\\s*,\\s*-?\\d+(?:\\.\\d+)?%\\s*\\)',
+    '|hsl\\(\\s*-?\\d+(?:\\.\\d+)?(?:deg|grad|rad|turn)?\\s+-?\\d+(?:\\.\\d+)?%\\s+-?\\d+(?:\\.\\d+)?%\\s*\\)',
+    ')$',
+  ].join(''),
+  'i',
+)
+
+/**
+ * A validated default-text-color field: '' (no override) or a solid CSS color.
+ * @returns the schema field for one palette mode's default text color.
+ */
+export const fontColorField = (): z<string> => z.string().pattern(FONT_COLOR_PATTERN).default('')
+
 /** Durable theme schema; also the wire envelope the browser scope validates against. */
 export const ThemeSettingsSchema: z<ThemeSettings> = z.object({
   [THEME_PREFERENCE_FIELD]: z.union([...THEME_PREFERENCES]).default(DEFAULT_PREFERENCE),
@@ -144,6 +186,8 @@ export const ThemeSettingsSchema: z<ThemeSettings> = z.object({
   [FONT_FAMILY_FIELDS.text]: z.string().default(''),
   [FONT_FAMILY_FIELDS.code]: z.string().default(''),
   [FONT_FAMILY_FIELDS.terminal]: z.string().default(''),
+  [FONT_COLOR_LIGHT_FIELD]: fontColorField(),
+  [FONT_COLOR_DARK_FIELD]: fontColorField(),
 })
 
 /** CSS Fonts generic and system family keywords, which must stay unquoted. */
@@ -175,4 +219,14 @@ export function normalizeFontFamily(value: string): string {
  */
 export function isThemePreference(value: unknown): value is ThemePreference {
   return THEME_PREFERENCES.some(preference => preference === value)
+}
+
+/**
+ * Validate a persisted default text color: the empty string (no override) or
+ * a solid CSS color accepted by {@link ThemeSettingsSchema}.
+ * @param value - value crossing the settings boundary.
+ * @returns whether the value is persistable as a default text color.
+ */
+export function isFontColor(value: unknown): value is string {
+  return value === '' || (typeof value === 'string' && FONT_COLOR_PATTERN.test(value))
 }

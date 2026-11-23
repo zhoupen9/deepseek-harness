@@ -59,15 +59,13 @@ describe('desktop macOS release signature', () => {
       'com.apple.security.cs.disable-library-validation', 'com.apple.security.device.audio-input']) {
       expect(entitlements).toContain(`<key>${key}</key>\n    <true/>`)
     }
-    expect(config.extraResources).toHaveLength(2)
+    expect(config.extraResources).toHaveLength(4)
     expect(config.extraResources[0]?.to).toBe('runtime')
     expect(portablePath(config.extraResources[0]?.from ?? '')).toContain('/.desktop-build/targets/mac-arm64/runtime')
-    const [dshFiles, dshNodeModules] = config.files.slice(-2)
-    if (!dshFiles || !dshNodeModules || typeof dshFiles === 'string' || typeof dshNodeModules === 'string') {
-      throw new Error('desktop DSH resources must use electron-builder file mappings')
-    }
-    expect(portablePath(dshFiles.from)).toContain('/.desktop-build/targets/mac-arm64/dsh')
-    expect(dshFiles.to).toBe('dsh')
+    const [dsh, dshNodeModules] = config.extraResources.slice(1, 3)
+    if (!dsh || !dshNodeModules) throw new Error('the Desktop payload must be an unpacked resource mapping')
+    expect(portablePath(dsh.from)).toContain('/.desktop-build/targets/mac-arm64/dsh')
+    expect(dsh.to).toBe('dsh')
     expect(portablePath(dshNodeModules.from)).toContain('/.desktop-build/targets/mac-arm64/dsh/node_modules')
     expect(dshNodeModules.to).toBe('dsh/node_modules')
     expect(config.asarUnpack).toEqual(expect.arrayContaining([
@@ -81,7 +79,7 @@ describe('desktop macOS release signature', () => {
         identity: RELEASE_ENVIRONMENT.DSH_DESKTOP_MACOS_SIGNING_IDENTITY,
         forceCodeSigning: true,
         notarize: true,
-        signIgnore: ['/Contents/Resources/app\\.asar\\.unpacked/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
+        signIgnore: ['/Contents/Resources/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
       },
       dmg: {
         format: 'ULMO',

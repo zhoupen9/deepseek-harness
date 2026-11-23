@@ -8,11 +8,14 @@ import z from '@deepseek-ai/schemastery'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { bootThemeInjections } from './boot-theme.ts'
-import { DEFAULT_PREFERENCE, FONT_SIZE_SPECS, fontSizeSchema, THEME_PREFERENCES } from './theme-settings.ts'
+import {
+  DEFAULT_PREFERENCE, FONT_COLOR_DARK_FIELD, FONT_COLOR_LIGHT_FIELD, FONT_SIZE_SPECS, fontColorField,
+  fontSizeSchema, THEME_PREFERENCES,
+} from './theme-settings.ts'
 
 export {
-  DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, FONT_SIZE_FIELD, FONT_SIZE_MAX, FONT_SIZE_MIN,
-  THEME_PREFERENCE_FIELD, THEME_PREFERENCES, THEME_SETTINGS_NAMESPACE,
+  DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, FONT_COLOR_DARK_FIELD, FONT_COLOR_LIGHT_FIELD, FONT_SIZE_FIELD,
+  FONT_SIZE_MAX, FONT_SIZE_MIN, THEME_PREFERENCE_FIELD, THEME_PREFERENCES, THEME_SETTINGS_NAMESPACE,
   type ThemePreference, type ThemeSettings,
 } from './theme-settings.ts'
 
@@ -32,6 +35,10 @@ export interface Config {
   codeFontFamily: Volatile<string>
   /** Sidebar terminal font list; `''` keeps the built-in stack. */
   terminalFontFamily: Volatile<string>
+  /** Default text color while the light palette is active; `''` keeps the shipped palette default. */
+  fontColorLight: Volatile<string>
+  /** Default text color while the dark palette is active; `''` keeps the shipped palette default. */
+  fontColorDark: Volatile<string>
 }
 
 /** Live theme and typography preferences. */
@@ -43,6 +50,8 @@ export const Config = z.object({
   textFontFamily: z.string().default('').volatile(),
   codeFontFamily: z.string().default('').volatile(),
   terminalFontFamily: z.string().default('').volatile(),
+  [FONT_COLOR_LIGHT_FIELD]: fontColorField().volatile(),
+  [FONT_COLOR_DARK_FIELD]: fontColorField().volatile(),
 })
 
 /** Supply the current palette before browser plugins start.
